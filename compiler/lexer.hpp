@@ -19,11 +19,15 @@ enum class Keyword {
 	INT
 };
 
+struct UnknownToken {
+	const int position;
+};
+
 using Token = std::variant<Symbol, // tokens
 	Keyword,
 	unsigned int,  // int literal
 	std::string, // identifiers
-	std::nullptr_t // unknown
+	UnknownToken // unknown
 >;
 
 struct TokenPrinter {
@@ -63,7 +67,7 @@ struct TokenPrinter {
 	void operator()(const std::string& s) const {
 		os << s;
 	}
-	void operator()(std::nullptr_t) const {
+	void operator()(UnknownToken) const {
 		os << "UNKNOWN";
 	}
 };

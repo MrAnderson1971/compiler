@@ -53,7 +53,7 @@ void Lexer::lex() {
 				tokens.push_back(intToken);
 			}
 			else {
-				tokens.push_back(nullptr); // unknown
+				tokens.push_back(UnknownToken{i}); // unknown
 			}
 		}
 	}

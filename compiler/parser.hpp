@@ -17,8 +17,8 @@ class Parser {
 			return t;
 		}
 
-		Token operator()(std::nullptr_t) const {
-			throw std::runtime_error("Unknown token");
+		Token operator()(UnknownToken unknown) const {
+			throw std::runtime_error("Unknown token at position " + std::to_string(unknown.position));
 		}
 	};
 	std::deque<Token> tokens;
