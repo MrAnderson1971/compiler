@@ -3,6 +3,9 @@
 Parser::Parser(std::vector<Token>&& tokens) : tokens(tokens.begin(), tokens.end()) {}
 
 Token Parser::getTokenAndAdvance() {
+	if (tokens.empty()) {
+		throw std::runtime_error("Unexpected EOF");
+	}
 	return std::visit(GetTokenAndAdvance{ tokens }, tokens.front());
 }
 

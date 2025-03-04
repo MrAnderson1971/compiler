@@ -32,6 +32,9 @@ class Parser {
 
 	template<typename T>
 	T getTokenAndAdvance() {
+		if (tokens.empty()) {
+			throw std::runtime_error("Unexpected EOF");
+		}
 		auto t = std::get<T>(tokens.front());
 		tokens.pop_front();
 		return t;

@@ -9,9 +9,16 @@
 
 int main()
 {
-    std::string source = "int main(){return 2;}";
+    std::string source = R"(int main() {
+    return 0;
+})";
     Compiler compiler(source);
-    compiler.compile();
+	try {
+		compiler.compile();
+	}
+	catch (const std::exception& e) {
+		std::cerr << e.what() << std::endl;
+	}
     return 0;
 }
 
