@@ -14,7 +14,7 @@ enum Symbol {
 	SEMICOLON,
 };
 
-enum Keyword {
+enum class Keyword {
 	RETURN,
 	INT
 };
@@ -26,11 +26,53 @@ using Token = std::variant<Symbol, // tokens
 	std::nullptr_t // unknown
 >;
 
+struct TokenPrinter {
+	std::ostream& os;
+	void operator()(Symbol s) const {
+		switch (s) {
+		case OPEN_BRACE:
+			os << "OPEN_BRACE";
+			break;
+		case CLOSED_BRACE:
+			os << "CLOSED_BRACE";
+			break;
+		case OPEN_PAREN:
+			os << "OPEN_PAREN";
+			break;
+		case CLOSED_PAREN:
+			os << "CLOSED_PAREN";
+			break;
+		case SEMICOLON:
+			os << "SEMICOLON";
+			break;
+		}
+	}
+	void operator()(Keyword k) const {
+		switch (k) {
+		case Keyword::RETURN:
+			os << "RETURN";
+			break;
+		case Keyword::INT:
+			os << "INT";
+			break;
+		}
+	}
+	void operator()(unsigned int i) const {
+		os << i;
+	}
+	void operator()(const std::string& s) const {
+		os << s;
+	}
+	void operator()(std::nullptr_t) const {
+		os << "UNKNOWN";
+	}
+};
+
 class Lexer {
 	std::string source;
-	std::vector<Token> tokens;
 
 public:
+	std::vector<Token> tokens;
 	Lexer(std::string& source);
 	void lex();
 

@@ -24,12 +24,21 @@
     <ClCompile Include="compiler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="parser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="lexer.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="compiler.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ast.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="parser.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

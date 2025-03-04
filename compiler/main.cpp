@@ -9,7 +9,7 @@
 
 int main()
 {
-    std::string source = "int main() {\n\treturn 2;\n}";
+    std::string source = "int main(){return 2;}";
     Compiler compiler(source);
     compiler.compile();
     return 0;

@@ -33,11 +33,12 @@ void Lexer::lex() {
 				while (i < source.size() && (std::isalnum(source[i]) || source[i] == '_')) {
 					identifier += source[i++];
 				}
+				i--;
 				if (identifier == "return") {
-					tokens.push_back(RETURN);
+					tokens.push_back(Keyword::RETURN);
 				}
 				else if (identifier == "int") {
-					tokens.push_back(INT);
+					tokens.push_back(Keyword::INT);
 				}
 				else {
 					tokens.push_back(identifier);
@@ -48,6 +49,7 @@ void Lexer::lex() {
 				while (i < source.size() && std::isdigit(source[i])) {
 					intToken = intToken * 10 + (source[i++] - '0');
 				}
+				i--;
 				tokens.push_back(intToken);
 			}
 			else {
@@ -60,25 +62,8 @@ void Lexer::lex() {
 std::ostream& operator<<(std::ostream& os, Lexer lexer) {
 	os << "[";
 	for (const auto& token : lexer.tokens) {
-		std::visit([&os](const auto& t) {
-			using T = std::decay_t<decltype(t)>;
-
-			if constexpr (std::is_same_v<Keyword, T>) {
-				os << "Keyword: " << static_cast<Keyword>(t) << ", ";
-			}
-			else if constexpr (std::is_same_v<Symbol, T>) {
-				os << "Symbol: " << static_cast<Symbol>(t) << ", ";
-			}
-			else if constexpr (std::is_same_v<unsigned int, T>) {
-				os << static_cast<unsigned int>(t) << ", ";
-			}
-			else if constexpr (std::is_same_v<std::string, T>) {
-				os << static_cast<std::string>(t) << ", ";
-			}
-			else if constexpr (std::is_same_v<std::nullptr_t, T>) {
-				os << "Unknown, ";
-			}
-			}, token);
+		std::visit(TokenPrinter{ os }, token);
+		os << ", ";
 	}
 	os << "]" << std::endl;
 	return os;
