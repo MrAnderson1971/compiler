@@ -9,10 +9,17 @@ enum class Types {
 	INT
 };
 
-enum class UnaryOperator {
-	MINUS,
+enum UnaryOperator {
+	NEGATION,
 	BITWISE_NOT,
 	LOGICAL_NOT
+};
+
+enum BinaryOperator {
+	ADD,
+	SUBTRACT,
+	MULTIPLY,
+	DIVIDE
 };
 
 struct CodeContext {
@@ -66,8 +73,21 @@ struct UnaryNode : public ASTNode {
 	UnaryOperator op;
 	std::unique_ptr<ASTNode> expression;
 
+	UnaryNode(UnaryOperator op, std::unique_ptr<ASTNode>& expression) : op(op), expression(std::move(expression)) {}
+
 	std::ostream& print(std::ostream&, int) const override;
 	void generate(CodeContext& context) const override;
+};
+
+struct BinaryNode : public ASTNode {
+	BinaryOperator op;
+	std::unique_ptr<ASTNode> left;
+	std::unique_ptr<ASTNode> right;
+
+	BinaryNode(BinaryOperator op, std::unique_ptr<ASTNode>& left, std::unique_ptr<ASTNode>& right) : op(op), left(std::move(left)), right(std::move(right)) {}
+
+	std::ostream& print(std::ostream& os, int indent) const override;
+	void generate(CodeContext& context) const override {}
 };
 
 struct ConstNode : public ASTNode {

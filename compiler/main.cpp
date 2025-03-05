@@ -10,7 +10,7 @@
 int main()
 {
     std::string source = R"(int main() {
-    return !~~~!2;
+    return 2*2
 })";
     Compiler compiler(source);
 	try {

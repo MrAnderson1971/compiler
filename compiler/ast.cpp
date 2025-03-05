@@ -47,13 +47,13 @@ void ConstNode::generate(CodeContext& context) const {
 std::ostream& UnaryNode::print(std::ostream& os, int indent) const {
 	os << std::string(indent, ' ') << "UNARY NODE: ";
 	switch (op) {
-	case UnaryOperator::MINUS:
+	case NEGATION:
 		os << "MINUS\n";
 		break;
-	case UnaryOperator::BITWISE_NOT:
+	case BITWISE_NOT:
 		os << "BITWISE NOT\n";
 		break;
-	case UnaryOperator::LOGICAL_NOT:
+	case LOGICAL_NOT:
 		os << "LOGICAL NOT\n";
 		break;
 	}
@@ -64,16 +64,37 @@ std::ostream& UnaryNode::print(std::ostream& os, int indent) const {
 void UnaryNode::generate(CodeContext& context) const {
 	expression->generate(context);
 	switch (op) {
-	case UnaryOperator::MINUS:
+	case NEGATION:
 		context.out << "    neg %eax\n";
 		break;
-	case UnaryOperator::BITWISE_NOT:
+	case BITWISE_NOT:
 		context.out << "    not %eax\n";
 		break;
-	case UnaryOperator::LOGICAL_NOT:
+	case LOGICAL_NOT:
 		context.out << "    cmp $0, %eax\n";
 		context.out << "    sete %al\n";
 		context.out << "    movzx %al, %eax\n";
 		break;
 	}
+}
+
+std::ostream& BinaryNode::print(std::ostream& os, int indent) const {
+	os << std::string(indent, ' ');
+	switch (op) {
+	case ADD:
+		os << "ADD\n";
+		break;
+	case SUBTRACT:
+		os << "SUBTRACT\n";
+		break;
+	case MULTIPLY:
+		os << "MULTIPLY\n";
+		break;
+	case DIVIDE:
+		os << "DIVIDE\n";
+		break;
+	}
+	left->print(os, indent + 1);
+	right->print(os, indent + 1);
+	return os;
 }

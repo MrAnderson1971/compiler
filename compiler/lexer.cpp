@@ -24,12 +24,23 @@ void TokenPrinter::operator()(Symbol s) const {
 	case MINUS:
 		os << "MINUS";
 		break;
-	case BITWISE_NOT:
-		os << "BITWISE_NOT";
+	case TILDE:
+		os << "TILDE";
 		break;
 	case EXCLAMATION_MARK:
 		os << "EXCLAMATION_MARK";
 		break;
+	case PLUS:
+		os << "PLUS";
+		break;
+	case ASTERISK:
+		os << "ASTERISK";
+		break;
+	case FORWARD_SLASH:
+		os << "FORWARD_SLASH";
+		break;
+	default:
+		os << "UNKNOWN SYMBOL";
 	}
 }
 
@@ -41,6 +52,8 @@ void TokenPrinter::operator()(Keyword k) const {
 	case Keyword::INT:
 		os << "INT";
 		break;
+	default:
+		os << "UNKNOWN KEYWORD";
 	}
 }
 
@@ -78,10 +91,19 @@ void Lexer::lex() {
 			tokens.push_back(MINUS);
 			break;
 		case '~':
-			tokens.push_back(BITWISE_NOT);
+			tokens.push_back(TILDE);
 			break;
 		case '!':
 			tokens.push_back(EXCLAMATION_MARK);
+			break;
+		case '+':
+			tokens.push_back(PLUS);
+			break;
+		case '*':
+			tokens.push_back(ASTERISK);
+			break;
+		case '/':
+			tokens.push_back(FORWARD_SLASH);
 			break;
 		case ' ': // whitespace, do nothing
 		case '\n':

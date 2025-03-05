@@ -29,6 +29,12 @@ class Parser {
 	std::unique_ptr<ASTNode> parseExpression();
 	std::unique_ptr<ASTNode> parseConst(Number value);
 
+	// Term represents multiplication and division	
+	std::unique_ptr<ASTNode> parseTerm();
+
+	// Factor is something an unary operator can be applied to
+	std::unique_ptr<ASTNode> parseFactor();
+
 	Token getTokenAndAdvance();
 
 	template<typename T>
@@ -54,6 +60,8 @@ class Parser {
 		}
 		return t;
 	}
+
+	Token peekToken();
 
 public:
 	Parser(std::vector<Token>&& tokens);
