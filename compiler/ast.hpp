@@ -3,6 +3,7 @@
 #include <string>
 #include <ostream>
 #include <sstream>
+#include "lexer.hpp"
 
 enum class Types {
 	INT
@@ -52,7 +53,7 @@ struct ReturnNode : public ASTNode {
 };
 
 struct ConstNode : public ASTNode {
-	unsigned int value;
+	Number value;
 	std::ostream& print(std::ostream&, int) const override;
 	void generate(std::stringstream&) const override;
 	std::string evaluate() const override;

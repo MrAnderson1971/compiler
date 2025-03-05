@@ -36,9 +36,9 @@ std::unique_ptr<ASTNode> Parser::parseReturn() {
 }
 
 std::unique_ptr<ASTNode> Parser::parseExpression() {
-	Token t = getTokenAndAdvance<unsigned int>();
+	Token t = getTokenAndAdvance<Number>();
 	auto constNode = std::make_unique<ConstNode>();
-	constNode->value = std::get<unsigned int>(t);
+	constNode->value = std::get<Number>(t);
 	return constNode;
 }
 

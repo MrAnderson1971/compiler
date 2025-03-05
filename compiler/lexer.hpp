@@ -23,9 +23,11 @@ struct UnknownToken {
 	const int position;
 };
 
+using Number = unsigned int;
+
 using Token = std::variant<Symbol, // tokens
 	Keyword,
-	unsigned int,  // int literal
+	Number,  // int literal
 	std::string, // identifiers
 	UnknownToken // unknown
 >;
@@ -61,7 +63,7 @@ struct TokenPrinter {
 			break;
 		}
 	}
-	void operator()(unsigned int i) const {
+	void operator()(Number i) const {
 		os << i;
 	}
 	void operator()(const std::string& s) const {

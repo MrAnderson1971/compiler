@@ -45,7 +45,7 @@ void Lexer::lex() {
 				}
 			}
 			else if (std::isdigit(source[i])) { // int literal
-				unsigned int intToken = 0;
+				Number intToken = 0;
 				while (i < source.size() && std::isdigit(source[i])) {
 					intToken = intToken * 10 + (source[i++] - '0');
 				}
