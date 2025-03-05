@@ -4,6 +4,58 @@
 
 Lexer::Lexer(std::string& source) : source(source) {}
 
+void TokenPrinter::operator()(Symbol s) const {
+	switch (s) {
+	case OPEN_BRACE:
+		os << "OPEN_BRACE";
+		break;
+	case CLOSED_BRACE:
+		os << "CLOSED_BRACE";
+		break;
+	case OPEN_PAREN:
+		os << "OPEN_PAREN";
+		break;
+	case CLOSED_PAREN:
+		os << "CLOSED_PAREN";
+		break;
+	case SEMICOLON:
+		os << "SEMICOLON";
+		break;
+	case MINUS:
+		os << "MINUS";
+		break;
+	case BITWISE_NOT:
+		os << "BITWISE_NOT";
+		break;
+	case EXCLAMATION_MARK:
+		os << "EXCLAMATION_MARK";
+		break;
+	}
+}
+
+void TokenPrinter::operator()(Keyword k) const {
+	switch (k) {
+	case Keyword::RETURN:
+		os << "RETURN";
+		break;
+	case Keyword::INT:
+		os << "INT";
+		break;
+	}
+}
+
+void TokenPrinter::operator()(UnknownToken) const {
+	os << "UNKNOWN";
+}
+
+void TokenPrinter::operator()(Number i) const {
+	os << i;
+}
+
+void TokenPrinter::operator()(const std::string& s) const {
+	os << s;
+}
+
 void Lexer::lex() {
 	for (int i = 0; i < source.size(); i++) {
 		switch (source[i]) {

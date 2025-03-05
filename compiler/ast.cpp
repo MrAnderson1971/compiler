@@ -6,14 +6,42 @@ std::ostream& ProgramNode::print(std::ostream& os, int indent) const {
 	return os;
 }
 
+void ProgramNode::generate(CodeContext& context) const {
+	// Assembly prologue
+	context.out << ".text\n";
+	context.out << ".global main\n\n";
+
+	// Generate code for the function (only main for now)
+	if (function_declaration) {
+		function_declaration->generate(context);
+	}
+}
+
 std::ostream& ReturnNode::print(std::ostream& os, int indent) const {
 	os << std::string(indent, ' ') << "RETURN NODE\n";
 	expression->print(os, indent + 1);
 	return os;
 }
 
+void ReturnNode::generate(CodeContext& context) const {
+	if (expression) {
+		expression->generate(context);
+	}
+	else {
+		context.out << "    xor %eax, %eax\n";
+	}
+
+	context.out << "    leave\n";
+	context.out << "    ret\n";
+}
+
 std::ostream& ConstNode::print(std::ostream& os, int indent) const {
 	return os << std::string(indent, ' ') << "CONST NODE: " << value << '\n';
+}
+
+void ConstNode::generate(CodeContext& context) const {
+	// Load the constant value into %eax
+	context.out << "    mov $" << value << ", %eax\n";
 }
 
 std::ostream& UnaryNode::print(std::ostream& os, int indent) const {
@@ -33,24 +61,19 @@ std::ostream& UnaryNode::print(std::ostream& os, int indent) const {
 	return os;
 }
 
-void ProgramNode::generate(std::stringstream& ss) const {
-	function_declaration->generate(ss);
-}
-
-std::string ProgramNode::evaluate() const {
-	std::stringstream ss;
-	generate(ss);
-	return ss.str();
-}
-
-void ReturnNode::generate(std::stringstream& ss) const {
-	ss << "movl $" << expression->evaluate() << ", %eax\nret";
-}
-
-void ConstNode::generate(std::stringstream& ss) const {
-	 ss << value;
-}
-
-std::string ConstNode::evaluate() const {
-	return std::to_string(value);
+void UnaryNode::generate(CodeContext& context) const {
+	expression->generate(context);
+	switch (op) {
+	case UnaryOperator::MINUS:
+		context.out << "    neg %eax\n";
+		break;
+	case UnaryOperator::BITWISE_NOT:
+		context.out << "    not %eax\n";
+		break;
+	case UnaryOperator::LOGICAL_NOT:
+		context.out << "    cmp $0, %eax\n";
+		context.out << "    sete %al\n";
+		context.out << "    movzx %al, %eax\n";
+		break;
+	}
 }
