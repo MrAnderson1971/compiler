@@ -98,3 +98,25 @@ std::ostream& BinaryNode::print(std::ostream& os, int indent) const {
 	right->print(os, indent + 1);
 	return os;
 }
+
+void BinaryNode::generate(CodeContext& context) const {
+	left->generate(context);
+	context.out << "    push %eax\n";
+	right->generate(context);
+	context.out << "    pop %ecx\n";
+	switch (op) {
+	case ADD:
+		context.out << "    add %ecx, %eax\n";
+		break;
+	case SUBTRACT:
+		context.out << "    sub %ecx, %eax\n";
+		break;
+	case MULTIPLY:
+		context.out << "    imul %ecx, %eax\n";
+		break;
+	case DIVIDE:
+		context.out << "    cdq\n";
+		context.out << "    idiv %ecx\n";
+		break;
+	}
+}

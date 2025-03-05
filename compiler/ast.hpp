@@ -87,7 +87,7 @@ struct BinaryNode : public ASTNode {
 	BinaryNode(BinaryOperator op, std::unique_ptr<ASTNode>& left, std::unique_ptr<ASTNode>& right) : op(op), left(std::move(left)), right(std::move(right)) {}
 
 	std::ostream& print(std::ostream& os, int indent) const override;
-	void generate(CodeContext& context) const override {}
+	void generate(CodeContext& context) const override;
 };
 
 struct ConstNode : public ASTNode {
