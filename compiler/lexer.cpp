@@ -22,6 +22,15 @@ void Lexer::lex() {
 		case ';':
 			tokens.push_back(SEMICOLON);
 			break;
+		case '-':
+			tokens.push_back(MINUS);
+			break;
+		case '~':
+			tokens.push_back(BITWISE_NOT);
+			break;
+		case '!':
+			tokens.push_back(EXCLAMATION_MARK);
+			break;
 		case ' ': // whitespace, do nothing
 		case '\n':
 		case '\r':

@@ -9,6 +9,12 @@ enum class Types {
 	INT
 };
 
+enum class UnaryOperator {
+	MINUS,
+	BITWISE_NOT,
+	LOGICAL_NOT
+};
+
 struct ASTNode {
 	virtual ~ASTNode() = default;
 	virtual std::ostream& print(std::ostream& os, int) const = 0;
@@ -50,6 +56,13 @@ struct ReturnNode : public ASTNode {
 	std::unique_ptr<ASTNode> expression;
 	std::ostream& print(std::ostream&, int) const override;
 	void generate(std::stringstream&) const override;
+};
+
+struct UnaryNode : public ASTNode {
+	UnaryOperator op;
+	std::unique_ptr<ASTNode> expression;
+	std::ostream& print(std::ostream&, int) const override;
+	void generate(std::stringstream&) const override {};
 };
 
 struct ConstNode : public ASTNode {

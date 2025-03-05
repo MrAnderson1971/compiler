@@ -16,6 +16,23 @@ std::ostream& ConstNode::print(std::ostream& os, int indent) const {
 	return os << std::string(indent, ' ') << "CONST NODE: " << value << '\n';
 }
 
+std::ostream& UnaryNode::print(std::ostream& os, int indent) const {
+	os << std::string(indent, ' ') << "UNARY NODE: ";
+	switch (op) {
+	case UnaryOperator::MINUS:
+		os << "MINUS\n";
+		break;
+	case UnaryOperator::BITWISE_NOT:
+		os << "BITWISE NOT\n";
+		break;
+	case UnaryOperator::LOGICAL_NOT:
+		os << "LOGICAL NOT\n";
+		break;
+	}
+	expression->print(os, indent + 1);
+	return os;
+}
+
 void ProgramNode::generate(std::stringstream& ss) const {
 	function_declaration->generate(ss);
 }

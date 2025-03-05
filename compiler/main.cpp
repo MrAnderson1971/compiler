@@ -10,15 +10,15 @@
 int main()
 {
     std::string source = R"(int main() {
-    return 0;
+    return !!!~~--2;
 })";
     Compiler compiler(source);
-	try {
+//	try {
 		compiler.compile();
-	}
-	catch (const std::exception& e) {
-		std::cerr << e.what() << std::endl;
-	}
+	//}
+	//catch (const std::exception& e) {
+	//	std::cerr << e.what() << std::endl;
+	//}
     return 0;
 }
 

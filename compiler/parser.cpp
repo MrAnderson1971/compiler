@@ -35,11 +35,41 @@ std::unique_ptr<ASTNode> Parser::parseReturn() {
 	return returnNode;
 }
 
-std::unique_ptr<ASTNode> Parser::parseExpression() {
-	Token t = getTokenAndAdvance<Number>();
+std::unique_ptr<ASTNode> Parser::parseConst(Number value) {
 	auto constNode = std::make_unique<ConstNode>();
-	constNode->value = std::get<Number>(t);
+	constNode->value = value;
 	return constNode;
+}
+
+std::unique_ptr<ASTNode> Parser::parseExpression() {
+	Token token = getTokenAndAdvance();
+	return std::visit([this](const auto& t) -> std::unique_ptr<ASTNode> {
+		using T = std::decay_t<decltype(t)>;
+
+		if constexpr (std::is_same_v<T, Number>) {
+			return parseConst(t);
+		}
+		else if constexpr (std::is_same_v<T, Symbol>) {
+			Symbol unaryOp = t;
+			auto unaryNode = std::make_unique<UnaryNode>();
+			switch (unaryOp) {
+			case Symbol::MINUS:
+				unaryNode->op = UnaryOperator::MINUS;
+				break;
+			case Symbol::EXCLAMATION_MARK:
+				unaryNode->op = UnaryOperator::LOGICAL_NOT;
+				break;
+			case Symbol::BITWISE_NOT:
+				unaryNode->op = UnaryOperator::BITWISE_NOT;
+				break;
+			default:
+				throw std::runtime_error("Unexpected unary operator");
+			}
+			unaryNode->expression = parseExpression();
+			return unaryNode;
+		}
+		throw std::runtime_error("Unexpected token");
+	}, token);
 }
 
 std::unique_ptr<ASTNode> Parser::parse() {

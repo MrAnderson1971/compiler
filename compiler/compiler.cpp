@@ -10,5 +10,5 @@ void Compiler::compile() {
 	Parser parser(std::move(lexer.tokens));
 	std::unique_ptr<ASTNode> programNode = parser.parse();
 	std::cout << *programNode << std::endl;
-	std::cout << programNode->evaluate() << std::endl;
+	//std::cout << programNode->evaluate() << std::endl;
 }

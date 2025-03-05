@@ -27,6 +27,7 @@ class Parser {
 	std::unique_ptr<ASTNode> parseFunctionDeclaration();
 	std::unique_ptr<ASTNode> parseReturn();
 	std::unique_ptr<ASTNode> parseExpression();
+	std::unique_ptr<ASTNode> parseConst(Number value);
 
 	Token getTokenAndAdvance();
 

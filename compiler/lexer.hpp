@@ -12,6 +12,9 @@ enum Symbol {
 	OPEN_PAREN,
 	CLOSED_PAREN,
 	SEMICOLON,
+	MINUS,
+	BITWISE_NOT,
+	EXCLAMATION_MARK
 };
 
 enum class Keyword {
@@ -50,6 +53,15 @@ struct TokenPrinter {
 			break;
 		case SEMICOLON:
 			os << "SEMICOLON";
+			break;
+		case MINUS:
+			os << "MINUS";
+			break;
+		case BITWISE_NOT:
+			os << "BITWISE_NOT";
+			break;
+		case EXCLAMATION_MARK:
+			os << "EXCLAMATION_MARK";
 			break;
 		}
 	}
