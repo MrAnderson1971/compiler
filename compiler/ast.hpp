@@ -43,23 +43,12 @@ struct ProgramNode : public ASTNode {
 	void generate(CodeContext& context) const override;
 };
 
-template<typename ReturnType>
 struct FunctionDeclarationNode : public ASTNode {
-	using return_type = ReturnType;
 	std::string identifier;
 	std::unique_ptr<ASTNode> statement;
 
-	std::ostream& print(std::ostream& os, int indent) const override {
-		os << std::string(indent, ' ') << "FUNCTION DECLARATION NODE: " << identifier << '\n';
-		statement->print(os, indent + 1);
-		return os;
-	}
-
-	void generate(CodeContext& context) const override {
-		if (statement) {
-			statement->generate(context);
-		}
-	}
+	std::ostream& print(std::ostream& os, int indent) const override;
+	void generate(CodeContext& context) const override;
 };
 
 struct ReturnNode : public ASTNode {

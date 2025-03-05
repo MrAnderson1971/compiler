@@ -25,7 +25,7 @@ std::unique_ptr<ASTNode> Parser::parseProgram() {
 
 std::unique_ptr<ASTNode> Parser::parseFunctionDeclaration() {
 	getTokenAndAdvance(Keyword::INT);
-	auto function_declaration = std::make_unique<FunctionDeclarationNode<int>>();
+	auto function_declaration = std::make_unique<FunctionDeclarationNode>();
 	function_declaration->identifier = getTokenAndAdvance<std::string>();
 	getTokenAndAdvance(Symbol::OPEN_PAREN);
 	getTokenAndAdvance(Symbol::CLOSED_PAREN);

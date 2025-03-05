@@ -120,3 +120,17 @@ void BinaryNode::generate(CodeContext& context) const {
 		break;
 	}
 }
+
+std::ostream& FunctionDeclarationNode::print(std::ostream& os, int indent) const {
+	os << std::string(indent, ' ') << "FUNCTION DECLARATION NODE: " << identifier << '\n';
+	if (statement) {
+		statement->print(os, indent + 1);
+	}
+	return os;
+}
+
+void FunctionDeclarationNode::generate(CodeContext& context) const {
+	if (statement) {
+		statement->generate(context);
+	}
+}
