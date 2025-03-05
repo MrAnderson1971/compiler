@@ -17,7 +17,9 @@ enum Symbol {
 	EXCLAMATION_MARK,
 	PLUS,
 	ASTERISK,
-	FORWARD_SLASH
+	FORWARD_SLASH,
+	DOUBLE_MINUS,
+	DOUBLE_PLUS
 };
 
 enum class Keyword {

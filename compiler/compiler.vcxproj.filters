@@ -21,10 +21,10 @@
     <ClCompile Include="lexer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="compiler.cpp">
+    <ClCompile Include="parser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="parser.cpp">
+    <ClCompile Include="ast.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

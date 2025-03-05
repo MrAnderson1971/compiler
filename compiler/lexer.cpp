@@ -39,6 +39,9 @@ void TokenPrinter::operator()(Symbol s) const {
 	case FORWARD_SLASH:
 		os << "FORWARD_SLASH";
 		break;
+	case DOUBLE_MINUS:
+		os << "DOUBLE_MINUS";
+		break;
 	default:
 		os << "UNKNOWN SYMBOL";
 	}
@@ -88,7 +91,13 @@ void Lexer::lex() {
 			tokens.push_back(SEMICOLON);
 			break;
 		case '-':
-			tokens.push_back(MINUS);
+			if (i + 1 < source.size() && source[i + 1] == '-') {
+				tokens.push_back(DOUBLE_MINUS);
+				i++;
+			}
+			else {
+				tokens.push_back(MINUS);
+			}
 			break;
 		case '~':
 			tokens.push_back(TILDE);
@@ -97,7 +106,13 @@ void Lexer::lex() {
 			tokens.push_back(EXCLAMATION_MARK);
 			break;
 		case '+':
-			tokens.push_back(PLUS);
+			if (i + 1 < source.size() && source[i + 1] == '+') {
+				tokens.push_back(DOUBLE_PLUS);
+				i++;
+			}
+			else {
+				tokens.push_back(PLUS);
+			}
 			break;
 		case '*':
 			tokens.push_back(ASTERISK);

@@ -8,25 +8,39 @@
 
 // https://norasandler.com/2017/11/29/Write-a-Compiler.html
 
+constexpr bool FILE_TESTS = true;
+
 int main()
 {
-	std::filesystem::path tests = std::filesystem::current_path() / "tests";
+	if constexpr (FILE_TESTS) {
+		std::filesystem::path tests = std::filesystem::current_path() / "tests";
 
-	for (const auto& file : std::filesystem::directory_iterator(tests)) {
-		if (file.is_regular_file()) {
-			std::string source;
-			{
-				std::ifstream fs(file.path());
-				source = std::string((std::istreambuf_iterator<char>(fs)), std::istreambuf_iterator<char>());
+		for (const auto& file : std::filesystem::directory_iterator(tests)) {
+			if (file.is_regular_file()) {
+				std::string source;
+				{
+					std::ifstream fs(file.path());
+					source = std::string((std::istreambuf_iterator<char>(fs)), std::istreambuf_iterator<char>());
+				}
+				std::cout << file.path().filename() << "\n" << source << std::endl;
+				try {
+					compile(source);
+				}
+				catch (const std::exception& e) {
+					std::cerr << e.what() << std::endl;
+				}
 			}
-			std::cout << file.path().filename() << "\n" << source << std::endl;
-			Compiler compiler(source);
-			try {
-				compiler.compile();
-			}
-			catch (const std::exception& e) {
-				std::cerr << e.what() << std::endl;
-			}
+		}
+	}
+	else {
+		std::string source = R"(int main() { 
+			return --2; 
+	})";
+		try {
+			compile(source);
+		}
+		catch (const std::exception& e) {
+			std::cerr << e.what() << std::endl;
 		}
 	}
 
