@@ -2,9 +2,22 @@
 
 #include <variant>
 #include <string>
+#include <ostream>
+
+struct PseudoRegister {
+	std::string name;
+	unsigned int position;
+};
+
+inline std::ostream& operator<<(std::ostream& os, const PseudoRegister& reg) {
+	return os << reg.name << "$" << reg.position;
+}
 
 using Number = unsigned int;
-using Operand = std::variant<std::string, Number>;
+using Operand = std::variant<PseudoRegister, 
+	Number, // number literal
+	std::nullptr_t
+>;
 
 enum class Types {
 	INT

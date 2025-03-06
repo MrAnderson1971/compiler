@@ -19,7 +19,7 @@ struct ASTNode {
 	virtual std::ostream& print(std::ostream& os, int) const = 0;
 	virtual void generate(CodeContext&) const = 0;
 	virtual Operand makeTac(FunctionBody& body) const {
-		return "";
+		return nullptr;
 	}
 };
 

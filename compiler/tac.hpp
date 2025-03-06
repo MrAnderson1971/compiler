@@ -6,8 +6,8 @@
 
 // three address code
 struct TACInstruction {
-	std::string dest;
-	TACInstruction(std::string dest) : dest(dest) {}
+	PseudoRegister dest;
+	TACInstruction(PseudoRegister dest) : dest(dest) {}
 	virtual ~TACInstruction() = default;
 	virtual std::string print() const = 0;
 };
@@ -25,7 +25,7 @@ struct UnaryOpInstruction : public TACInstruction {
 	UnaryOperator op;
 	Operand arg;
 
-	UnaryOpInstruction(std::string dest, UnaryOperator op, Operand arg) : TACInstruction(dest), op(op), arg(arg) {}
+	UnaryOpInstruction(PseudoRegister dest, UnaryOperator op, Operand arg) : TACInstruction(dest), op(op), arg(arg) {}
 	std::string print() const override;
 };
 
@@ -34,14 +34,14 @@ struct BinaryOpInstruction : public TACInstruction {
 	Operand left;
 	Operand right;
 
-	BinaryOpInstruction(std::string dest, BinaryOperator op, Operand left, Operand right) : TACInstruction(dest), op(op), left(left), right(right) {}
+	BinaryOpInstruction(PseudoRegister dest, BinaryOperator op, Operand left, Operand right) : TACInstruction(dest), op(op), left(left), right(right) {}
 	std::string print() const override;
 };
 
 struct ReturnInstruction : public TACInstruction {
 	Operand val;
 
-	ReturnInstruction(std::string dest, Operand val) : TACInstruction(dest), val(val) {}
+	ReturnInstruction(PseudoRegister dest, Operand val) : TACInstruction(dest), val(val) {}
 	std::string print() const override;
 };
 
@@ -51,8 +51,8 @@ struct FunctionBody {
 	std::vector<std::unique_ptr<TACInstruction>> instructions;
 
 	template<typename Instruction, typename... Args>
-	std::string emplaceInstruction(Args... args) {
-		std::string destination = name + "$" + std::to_string(variableCount++);
+	PseudoRegister emplaceInstruction(Args... args) {
+		PseudoRegister destination{ name, variableCount++ };
 		instructions.push_back(std::make_unique<Instruction>(destination, std::forward<Args>(args)...));
 		return destination;
 	}

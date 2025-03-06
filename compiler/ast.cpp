@@ -38,12 +38,12 @@ void ReturnNode::generate(CodeContext& context) const {
 }
 
 Operand ReturnNode::makeTac(FunctionBody& body) const {
-	Operand dest = "";
+	Operand dest = nullptr;
 	if (expression) {
 		dest = expression->makeTac(body);
 	}
 	body.emplaceInstruction<ReturnInstruction>(dest);
-	return "";
+	return nullptr;
 }
 
 std::ostream& ConstNode::print(std::ostream& os, int indent) const {
@@ -95,7 +95,7 @@ void UnaryNode::generate(CodeContext& context) const {
 
 Operand UnaryNode::makeTac(FunctionBody& body) const {
 	Operand src = expression->makeTac(body);
-	std::string dest = body.emplaceInstruction<UnaryOpInstruction>(op, src);
+	PseudoRegister dest = body.emplaceInstruction<UnaryOpInstruction>(op, src);
 	return dest;
 }
 
