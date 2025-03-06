@@ -34,7 +34,7 @@ int main()
 	}
 	else {
 		std::string source = R"(int main() { 
-			return ~~~~~-(-2); 
+			return ~-2; 
 	})";
 		try {
 			compile(source);

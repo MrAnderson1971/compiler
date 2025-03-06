@@ -94,6 +94,9 @@ void ReturnInstruction::makeAssembly(std::stringstream& ss) const {
 	/* movq %rbp, %rsp
 popq %rbp
 ret*/
+	ss << "movl ";
+	std::visit(OperandToAsm{ ss }, val);
+	ss << ", %eax\n";
 	ss << "movq %rbp, %rsp\n"
 		<< "popq %rbp\n"
 		<< "ret\n";
