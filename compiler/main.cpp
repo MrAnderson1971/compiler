@@ -8,7 +8,7 @@
 
 // https://norasandler.com/2017/11/29/Write-a-Compiler.html
 
-constexpr bool FILE_TESTS = true;
+constexpr bool FILE_TESTS = false;
 
 int main()
 {
@@ -34,7 +34,7 @@ int main()
 	}
 	else {
 		std::string source = R"(int main() { 
-			return --2; 
+			return ~~~~~-(-2); 
 	})";
 		try {
 			compile(source);

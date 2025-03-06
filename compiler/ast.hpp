@@ -24,6 +24,9 @@ enum BinaryOperator {
 
 struct CodeContext {
 	std::ostream& out;
+
+	std::string methodName = "";
+	unsigned int variableCounter = 0;
 };
 
 struct ASTNode {

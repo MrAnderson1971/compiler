@@ -133,12 +133,14 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="lexer.cpp" />
     <ClCompile Include="parser.cpp" />
+    <ClCompile Include="tac.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ast.hpp" />
     <ClInclude Include="compiler.hpp" />
     <ClInclude Include="lexer.hpp" />
     <ClInclude Include="parser.hpp" />
+    <ClInclude Include="tac.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

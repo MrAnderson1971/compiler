@@ -1,4 +1,6 @@
+#include <iostream>
 #include "ast.hpp"
+#include "tac.hpp"
 
 std::ostream& ProgramNode::print(std::ostream& os, int indent) const {
 	os << "PROGRAM NODE\n";
@@ -131,6 +133,9 @@ std::ostream& FunctionDeclarationNode::print(std::ostream& os, int indent) const
 
 void FunctionDeclarationNode::generate(CodeContext& context) const {
 	if (statement) {
+		FunctionBody body(identifier);
+		makeTac(statement, body);
+		std::cout << body;
 		statement->generate(context);
 	}
 }
