@@ -141,6 +141,7 @@
     <ClInclude Include="lexer.hpp" />
     <ClInclude Include="parser.hpp" />
     <ClInclude Include="tac.hpp" />
+    <ClInclude Include="type.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

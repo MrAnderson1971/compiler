@@ -4,23 +4,8 @@
 #include <ostream>
 #include <sstream>
 #include "lexer.hpp"
-
-enum class Types {
-	INT
-};
-
-enum UnaryOperator {
-	NEGATION,
-	BITWISE_NOT,
-	LOGICAL_NOT
-};
-
-enum BinaryOperator {
-	ADD,
-	SUBTRACT,
-	MULTIPLY,
-	DIVIDE
-};
+#include "tac.hpp"
+#include "type.hpp"
 
 struct CodeContext {
 	std::ostream& out;
@@ -33,6 +18,9 @@ struct ASTNode {
 	virtual ~ASTNode() = default;
 	virtual std::ostream& print(std::ostream& os, int) const = 0;
 	virtual void generate(CodeContext&) const = 0;
+	virtual Operand makeTac(FunctionBody& body) const {
+		return "";
+	}
 };
 
 inline std::ostream& operator<<(std::ostream& os, const ASTNode& node) {
@@ -59,6 +47,7 @@ struct ReturnNode : public ASTNode {
 
 	std::ostream& print(std::ostream&, int) const override;
 	void generate(CodeContext& context) const override;
+	Operand makeTac(FunctionBody& body) const override;
 };
 
 struct UnaryNode : public ASTNode {
@@ -69,6 +58,7 @@ struct UnaryNode : public ASTNode {
 
 	std::ostream& print(std::ostream&, int) const override;
 	void generate(CodeContext& context) const override;
+	Operand makeTac(FunctionBody& body) const override;
 };
 
 struct BinaryNode : public ASTNode {
@@ -87,4 +77,5 @@ struct ConstNode : public ASTNode {
 
 	std::ostream& print(std::ostream&, int) const override;
 	void generate(CodeContext& context) const override;
+	Operand makeTac(FunctionBody& body) const override;
 };

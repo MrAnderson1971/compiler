@@ -37,6 +37,15 @@ void ReturnNode::generate(CodeContext& context) const {
 	context.out << "    ret\n";
 }
 
+Operand ReturnNode::makeTac(FunctionBody& body) const {
+	Operand dest = "";
+	if (expression) {
+		dest = expression->makeTac(body);
+	}
+	body.emplaceInstruction<ReturnInstruction>(dest);
+	return "";
+}
+
 std::ostream& ConstNode::print(std::ostream& os, int indent) const {
 	return os << std::string(indent, ' ') << "CONST NODE: " << value << '\n';
 }
@@ -44,6 +53,10 @@ std::ostream& ConstNode::print(std::ostream& os, int indent) const {
 void ConstNode::generate(CodeContext& context) const {
 	// Load the constant value into %eax
 	context.out << "    mov $" << value << ", %eax\n";
+}
+
+Operand ConstNode::makeTac(FunctionBody& body) const {
+	return value;
 }
 
 std::ostream& UnaryNode::print(std::ostream& os, int indent) const {
@@ -78,6 +91,12 @@ void UnaryNode::generate(CodeContext& context) const {
 		context.out << "    movzx %al, %eax\n";
 		break;
 	}
+}
+
+Operand UnaryNode::makeTac(FunctionBody& body) const {
+	Operand src = expression->makeTac(body);
+	std::string dest = body.emplaceInstruction<UnaryOpInstruction>(op, src);
+	return dest;
 }
 
 std::ostream& BinaryNode::print(std::ostream& os, int indent) const {
@@ -134,7 +153,7 @@ std::ostream& FunctionDeclarationNode::print(std::ostream& os, int indent) const
 void FunctionDeclarationNode::generate(CodeContext& context) const {
 	if (statement) {
 		FunctionBody body(identifier);
-		makeTac(statement, body);
+		statement->makeTac(body);
 		std::cout << body;
 		statement->generate(context);
 	}

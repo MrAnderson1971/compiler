@@ -1,15 +1,16 @@
 #pragma once
 
-#include "ast.hpp"
+#include <vector>
+#include <memory>
+#include "type.hpp"
 
 // three address code
 struct TACInstruction {
 	std::string dest;
 	TACInstruction(std::string dest) : dest(dest) {}
 	virtual ~TACInstruction() = default;
+	virtual std::string print() const = 0;
 };
-
-using Operand = std::variant<std::string, Number>;
 
 struct OperandPrinter {
 	std::ostream& os;
@@ -25,6 +26,7 @@ struct UnaryOpInstruction : public TACInstruction {
 	Operand arg;
 
 	UnaryOpInstruction(std::string dest, UnaryOperator op, Operand arg) : TACInstruction(dest), op(op), arg(arg) {}
+	std::string print() const override;
 };
 
 struct BinaryOpInstruction : public TACInstruction {
@@ -33,12 +35,14 @@ struct BinaryOpInstruction : public TACInstruction {
 	Operand right;
 
 	BinaryOpInstruction(std::string dest, BinaryOperator op, Operand left, Operand right) : TACInstruction(dest), op(op), left(left), right(right) {}
+	std::string print() const override;
 };
 
 struct ReturnInstruction : public TACInstruction {
 	Operand val;
 
 	ReturnInstruction(std::string dest, Operand val) : TACInstruction(dest), val(val) {}
+	std::string print() const override;
 };
 
 struct FunctionBody {
@@ -54,5 +58,4 @@ struct FunctionBody {
 	}
 };
 
-Operand makeTac(const std::unique_ptr<ASTNode>& node, FunctionBody& body);
 std::ostream& operator<<(std::ostream& os, const FunctionBody& instruction);

@@ -5,6 +5,7 @@
 #include <vector>
 #include <ostream>
 #include <cstddef>
+#include "type.hpp"
 
 enum Symbol {
 	OPEN_BRACE,
@@ -30,8 +31,6 @@ enum class Keyword {
 struct UnknownToken {
 	const int position;
 };
-
-using Number = unsigned int;
 
 using Token = std::variant<Symbol, // tokens
 	Keyword,
