@@ -6,7 +6,7 @@
 
 struct PseudoRegister {
 	std::string name;
-	unsigned int position;
+	int position;
 };
 
 inline std::ostream& operator<<(std::ostream& os, const PseudoRegister& reg) {

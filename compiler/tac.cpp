@@ -8,6 +8,16 @@ std::ostream& operator<<(std::ostream& os, const FunctionBody& instruction) {
 	return os;
 }
 
+void OperandToAsm::operator()(const Number n) const {
+	ss << "$" << n;
+}
+
+void OperandToAsm::operator()(const PseudoRegister& reg) const {
+	ss << -4 * reg.position << "(%rbp)";
+}
+
+void OperandToAsm::operator()(const std::nullptr_t) const {}
+
 std::string UnaryOpInstruction::print() const {
 	std::stringstream ss;
 	ss << dest << " = ";
@@ -24,6 +34,31 @@ std::string UnaryOpInstruction::print() const {
 	}
 	std::visit(OperandPrinter{ ss }, arg);
 	return ss.str();
+}
+
+void UnaryOpInstruction::makeAssembly(std::stringstream& ss) const {
+	ss << "movl ";
+	std::visit(OperandToAsm{ ss }, arg);
+	ss << ", %r10d\n"
+		<< "movl %r10d, ";
+	OperandToAsm{ ss }(dest);
+	ss << "\n";
+	switch (op) {
+	case NEGATION:
+		ss << "negl ";
+		break;
+	case BITWISE_NOT:
+		ss << "notl ";
+		break;
+	case LOGICAL_NOT:
+		ss << "cmp $0, ";
+		std::visit(OperandToAsm{ ss }, arg);
+		ss << "\n    sete %al\n    movzx %al, " << dest;
+		ss << "\n";
+		return;
+	}
+	OperandToAsm{ ss }(dest);
+	ss << "\n";
 }
 
 std::string BinaryOpInstruction::print() const {
@@ -53,4 +88,13 @@ std::string ReturnInstruction::print() const {
 	ss << "return ";
 	std::visit(OperandPrinter{ ss }, val);
 	return ss.str();
+}
+
+void ReturnInstruction::makeAssembly(std::stringstream& ss) const {
+	/* movq %rbp, %rsp
+popq %rbp
+ret*/
+	ss << "movq %rbp, %rsp\n"
+		<< "popq %rbp\n"
+		<< "ret\n";
 }

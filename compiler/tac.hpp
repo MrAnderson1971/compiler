@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <memory>
+#include <sstream>
 #include "type.hpp"
 
 // three address code
@@ -10,6 +11,7 @@ struct TACInstruction {
 	TACInstruction(PseudoRegister dest) : dest(dest) {}
 	virtual ~TACInstruction() = default;
 	virtual std::string print() const = 0;
+	virtual void makeAssembly(std::stringstream&) const {};
 };
 
 struct OperandPrinter {
@@ -21,12 +23,20 @@ struct OperandPrinter {
 	}
 };
 
+struct OperandToAsm {
+	std::stringstream& ss;
+	void operator()(const Number n) const;
+	void operator()(const PseudoRegister& reg) const;
+	void operator()(const std::nullptr_t) const;
+};
+
 struct UnaryOpInstruction : public TACInstruction {
 	UnaryOperator op;
 	Operand arg;
 
 	UnaryOpInstruction(PseudoRegister dest, UnaryOperator op, Operand arg) : TACInstruction(dest), op(op), arg(arg) {}
 	std::string print() const override;
+	void makeAssembly(std::stringstream& ss) const override;
 };
 
 struct BinaryOpInstruction : public TACInstruction {
@@ -43,11 +53,12 @@ struct ReturnInstruction : public TACInstruction {
 
 	ReturnInstruction(PseudoRegister dest, Operand val) : TACInstruction(dest), val(val) {}
 	std::string print() const override;
+	void makeAssembly(std::stringstream& ss) const override;
 };
 
 struct FunctionBody {
 	std::string name;
-	unsigned int variableCount = 0;
+	int variableCount = 0;
 	std::vector<std::unique_ptr<TACInstruction>> instructions;
 
 	template<typename Instruction, typename... Args>

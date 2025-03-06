@@ -155,6 +155,11 @@ void FunctionDeclarationNode::generate(CodeContext& context) const {
 		FunctionBody body(identifier);
 		statement->makeTac(body);
 		std::cout << body;
-		statement->generate(context);
+		
+		std::stringstream ss;
+		for (const auto& instruction : body.instructions) {
+			instruction->makeAssembly(ss);
+		}
+		std::cout << ss.str();
 	}
 }
