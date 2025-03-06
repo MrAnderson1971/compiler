@@ -30,6 +30,15 @@ struct OperandToAsm {
 	void operator()(const std::nullptr_t) const;
 };
 
+struct FunctionInstruction : public TACInstruction {
+	std::string name;
+	std::string print() const override;
+	void makeAssembly(std::stringstream& ss) const override;
+	FunctionInstruction(PseudoRegister dest) : TACInstruction(dest) {
+		name = dest.name;
+	}
+};
+
 struct UnaryOpInstruction : public TACInstruction {
 	UnaryOperator op;
 	Operand arg;

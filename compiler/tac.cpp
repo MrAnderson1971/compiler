@@ -98,3 +98,14 @@ ret*/
 		<< "popq %rbp\n"
 		<< "ret\n";
 }
+
+std::string FunctionInstruction::print() const {
+	return "function";
+}
+
+void FunctionInstruction::makeAssembly(std::stringstream& ss) const {
+	ss << ".global " << name << "\n" 
+		<< name << ":\n"
+	<< "pushq %rbp\n"
+		<< "movq %rsp, %rbp\n";
+}

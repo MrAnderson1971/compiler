@@ -40,6 +40,7 @@ struct FunctionDeclarationNode : public ASTNode {
 
 	std::ostream& print(std::ostream& os, int indent) const override;
 	void generate(CodeContext& context) const override;
+	Operand makeTac(FunctionBody& body) const override;
 };
 
 struct ReturnNode : public ASTNode {

@@ -150,9 +150,15 @@ std::ostream& FunctionDeclarationNode::print(std::ostream& os, int indent) const
 	return os;
 }
 
+Operand FunctionDeclarationNode::makeTac(FunctionBody& body) const {
+	body.emplaceInstruction<FunctionInstruction>();
+	return nullptr;
+}
+
 void FunctionDeclarationNode::generate(CodeContext& context) const {
+	FunctionBody body(identifier);
+	makeTac(body);
 	if (statement) {
-		FunctionBody body(identifier);
 		statement->makeTac(body);
 		std::cout << body;
 		
