@@ -10,42 +10,42 @@
 
 constexpr bool FILE_TESTS = false;
 
-int main()
-{
-	if constexpr (FILE_TESTS) {
-		std::filesystem::path tests = std::filesystem::current_path() / "tests";
-
-		for (const auto& file : std::filesystem::directory_iterator(tests)) {
-			if (file.is_regular_file()) {
-				std::string source;
-				{
-					std::ifstream fs(file.path());
-					source = std::string((std::istreambuf_iterator<char>(fs)), std::istreambuf_iterator<char>());
-				}
-				std::cout << file.path().filename() << "\n" << source << std::endl;
-				try {
-					compile(source);
-				}
-				catch (const std::exception& e) {
-					std::cerr << e.what() << std::endl;
-				}
-			}
-		}
-	}
-	else {
-		std::string source = R"(int main() { 
-			return ~-2;
-	})";
-		try {
-			compile(source);
-		}
-		catch (const compiler_error& e) {
-			std::cerr << e.what() << std::endl;
-		}
-	}
-
-    return 0;
-}
+//int main()
+//{
+//	//if constexpr (FILE_TESTS) {
+//	//	std::filesystem::path tests = std::filesystem::current_path() / "tests";
+//
+//	//	for (const auto& file : std::filesystem::directory_iterator(tests)) {
+//	//		if (file.is_regular_file()) {
+//	//			std::string source;
+//	//			{
+//	//				std::ifstream fs(file.path());
+//	//				source = std::string((std::istreambuf_iterator<char>(fs)), std::istreambuf_iterator<char>());
+//	//			}
+//	//			std::cout << file.path().filename() << "\n" << source << std::endl;
+//	//			try {
+//	//				compile(source);
+//	//			}
+//	//			catch (const std::exception& e) {
+//	//				std::cerr << e.what() << std::endl;
+//	//			}
+//	//		}
+//	//	}
+//	//}
+//	//else {
+//	//	std::string source = R"(int main() { 
+//	//		return ~-2;
+//	//})";
+//	//	try {
+//	//		compile(source);
+//	//	}
+//	//	catch (const compiler_error& e) {
+//	//		std::cerr << e.what() << std::endl;
+//	//	}
+//	//}
+//
+//    return 0;
+//}
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu
 // Debug program: F5 or Debug > Start Debugging menu

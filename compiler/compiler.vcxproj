@@ -133,6 +133,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="lexer.cpp" />
     <ClCompile Include="parser.cpp" />
+    <ClCompile Include="simulator.cpp" />
     <ClCompile Include="tac.cpp" />
     <ClCompile Include="test_compiler.cpp" />
   </ItemGroup>
@@ -141,6 +142,7 @@
     <ClInclude Include="compiler.hpp" />
     <ClInclude Include="lexer.hpp" />
     <ClInclude Include="parser.hpp" />
+    <ClInclude Include="simulator.hpp" />
     <ClInclude Include="tac.hpp" />
     <ClInclude Include="type.hpp" />
   </ItemGroup>
