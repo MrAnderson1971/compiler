@@ -18,7 +18,7 @@ class Parser {
 		}
 
 		Token operator()(UnknownToken unknown) const {
-			throw std::runtime_error("Unknown token at position " + std::to_string(unknown.position));
+			throw compiler_error("Unknown token at position " + std::to_string(unknown.position));
 		}
 	};
 	std::deque<Token> tokens;
@@ -40,15 +40,29 @@ class Parser {
 	template<typename T>
 	T getTokenAndAdvance() {
 		if (tokens.empty()) {
-			throw std::runtime_error("Unexpected EOF");
+			throw compiler_error("Unexpected EOF");
 		}
-		auto t = std::get<T>(tokens.front());
+		auto* t = std::get_if<T>(&tokens.front());
+		if (!t) {
+			std::stringstream ss;
+			ss << "Unexpected token ";
+			std::visit(TokenPrinter{ ss }, tokens.front());
+			throw compiler_error(ss.str());
+		}
 		tokens.pop_front();
-		return t;
+		return *t;
 	}
 
 	template<typename T>
 	T getTokenAndAdvance(T expected) {
+		if (!std::holds_alternative<T>(peekToken())) {
+			std::stringstream ss;
+			ss << "Expected ";
+			TokenPrinter{ ss }(expected);
+			ss << " but got ";
+			std::visit(TokenPrinter{ ss }, peekToken());
+			throw compiler_error(ss.str());
+		}
 		auto t = std::get<T>(getTokenAndAdvance());
 		if (t != expected) {
 			std::stringstream ss;
@@ -56,7 +70,7 @@ class Parser {
 			TokenPrinter{ ss }(expected);
 			ss<< " but got ";
 			TokenPrinter{ ss }(t);
-			throw std::runtime_error(ss.str());
+			throw compiler_error(ss.str());
 		}
 		return t;
 	}

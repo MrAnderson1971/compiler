@@ -4,6 +4,16 @@
 #include <string>
 #include <ostream>
 
+class compiler_error : public std::exception {
+	const std::string message;
+
+public:
+	explicit compiler_error(const std::string& message) : message(message) {}
+	const char* what() const noexcept override {
+		return message.c_str();
+	}
+};
+
 struct PseudoRegister {
 	std::string name;
 	int position;

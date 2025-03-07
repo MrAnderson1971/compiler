@@ -34,12 +34,12 @@ int main()
 	}
 	else {
 		std::string source = R"(int main() { 
-			return ~-2; 
+			return ~-2;
 	})";
 		try {
 			compile(source);
 		}
-		catch (const std::exception& e) {
+		catch (const compiler_error& e) {
 			std::cerr << e.what() << std::endl;
 		}
 	}

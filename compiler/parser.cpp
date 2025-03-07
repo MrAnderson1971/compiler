@@ -3,7 +3,7 @@
 
 Token Parser::peekToken() {
 	if (tokens.empty()) {
-		throw std::runtime_error("Unexpected EOF");
+		throw compiler_error("Unexpected EOF");
 	}
 	return tokens.front();
 }
@@ -12,7 +12,7 @@ Parser::Parser(std::vector<Token>&& tokens) : tokens(tokens.begin(), tokens.end(
 
 Token Parser::getTokenAndAdvance() {
 	if (tokens.empty()) {
-		throw std::runtime_error("Unexpected EOF");
+		throw compiler_error("Unexpected EOF");
 	}
 	return std::visit(GetTokenAndAdvance{ tokens }, tokens.front());
 }
@@ -116,9 +116,9 @@ std::unique_ptr<ASTNode> Parser::parseFactor() {
 		getTokenAndAdvance(Symbol::CLOSED_PAREN);
 		return expression;
 	}
-	else if (std::holds_alternative<Symbol>(next) && (std::get<Symbol>(next) == MINUS || std::get<Symbol>(next) == EXCLAMATION_MARK || std::get<Symbol>(next) == TILDE)) {
+	else if (auto* symbol = std::get_if<Symbol>(&next)) {
 		UnaryOperator op;
-		switch (std::get<Symbol>(next)) {
+		switch (*symbol) {
 		case MINUS:
 			op = NEGATION;
 			break;
@@ -132,21 +132,20 @@ std::unique_ptr<ASTNode> Parser::parseFactor() {
 			std::stringstream ss;
 			ss << "Unexpected unary operator ";
 			std::visit(TokenPrinter{ ss }, next);
-			throw std::runtime_error(ss.str());
+			throw compiler_error(ss.str());
 		}
 		auto factor = parseFactor();
 		return std::make_unique<UnaryNode>(op, factor);
 	}
-	else if (std::holds_alternative<Number>(next)) {
-		return parseConst(std::get<Number>(next));
+	else if (auto* number = std::get_if<Number>(&next)) {
+		return parseConst(*number);
 	}
 	else {
 		std::stringstream ss;
 		ss << "Unexpected token ";
 		std::visit(TokenPrinter{ ss }, next);
-		throw std::runtime_error(ss.str());
+		throw compiler_error(ss.str());
 	}
-
 }
 
 std::unique_ptr<ASTNode> Parser::parse() {
