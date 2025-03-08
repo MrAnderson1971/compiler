@@ -42,15 +42,15 @@ class Parser {
 		if (tokens.empty()) {
 			throw compiler_error("Unexpected EOF");
 		}
-		auto* t = std::get_if<T>(&tokens.front());
-		if (!t) {
+		if (!std::holds_alternative<T>(tokens.front())) {
 			std::stringstream ss;
 			ss << "Unexpected token ";
 			std::visit(TokenPrinter{ ss }, tokens.front());
 			throw compiler_error(ss.str());
 		}
+		auto t = std::get<T>(tokens.front());
 		tokens.pop_front();
-		return *t;
+		return t;
 	}
 
 	template<typename T>

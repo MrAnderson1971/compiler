@@ -2,6 +2,7 @@
 
 #include "lexer.hpp"
 #include "parser.hpp"
+#include <iostream>
 
 #ifdef _DEBUG
 constexpr bool debug = true;

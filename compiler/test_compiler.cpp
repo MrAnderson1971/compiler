@@ -1,14 +1,5 @@
-#include <gtest/gtest.h>
 #include "simulator.hpp"
 #include "compiler.hpp"
-
-class CompilerTest : public ::testing::Test {
-protected:
-	void SetUp() override {}
-
-	X86Simulator simulator;
-	std::stringstream ss;
-};
 
 TEST_F(CompilerTest, TestSuccess) {
 	std::string source = R"(
@@ -17,6 +8,7 @@ int main() {
 }
 )";
 	compile(source, ss);
+	std::cout << ss.str() << std::endl;
 	simulator.loadProgram(ss.str());
 	int64_t output = simulator.execute();
 	EXPECT_EQ(2, output);

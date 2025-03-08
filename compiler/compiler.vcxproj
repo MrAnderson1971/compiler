@@ -136,6 +136,7 @@
     <ClCompile Include="simulator.cpp" />
     <ClCompile Include="tac.cpp" />
     <ClCompile Include="test_compiler.cpp" />
+    <ClCompile Include="test_unary.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ast.hpp" />

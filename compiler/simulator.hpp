@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <functional>
 #include <memory>
+#include <gtest/gtest.h>
 
 class X86Simulator {
 public:
@@ -75,4 +76,12 @@ private:
 
     // Execute a single instruction
     void executeInstruction(const std::string& instruction);
+};
+
+class CompilerTest : public ::testing::Test {
+protected:
+    void SetUp() override {}
+
+    X86Simulator simulator;
+    std::stringstream ss;
 };

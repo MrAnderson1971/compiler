@@ -81,19 +81,33 @@ void X86Simulator::reset() {
     labels.clear();
 }
 
+// Updated instruction handlers with improved argument parsing
+
 void X86Simulator::initInstructionHandlers() {
     using Handler = std::function<void(const std::string&)>;
 
     std::unordered_map<std::string, Handler> handlers;
 
     handlers["movq"] = [this](const std::string& args) {
-        std::istringstream iss(args);
-        std::string src, dst;
-        iss >> src >> dst;
+        // Better parsing for comma-separated arguments
+        std::string trimmedArgs = args;
+        trimmedArgs.erase(0, trimmedArgs.find_first_not_of(" \t"));
 
-        // Remove comma if present
-        if (!dst.empty() && dst[0] == ',') dst = dst.substr(1);
-        dst.erase(std::remove(dst.begin(), dst.end(), ','), dst.end());
+        // Find comma
+        size_t commaPos = trimmedArgs.find(',');
+        if (commaPos == std::string::npos) {
+            throw std::runtime_error("movq requires comma-separated arguments: " + args);
+        }
+
+        std::string src = trimmedArgs.substr(0, commaPos);
+        std::string dst = trimmedArgs.substr(commaPos + 1);
+
+        // Trim both operands
+        src.erase(0, src.find_first_not_of(" \t"));
+        src.erase(src.find_last_not_of(" \t") + 1);
+
+        dst.erase(0, dst.find_first_not_of(" \t"));
+        dst.erase(dst.find_last_not_of(" \t") + 1);
 
         auto srcVal = parseOperand(src);
         if (srcVal.isMemoryAddress) {
@@ -114,13 +128,25 @@ void X86Simulator::initInstructionHandlers() {
         };
 
     handlers["movl"] = [this](const std::string& args) {
-        std::istringstream iss(args);
-        std::string src, dst;
-        iss >> src >> dst;
+        // Better parsing for comma-separated arguments
+        std::string trimmedArgs = args;
+        trimmedArgs.erase(0, trimmedArgs.find_first_not_of(" \t"));
 
-        // Remove comma if present
-        if (!dst.empty() && dst[0] == ',') dst = dst.substr(1);
-        dst.erase(std::remove(dst.begin(), dst.end(), ','), dst.end());
+        // Find comma
+        size_t commaPos = trimmedArgs.find(',');
+        if (commaPos == std::string::npos) {
+            throw std::runtime_error("movl requires comma-separated arguments: " + args);
+        }
+
+        std::string src = trimmedArgs.substr(0, commaPos);
+        std::string dst = trimmedArgs.substr(commaPos + 1);
+
+        // Trim both operands
+        src.erase(0, src.find_first_not_of(" \t"));
+        src.erase(src.find_last_not_of(" \t") + 1);
+
+        dst.erase(0, dst.find_first_not_of(" \t"));
+        dst.erase(dst.find_last_not_of(" \t") + 1);
 
         auto srcVal = parseOperand(src);
         if (srcVal.isMemoryAddress) {
@@ -145,6 +171,8 @@ void X86Simulator::initInstructionHandlers() {
 
     handlers["negl"] = [this](const std::string& args) {
         std::string operand = args;
+        operand.erase(0, operand.find_first_not_of(" \t"));
+        operand.erase(operand.find_last_not_of(" \t") + 1);
 
         if (!operand.empty() && operand[0] == '%') {
             // Register operand
@@ -163,6 +191,8 @@ void X86Simulator::initInstructionHandlers() {
 
     handlers["notl"] = [this](const std::string& args) {
         std::string operand = args;
+        operand.erase(0, operand.find_first_not_of(" \t"));
+        operand.erase(operand.find_last_not_of(" \t") + 1);
 
         if (!operand.empty() && operand[0] == '%') {
             // Register operand
@@ -180,6 +210,8 @@ void X86Simulator::initInstructionHandlers() {
 
     handlers["pushq"] = [this](const std::string& args) {
         std::string operand = args;
+        operand.erase(0, operand.find_first_not_of(" \t"));
+        operand.erase(operand.find_last_not_of(" \t") + 1);
 
         auto srcVal = parseOperand(operand);
         if (srcVal.isMemoryAddress) {
@@ -197,6 +229,8 @@ void X86Simulator::initInstructionHandlers() {
 
     handlers["popq"] = [this](const std::string& args) {
         std::string operand = args;
+        operand.erase(0, operand.find_first_not_of(" \t"));
+        operand.erase(operand.find_last_not_of(" \t") + 1);
 
         // Read value from stack
         int64_t value = static_cast<int64_t>(
@@ -226,6 +260,54 @@ void X86Simulator::initInstructionHandlers() {
         };
 
     instructionHandlers = std::move(handlers);
+}
+
+// Improved register synchronization to handle r10d/r10 pairs correctly
+void X86Simulator::syncRegisters(const std::string& reg) {
+    // Handle r10d -> r10 case (extended registers like r8d through r15d)
+    if (reg.length() > 2 && reg[0] == 'r' && reg[reg.length() - 1] == 'd') {
+        std::string reg64 = reg.substr(0, reg.length() - 1);
+        // Zero extend to 64 bits
+        registers[reg64] = static_cast<int64_t>(static_cast<int32_t>(registers[reg]));
+        return;
+    }
+
+    // Handle eax -> rax case (standard registers)
+    if (reg.length() == 3 && reg[0] == 'e') {
+        std::string reg64 = "r" + reg.substr(1);
+        // Zero extend to 64 bits
+        registers[reg64] = static_cast<int64_t>(static_cast<int32_t>(registers[reg]));
+    }
+    // Handle rax -> eax case
+    else if (reg.length() == 3 && reg[0] == 'r') {
+        std::string reg32 = "e" + reg.substr(1);
+        if (registers.find(reg32) != registers.end()) {
+            // Truncate to 32 bits
+            registers[reg32] = static_cast<int64_t>(static_cast<int32_t>(registers[reg]));
+        }
+    }
+    // Handle r10 -> r10d case (for extended registers)
+    else if (reg.length() > 1 && reg[0] == 'r' && std::isdigit(reg[1])) {
+        std::string reg32 = reg + "d";
+        if (registers.find(reg32) != registers.end()) {
+            // Truncate to 32 bits
+            registers[reg32] = static_cast<int64_t>(static_cast<int32_t>(registers[reg]));
+        }
+    }
+}
+
+// Improved memory address parsing for AT&T syntax
+uint32_t X86Simulator::parseMemoryAddress(const std::string& operand) {
+    std::regex memPattern(R"((-?\d*)\(%([a-zA-Z0-9]+)\))");
+    std::smatch match;
+
+    if (std::regex_match(operand, match, memPattern)) {
+        int32_t offset = match[1].length() > 0 ? std::stoi(match[1].str()) : 0;
+        std::string reg = match[2].str();
+        return static_cast<uint32_t>(registers[reg] + static_cast<int64_t>(offset));
+    }
+
+    throw std::runtime_error("Invalid memory operand: " + operand);
 }
 
 void X86Simulator::loadProgram(const std::string& assembly) {
@@ -328,19 +410,6 @@ void X86Simulator::executeInstruction(const std::string& instruction) {
     }
 }
 
-uint32_t X86Simulator::parseMemoryAddress(const std::string& operand) {
-    std::regex memPattern(R"((-?\d*)\(%([a-z0-9]+)\))");
-    std::smatch match;
-
-    if (std::regex_match(operand, match, memPattern)) {
-        int32_t offset = match[1].length() > 0 ? std::stoi(match[1].str()) : 0;
-        std::string reg = match[2].str();
-        return static_cast<uint32_t>(registers[reg] + static_cast<int64_t>(offset));
-    }
-
-    throw std::runtime_error("Invalid memory operand: " + operand);
-}
-
 X86Simulator::OperandValue X86Simulator::parseOperand(const std::string& operand) {
     if (operand.empty()) {
         return { 0, false };
@@ -359,31 +428,6 @@ X86Simulator::OperandValue X86Simulator::parseOperand(const std::string& operand
         // Memory operand
         uint32_t addr = parseMemoryAddress(operand);
         return { static_cast<int64_t>(addr), true }; // Return address + flag indicating memory
-    }
-}
-
-void X86Simulator::syncRegisters(const std::string& reg) {
-    // Handle r10d -> r10 case (for extended registers)
-    if (reg.length() > 2 && reg[reg.length() - 1] == 'd') {
-        std::string reg64 = reg.substr(0, reg.length() - 1);
-        // Zero extend to 64 bits
-        registers[reg64] = static_cast<int64_t>(static_cast<uint32_t>(registers[reg]));
-        return;
-    }
-
-    // Handle eax -> rax case
-    if (reg.length() == 3 && reg[0] == 'e') {
-        std::string reg64 = "r" + reg.substr(1);
-        // Zero extend to 64 bits
-        registers[reg64] = static_cast<int64_t>(static_cast<uint32_t>(registers[reg]));
-    }
-    // Handle rax -> eax case
-    else if (reg.length() == 3 && reg[0] == 'r') {
-        std::string reg32 = "e" + reg.substr(1);
-        if (registers.find(reg32) != registers.end()) {
-            // Truncate to 32 bits
-            registers[reg32] = static_cast<int64_t>(static_cast<int32_t>(registers[reg]));
-        }
     }
 }
 
