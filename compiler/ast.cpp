@@ -157,7 +157,8 @@ std::ostream& FunctionDeclarationNode::print(std::ostream& os, int indent) const
 }
 
 Operand FunctionDeclarationNode::makeTac(FunctionBody& body) const {
-	body.emplaceInstruction<FunctionInstruction>();
+	body.emplaceInstruction<FunctionInstruction>(body.name);
+	body.emplaceInstruction<AllocateStackInstruction>();
 	return nullptr;
 }
 
@@ -169,7 +170,7 @@ void FunctionDeclarationNode::generate(CodeContext& context) const {
 		
 		std::stringstream ss;
 		for (const auto& instruction : body.instructions) {
-			instruction->makeAssembly(ss);
+			instruction->makeAssembly(ss, body);
 		}
 		context.out << ss.str();
 	}

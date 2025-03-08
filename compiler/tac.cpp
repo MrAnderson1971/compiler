@@ -41,7 +41,7 @@ std::string UnaryOpInstruction::print() const {
 	return ss.str();
 }
 
-void UnaryOpInstruction::makeAssembly(std::stringstream& ss) const {
+void UnaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
 	ss << std::format("movl {}, %r10d\n", std::visit(operandToAsm, arg));
 	ss << std::format("movl %r10d, {}\n", dest);
 	switch (op) {
@@ -77,7 +77,7 @@ std::string BinaryOpInstruction::print() const {
 	return ss.str();
 }
 
-void BinaryOpInstruction::makeAssembly(std::stringstream& ss) const {
+void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
 	std::string src1 = std::visit(operandToAsm, left);
 	std::string src2 = std::visit(operandToAsm, right);
 	std::string d = operandToAsm(dest);
@@ -119,7 +119,7 @@ std::string ReturnInstruction::print() const {
 	return ss.str();
 }
 
-void ReturnInstruction::makeAssembly(std::stringstream& ss) const {
+void ReturnInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
 	/* movq %rbp, %rsp
 popq %rbp
 ret*/
@@ -133,9 +133,17 @@ std::string FunctionInstruction::print() const {
 	return "function";
 }
 
-void FunctionInstruction::makeAssembly(std::stringstream& ss) const {
+void FunctionInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
 	ss << ".global " << name << "\n" 
 		<< name << ":\n"
 	<< "pushq %rbp\n"
 		<< "movq %rsp, %rbp\n";
+}
+
+std::string AllocateStackInstruction::print() const {
+	return std::format("allocate_stack");
+}
+
+void AllocateStackInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
+	ss << std::format("subq ${}, %rsp\n", body.variableCount * 4);
 }

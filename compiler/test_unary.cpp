@@ -7,6 +7,7 @@ int main() {
 	return ~12;
 })";
 	compile(source, ss);
+	std::cout << ss.str() << std::endl;
 	simulator.loadProgram(ss.str());
 	EXPECT_EQ(~12, simulator.execute());
 }

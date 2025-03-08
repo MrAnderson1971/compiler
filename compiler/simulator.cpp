@@ -176,6 +176,32 @@ void X86Simulator::initInstructionHandlers() {
         }
         };
 
+    handlers["subq"] = [this](const auto& operands) {
+        if (operands.size() != 2) {
+            throw std::runtime_error("subq requires exactly 2 operands");
+        }
+
+		const std::string& src = operands[0];
+		const std::string& dst = operands[1];
+
+		auto srcVal = parseOperand(src);
+        if (srcVal.isMemoryAddress) {
+            srcVal.value = static_cast<int64_t>(readMemory(static_cast<uint32_t>(srcVal.value), 8));
+        }
+
+        if (!dst.empty() && dst[0] == '%') {
+			// Register destination
+			std::string regName = dst.substr(1);
+			registers[regName] -= srcVal.value;
+			syncRegisters(regName);
+		}
+        else {
+            // Memory destination
+            uint32_t destAddr = parseMemoryAddress(dst);
+            writeMemory(destAddr, readMemory(destAddr, 8) - srcVal.value, 8);
+        }
+        };
+
     handlers["addl"] = [this](const std::vector<std::string>& operands) {
         if (operands.size() != 2) {
             throw std::runtime_error("addl requires exactly 2 operands");
