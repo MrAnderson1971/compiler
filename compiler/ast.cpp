@@ -141,6 +141,13 @@ void BinaryNode::generate(CodeContext& context) const {
 	}
 }
 
+Operand BinaryNode::makeTac(FunctionBody& body) const {
+	Operand leftOperand = left->makeTac(body);
+	Operand rightOperand = right->makeTac(body);
+	PseudoRegister dest = body.emplaceInstruction<BinaryOpInstruction>(op, leftOperand, rightOperand);
+	return dest;
+}
+
 std::ostream& FunctionDeclarationNode::print(std::ostream& os, int indent) const {
 	os << std::string(indent, ' ') << "FUNCTION DECLARATION NODE: " << identifier << '\n';
 	if (statement) {

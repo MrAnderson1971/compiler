@@ -30,12 +30,6 @@
     <ClCompile Include="tac.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="test_compiler.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="simulator.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="lexer.hpp">
@@ -56,11 +50,5 @@
     <ClInclude Include="type.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="simulator.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="packages.config" />
   </ItemGroup>
 </Project>

@@ -73,7 +73,7 @@ void X86Simulator::reset() {
     }
 
     registers[std::string(REG_RSP)] = static_cast<int64_t>(STACK_START);
-    registers[std::string(REG_ESP)] = static_cast<int32_t>(STACK_START);
+    registers[std::string(REG_RBP)] = static_cast<int32_t>(STACK_START);
 
     std::fill(memory.begin(), memory.end(), 0);
     pc = 0;
@@ -81,33 +81,53 @@ void X86Simulator::reset() {
     labels.clear();
 }
 
+static std::vector<std::string> parseOperands(const std::string& args) {
+    std::vector<std::string> result;
+    std::string trimmedArgs = args;
+    trimmedArgs.erase(0, trimmedArgs.find_first_not_of(" \t"));
+
+    // Handle empty args
+    if (trimmedArgs.empty()) {
+        return result;
+    }
+
+    // Split by commas
+    size_t start = 0;
+    size_t end = 0;
+    while ((end = trimmedArgs.find(',', start)) != std::string::npos) {
+        std::string operand = trimmedArgs.substr(start, end - start);
+
+        // Trim whitespace
+        operand.erase(0, operand.find_first_not_of(" \t"));
+        operand.erase(operand.find_last_not_of(" \t") + 1);
+
+        result.push_back(operand);
+        start = end + 1;
+    }
+
+    // Add the last operand
+    std::string lastOperand = trimmedArgs.substr(start);
+    lastOperand.erase(0, lastOperand.find_first_not_of(" \t"));
+    lastOperand.erase(lastOperand.find_last_not_of(" \t") + 1);
+    result.push_back(lastOperand);
+
+    return result;
+}
+
 // Updated instruction handlers with improved argument parsing
 
 void X86Simulator::initInstructionHandlers() {
-    using Handler = std::function<void(const std::string&)>;
+    using Handler = std::function<void(const std::vector<std::string>&)>;
 
     std::unordered_map<std::string, Handler> handlers;
 
-    handlers["movq"] = [this](const std::string& args) {
-        // Better parsing for comma-separated arguments
-        std::string trimmedArgs = args;
-        trimmedArgs.erase(0, trimmedArgs.find_first_not_of(" \t"));
-
-        // Find comma
-        size_t commaPos = trimmedArgs.find(',');
-        if (commaPos == std::string::npos) {
-            throw std::runtime_error("movq requires comma-separated arguments: " + args);
+    handlers["movq"] = [this](const std::vector<std::string>& operands) {
+        if (operands.size() != 2) {
+            throw std::runtime_error("movq requires exactly 2 operands");
         }
 
-        std::string src = trimmedArgs.substr(0, commaPos);
-        std::string dst = trimmedArgs.substr(commaPos + 1);
-
-        // Trim both operands
-        src.erase(0, src.find_first_not_of(" \t"));
-        src.erase(src.find_last_not_of(" \t") + 1);
-
-        dst.erase(0, dst.find_first_not_of(" \t"));
-        dst.erase(dst.find_last_not_of(" \t") + 1);
+        const std::string& src = operands[0];
+        const std::string& dst = operands[1];
 
         auto srcVal = parseOperand(src);
         if (srcVal.isMemoryAddress) {
@@ -127,26 +147,13 @@ void X86Simulator::initInstructionHandlers() {
         }
         };
 
-    handlers["movl"] = [this](const std::string& args) {
-        // Better parsing for comma-separated arguments
-        std::string trimmedArgs = args;
-        trimmedArgs.erase(0, trimmedArgs.find_first_not_of(" \t"));
-
-        // Find comma
-        size_t commaPos = trimmedArgs.find(',');
-        if (commaPos == std::string::npos) {
-            throw std::runtime_error("movl requires comma-separated arguments: " + args);
+    handlers["movl"] = [this](const std::vector<std::string>& operands) {
+        if (operands.size() != 2) {
+            throw std::runtime_error("movl requires exactly 2 operands");
         }
 
-        std::string src = trimmedArgs.substr(0, commaPos);
-        std::string dst = trimmedArgs.substr(commaPos + 1);
-
-        // Trim both operands
-        src.erase(0, src.find_first_not_of(" \t"));
-        src.erase(src.find_last_not_of(" \t") + 1);
-
-        dst.erase(0, dst.find_first_not_of(" \t"));
-        dst.erase(dst.find_last_not_of(" \t") + 1);
+        const std::string& src = operands[0];
+        const std::string& dst = operands[1];
 
         auto srcVal = parseOperand(src);
         if (srcVal.isMemoryAddress) {
@@ -169,10 +176,43 @@ void X86Simulator::initInstructionHandlers() {
         }
         };
 
-    handlers["negl"] = [this](const std::string& args) {
-        std::string operand = args;
-        operand.erase(0, operand.find_first_not_of(" \t"));
-        operand.erase(operand.find_last_not_of(" \t") + 1);
+    handlers["addl"] = [this](const std::vector<std::string>& operands) {
+        if (operands.size() != 2) {
+            throw std::runtime_error("addl requires exactly 2 operands");
+        }
+
+        const std::string& src = operands[0];
+        const std::string& dst = operands[1];
+
+        auto srcVal = parseOperand(src);
+        if (srcVal.isMemoryAddress) {
+            srcVal.value = static_cast<int64_t>(readMemory(static_cast<uint32_t>(srcVal.value), 4));
+        }
+
+        // Truncate to 32 bits
+        int32_t val32 = static_cast<int32_t>(srcVal.value);
+
+        if (!dst.empty() && dst[0] == '%') {
+            // Register destination
+            std::string regName = dst.substr(1);
+            int32_t dstVal = static_cast<int32_t>(registers[regName]);
+            registers[regName] = static_cast<int64_t>(dstVal + val32);
+            syncRegisters(regName);
+        }
+        else {
+            // Memory destination
+            uint32_t destAddr = parseMemoryAddress(dst);
+            int32_t dstVal = static_cast<int32_t>(readMemory(destAddr, 4));
+            writeMemory(destAddr, static_cast<uint64_t>(dstVal + val32), 4);
+        }
+        };
+
+    handlers["negl"] = [this](const std::vector<std::string>& operands) {
+        if (operands.size() != 1) {
+            throw std::runtime_error("negl requires exactly 1 operand");
+        }
+
+        const std::string& operand = operands[0];
 
         if (!operand.empty() && operand[0] == '%') {
             // Register operand
@@ -189,10 +229,12 @@ void X86Simulator::initInstructionHandlers() {
         }
         };
 
-    handlers["notl"] = [this](const std::string& args) {
-        std::string operand = args;
-        operand.erase(0, operand.find_first_not_of(" \t"));
-        operand.erase(operand.find_last_not_of(" \t") + 1);
+    handlers["notl"] = [this](const std::vector<std::string>& operands) {
+        if (operands.size() != 1) {
+            throw std::runtime_error("notl requires exactly 1 operand");
+        }
+
+        const std::string& operand = operands[0];
 
         if (!operand.empty() && operand[0] == '%') {
             // Register operand
@@ -208,10 +250,12 @@ void X86Simulator::initInstructionHandlers() {
         }
         };
 
-    handlers["pushq"] = [this](const std::string& args) {
-        std::string operand = args;
-        operand.erase(0, operand.find_first_not_of(" \t"));
-        operand.erase(operand.find_last_not_of(" \t") + 1);
+    handlers["pushq"] = [this](const std::vector<std::string>& operands) {
+        if (operands.size() != 1) {
+            throw std::runtime_error("pushq requires exactly 1 operand");
+        }
+
+        const std::string& operand = operands[0];
 
         auto srcVal = parseOperand(operand);
         if (srcVal.isMemoryAddress) {
@@ -227,10 +271,12 @@ void X86Simulator::initInstructionHandlers() {
             static_cast<uint64_t>(srcVal.value), 8);
         };
 
-    handlers["popq"] = [this](const std::string& args) {
-        std::string operand = args;
-        operand.erase(0, operand.find_first_not_of(" \t"));
-        operand.erase(operand.find_last_not_of(" \t") + 1);
+    handlers["popq"] = [this](const std::vector<std::string>& operands) {
+        if (operands.size() != 1) {
+            throw std::runtime_error("popq requires exactly 1 operand");
+        }
+
+        const std::string& operand = operands[0];
 
         // Read value from stack
         int64_t value = static_cast<int64_t>(
@@ -254,7 +300,7 @@ void X86Simulator::initInstructionHandlers() {
         }
         };
 
-    handlers["ret"] = [this](const std::string&) {
+    handlers["ret"] = [this](const std::vector<std::string>&) {
         // Return just exits - we'll handle this in the execute() function
         pc = static_cast<int>(instructions.size()); // This will end execution
         };
@@ -267,7 +313,7 @@ void X86Simulator::syncRegisters(const std::string& reg) {
     // Handle r10d -> r10 case (extended registers like r8d through r15d)
     if (reg.length() > 2 && reg[0] == 'r' && reg[reg.length() - 1] == 'd') {
         std::string reg64 = reg.substr(0, reg.length() - 1);
-        // Zero extend to 64 bits
+        // Sign extend to 64 bits (not zero extend)
         registers[reg64] = static_cast<int64_t>(static_cast<int32_t>(registers[reg]));
         return;
     }
@@ -275,7 +321,7 @@ void X86Simulator::syncRegisters(const std::string& reg) {
     // Handle eax -> rax case (standard registers)
     if (reg.length() == 3 && reg[0] == 'e') {
         std::string reg64 = "r" + reg.substr(1);
-        // Zero extend to 64 bits
+        // Sign extend to 64 bits (not zero extend)
         registers[reg64] = static_cast<int64_t>(static_cast<int32_t>(registers[reg]));
     }
     // Handle rax -> eax case
@@ -373,7 +419,7 @@ int64_t X86Simulator::execute(bool debugMode) {
 
     // Set stack pointer to initial value
     registers[std::string(REG_RSP)] = static_cast<int64_t>(STACK_START);
-    registers[std::string(REG_ESP)] = static_cast<int32_t>(STACK_START);
+    registers[std::string(REG_RBP)] = static_cast<int32_t>(STACK_START);
 
     while (pc < static_cast<int>(instructions.size())) {
         if (debug) {
@@ -400,10 +446,13 @@ void X86Simulator::executeInstruction(const std::string& instruction) {
         argsStr.erase(0, argsStr.find_first_not_of(" \t"));
     }
 
+    // Parse operands
+    std::vector<std::string> operands = parseOperands(argsStr);
+
     // Find handler for opcode
     auto it = instructionHandlers.find(opcode);
     if (it != instructionHandlers.end()) {
-        it->second(argsStr);
+        it->second(operands);
     }
     else {
         throw std::runtime_error("Unsupported instruction: " + opcode);

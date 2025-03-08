@@ -24,10 +24,18 @@ struct OperandPrinter {
 };
 
 struct OperandToAsm {
-	std::stringstream& ss;
-	void operator()(const Number n) const;
-	void operator()(const PseudoRegister& reg) const;
-	void operator()(const std::nullptr_t) const;
+	std::string operator()(const Number n) const;
+	std::string operator()(const PseudoRegister& reg) const;
+	std::string operator()(const std::nullptr_t) const;
+};
+
+extern OperandToAsm operandToAsm;
+
+template<>
+struct std::formatter<Operand> : std::formatter<std::string> {
+	auto format(const Operand& op, std::format_context& ctx) const {
+		return std::formatter<std::string>::format(std::visit(operandToAsm, op), ctx);
+	}
 };
 
 struct FunctionInstruction : public TACInstruction {
@@ -55,6 +63,7 @@ struct BinaryOpInstruction : public TACInstruction {
 
 	BinaryOpInstruction(PseudoRegister dest, BinaryOperator op, Operand left, Operand right) : TACInstruction(dest), op(op), left(left), right(right) {}
 	std::string print() const override;
+	void makeAssembly(std::stringstream& ss) const override;
 };
 
 struct ReturnInstruction : public TACInstruction {

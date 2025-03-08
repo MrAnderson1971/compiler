@@ -60,7 +60,7 @@ private:
     bool debug;
 
     // Map of instruction handlers
-    std::unordered_map<std::string, std::function<void(const std::string&)>> instructionHandlers;
+    std::unordered_map<std::string, std::function<void(const std::vector<std::string>&)>> instructionHandlers;
 
     // Parse memory operand like '8(%rbp)' or '(%rsp)'
     uint32_t parseMemoryAddress(const std::string& operand);

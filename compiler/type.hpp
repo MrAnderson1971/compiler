@@ -3,6 +3,7 @@
 #include <variant>
 #include <string>
 #include <ostream>
+#include <format>
 
 class compiler_error : public std::exception {
 	const std::string message;
@@ -17,6 +18,13 @@ public:
 struct PseudoRegister {
 	std::string name;
 	int position;
+};
+
+template <>
+struct std::formatter<PseudoRegister> : std::formatter<std::string> {
+	auto format(const PseudoRegister& reg, std::format_context& ctx) const {
+		return std::formatter<std::string>::format(std::to_string(-4 * reg.position) + "(%rbp)", ctx);
+	}
 };
 
 inline std::ostream& operator<<(std::ostream& os, const PseudoRegister& reg) {
@@ -43,5 +51,6 @@ enum BinaryOperator {
 	ADD,
 	SUBTRACT,
 	MULTIPLY,
-	DIVIDE
+	DIVIDE,
+	MODULO
 };

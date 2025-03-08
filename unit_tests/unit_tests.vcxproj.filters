@@ -24,6 +24,12 @@
     <ClCompile Include="..\compiler\test_unary.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="test_binary.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\compiler\simulator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\compiler\simulator.hpp">
