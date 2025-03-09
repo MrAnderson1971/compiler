@@ -115,7 +115,36 @@ static std::vector<std::string> parseOperands(const std::string& args) {
 }
 
 // Updated instruction handlers with improved argument parsing
+// Helper method to read from and write to operands
+void X86Simulator::writeToDestination(const std::string& dst, int64_t value, int size) {
+    if (!dst.empty() && dst[0] == '%') {
+        // Register destination
+        std::string regName = dst.substr(1);
+        registers[regName] = value;
+        syncRegisters(regName);
+    }
+    else {
+        // Memory destination
+        uint32_t destAddr = parseMemoryAddress(dst);
+        writeMemory(destAddr, static_cast<uint64_t>(value), size);
+    }
+}
 
+// Helper method to read from operands
+int64_t X86Simulator::readFromDestination(const std::string& dst, int size) {
+    if (!dst.empty() && dst[0] == '%') {
+        // Register source
+        std::string regName = dst.substr(1);
+        return registers[regName];
+    }
+    else {
+        // Memory source
+        uint32_t srcAddr = parseMemoryAddress(dst);
+        return static_cast<int64_t>(readMemory(srcAddr, size));
+    }
+}
+
+// Refactored instruction handlers using the helper methods
 void X86Simulator::initInstructionHandlers() {
     using Handler = std::function<void(const std::vector<std::string>&)>;
 
@@ -134,17 +163,7 @@ void X86Simulator::initInstructionHandlers() {
             srcVal.value = static_cast<int64_t>(readMemory(static_cast<uint32_t>(srcVal.value), 8));
         }
 
-        if (!dst.empty() && dst[0] == '%') {
-            // Register destination
-            std::string regName = dst.substr(1);
-            registers[regName] = srcVal.value;
-            syncRegisters(regName);
-        }
-        else {
-            // Memory destination
-            uint32_t destAddr = parseMemoryAddress(dst);
-            writeMemory(destAddr, static_cast<uint64_t>(srcVal.value), 8);
-        }
+        writeToDestination(dst, srcVal.value, 8);
         };
 
     handlers["movl"] = [this](const std::vector<std::string>& operands) {
@@ -162,18 +181,7 @@ void X86Simulator::initInstructionHandlers() {
 
         // Truncate to 32 bits
         int32_t val32 = static_cast<int32_t>(srcVal.value);
-
-        if (!dst.empty() && dst[0] == '%') {
-            // Register destination
-            std::string regName = dst.substr(1);
-            registers[regName] = static_cast<int64_t>(val32);
-            syncRegisters(regName);
-        }
-        else {
-            // Memory destination
-            uint32_t destAddr = parseMemoryAddress(dst);
-            writeMemory(destAddr, static_cast<uint64_t>(val32), 4);
-        }
+        writeToDestination(dst, static_cast<int64_t>(val32), 4);
         };
 
     handlers["subq"] = [this](const auto& operands) {
@@ -181,25 +189,33 @@ void X86Simulator::initInstructionHandlers() {
             throw std::runtime_error("subq requires exactly 2 operands");
         }
 
-		const std::string& src = operands[0];
-		const std::string& dst = operands[1];
+        const std::string& src = operands[0];
+        const std::string& dst = operands[1];
 
-		auto srcVal = parseOperand(src);
+        auto srcVal = parseOperand(src);
         if (srcVal.isMemoryAddress) {
             srcVal.value = static_cast<int64_t>(readMemory(static_cast<uint32_t>(srcVal.value), 8));
         }
 
-        if (!dst.empty() && dst[0] == '%') {
-			// Register destination
-			std::string regName = dst.substr(1);
-			registers[regName] -= srcVal.value;
-			syncRegisters(regName);
-		}
-        else {
-            // Memory destination
-            uint32_t destAddr = parseMemoryAddress(dst);
-            writeMemory(destAddr, readMemory(destAddr, 8) - srcVal.value, 8);
-        }
+        int64_t dstVal = readFromDestination(dst, 8);
+        writeToDestination(dst, dstVal - srcVal.value, 8);
+        };
+
+    handlers["subl"] = [this](const auto& operands)
+        {
+            if (operands.size() != 2) {
+                throw std::runtime_error("subl requires exactly 2 operands");
+            }
+            const std::string& src = operands[0];
+            const std::string& dst = operands[1];
+            auto srcVal = parseOperand(src);
+            if (srcVal.isMemoryAddress) {
+                srcVal.value = static_cast<int64_t>(readMemory(static_cast<uint32_t>(srcVal.value), 4));
+            }
+            // Truncate to 32 bits
+            int32_t val32 = static_cast<int32_t>(srcVal.value);
+            int32_t dstVal = static_cast<int32_t>(readFromDestination(dst, 4));
+            writeToDestination(dst, static_cast<int64_t>(dstVal - val32), 4);
         };
 
     handlers["addl"] = [this](const std::vector<std::string>& operands) {
@@ -217,21 +233,59 @@ void X86Simulator::initInstructionHandlers() {
 
         // Truncate to 32 bits
         int32_t val32 = static_cast<int32_t>(srcVal.value);
+        int32_t dstVal = static_cast<int32_t>(readFromDestination(dst, 4));
 
-        if (!dst.empty() && dst[0] == '%') {
-            // Register destination
-            std::string regName = dst.substr(1);
-            int32_t dstVal = static_cast<int32_t>(registers[regName]);
-            registers[regName] = static_cast<int64_t>(dstVal + val32);
-            syncRegisters(regName);
-        }
-        else {
-            // Memory destination
-            uint32_t destAddr = parseMemoryAddress(dst);
-            int32_t dstVal = static_cast<int32_t>(readMemory(destAddr, 4));
-            writeMemory(destAddr, static_cast<uint64_t>(dstVal + val32), 4);
-        }
+        writeToDestination(dst, static_cast<int64_t>(dstVal + val32), 4);
         };
+
+	handlers["imull"] = [this](const std::vector<std::string>& operands) {
+		if (operands.size() != 2) {
+			throw std::runtime_error("imull requires exactly 2 operands");
+		}
+		const std::string& src = operands[0];
+		const std::string& dst = operands[1];
+		auto srcVal = parseOperand(src);
+		if (srcVal.isMemoryAddress) {
+			srcVal.value = static_cast<int64_t>(readMemory(static_cast<uint32_t>(srcVal.value), 4));
+		}
+		// Truncate to 32 bits
+		int32_t val32 = static_cast<int32_t>(srcVal.value);
+		int32_t dstVal = static_cast<int32_t>(readFromDestination(dst, 4));
+		writeToDestination(dst, static_cast<int64_t>(dstVal * val32), 4);
+		};
+
+	handlers["idivl"] = [this](const std::vector<std::string>& operands) {
+		if (operands.size() != 1) {
+			throw std::runtime_error("idivl requires exactly 1 operand");
+		}
+		const std::string& operand = operands[0];
+		auto srcVal = parseOperand(operand);
+		if (srcVal.isMemoryAddress) {
+			srcVal.value = static_cast<int64_t>(readMemory(static_cast<uint32_t>(srcVal.value), 4));
+		}
+		int32_t val = static_cast<int32_t>(srcVal.value);
+		int32_t eax = static_cast<int32_t>(registers[std::string(REG_EAX)]);
+		int32_t edx = static_cast<int32_t>(registers[std::string(REG_EDX)]);
+		if (val == 0) {
+			throw std::runtime_error("Division by zero");
+		}
+		if (eax == std::numeric_limits<int32_t>::min() && val == -1) {
+			throw std::runtime_error("Integer overflow in idivl");
+		}
+		int32_t quotient = eax / val;
+		int32_t remainder = eax % val;
+		if (quotient != remainder) {
+			throw std::runtime_error("Integer overflow in idivl");
+		}
+		registers[std::string(REG_EAX)] = static_cast<int64_t>(quotient);
+		registers[std::string(REG_EDX)] = static_cast<int64_t>(remainder);
+		};
+
+	handlers["cdq"] = [this](const std::vector<std::string>&) {
+		// Sign extend EAX into EDX:EAX
+		int32_t eax = static_cast<int32_t>(registers[std::string(REG_EAX)]);
+		registers[std::string(REG_EDX)] = static_cast<int64_t>(eax < 0 ? -1 : 0);
+		};
 
     handlers["negl"] = [this](const std::vector<std::string>& operands) {
         if (operands.size() != 1) {
@@ -239,20 +293,8 @@ void X86Simulator::initInstructionHandlers() {
         }
 
         const std::string& operand = operands[0];
-
-        if (!operand.empty() && operand[0] == '%') {
-            // Register operand
-            std::string regName = operand.substr(1);
-            int32_t val = static_cast<int32_t>(registers[regName]);
-            registers[regName] = static_cast<int64_t>(-val); // Maintain 32-bit behavior
-            syncRegisters(regName);
-        }
-        else {
-            // Memory operand
-            uint32_t addr = parseMemoryAddress(operand);
-            int32_t val = static_cast<int32_t>(readMemory(addr, 4));
-            writeMemory(addr, static_cast<uint64_t>(-val), 4);
-        }
+        int32_t val = static_cast<int32_t>(readFromDestination(operand, 4));
+        writeToDestination(operand, static_cast<int64_t>(-val), 4);
         };
 
     handlers["notl"] = [this](const std::vector<std::string>& operands) {
@@ -261,19 +303,8 @@ void X86Simulator::initInstructionHandlers() {
         }
 
         const std::string& operand = operands[0];
-
-        if (!operand.empty() && operand[0] == '%') {
-            // Register operand
-            std::string regName = operand.substr(1);
-            registers[regName] = static_cast<int64_t>(~static_cast<int32_t>(registers[regName]));
-            syncRegisters(regName);
-        }
-        else {
-            // Memory operand
-            uint32_t addr = parseMemoryAddress(operand);
-            int32_t val = static_cast<int32_t>(readMemory(addr, 4));
-            writeMemory(addr, static_cast<uint64_t>(~val), 4);
-        }
+        int32_t val = static_cast<int32_t>(readFromDestination(operand, 4));
+        writeToDestination(operand, static_cast<int64_t>(~val), 4);
         };
 
     handlers["pushq"] = [this](const std::vector<std::string>& operands) {
@@ -313,17 +344,7 @@ void X86Simulator::initInstructionHandlers() {
         registers[std::string(REG_RSP)] += 8;
         registers[std::string(REG_ESP)] = static_cast<int32_t>(registers[std::string(REG_RSP)]);
 
-        if (!operand.empty() && operand[0] == '%') {
-            // Register destination
-            std::string regName = operand.substr(1);
-            registers[regName] = value;
-            syncRegisters(regName);
-        }
-        else {
-            // Memory destination (rare, but possible)
-            uint32_t destAddr = parseMemoryAddress(operand);
-            writeMemory(destAddr, static_cast<uint64_t>(value), 8);
-        }
+        writeToDestination(operand, value, 8);
         };
 
     handlers["ret"] = [this](const std::vector<std::string>&) {

@@ -44,8 +44,7 @@ std::unique_ptr<ASTNode> Parser::parseReturn() {
 }
 
 std::unique_ptr<ASTNode> Parser::parseConst(Number value) {
-	auto constNode = std::make_unique<ConstNode>();
-	constNode->value = value;
+	auto constNode = std::make_unique<ConstNode>(value);
 	return constNode;
 }
 

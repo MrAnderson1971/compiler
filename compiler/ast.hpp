@@ -77,6 +77,7 @@ struct BinaryNode : public ASTNode {
 struct ConstNode : public ASTNode {
 	Number value;
 
+	ConstNode(Number value) : value(value) {}
 	std::ostream& print(std::ostream&, int) const override;
 	void generate(CodeContext& context) const override;
 	Operand makeTac(FunctionBody& body) const override;

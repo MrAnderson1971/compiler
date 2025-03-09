@@ -71,6 +71,10 @@ private:
     // Sync 32/64 bit registers (when one changes, update the other)
     void syncRegisters(const std::string& reg);
 
+    void writeToDestination(const std::string& dst, int64_t value, int size);
+
+    int64_t readFromDestination(const std::string& dst, int size);
+
     // Initialize instruction handlers
     void initInstructionHandlers();
 
