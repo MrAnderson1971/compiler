@@ -10,7 +10,7 @@ std::ostream& ProgramNode::print(std::ostream& os, int indent) const {
 
 void ProgramNode::generate(CodeContext& context) const {
 	// Assembly prologue
-	context.out << ".text\n";
+	//context.out << ".text\n";
 
 	// Generate code for the function (only main for now)
 	if (function_declaration) {

@@ -9,7 +9,7 @@ int main() {
 	compile(source, ss);
 	std::cout << ss.str() << std::endl;
 	simulator.loadProgram(ss.str());
-	EXPECT_EQ(~12, simulator.execute());
+	EXPECT_EQ(~12, static_cast<int>(simulator.execute()));
 }
 
 TEST_F(CompilerTest, TestBitwise0) {
@@ -19,7 +19,7 @@ int main() {
 })";
 	compile(source, ss);
 	simulator.loadProgram(ss.str());
-	EXPECT_EQ(~0, simulator.execute());
+	EXPECT_EQ(~0, static_cast<int>(simulator.execute()));
 }
 
 TEST_F(CompilerTest, TestMissingConst) {

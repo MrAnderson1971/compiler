@@ -14,12 +14,6 @@
 // Simulator class that can execute AT&T x86 assembly
 class Simulator {
 private:
-    // Memory addresses for emulation
-    static constexpr uint64_t BASE_ADDRESS = 0x1000000;
-    static constexpr uint64_t STACK_ADDRESS = 0x2000000;
-    static constexpr size_t STACK_SIZE = 0x20000;  // 128 KB
-    static constexpr size_t CODE_SIZE = 0x10000;   // 64 KB
-
     std::string program;
     bool programLoaded = false;
 
