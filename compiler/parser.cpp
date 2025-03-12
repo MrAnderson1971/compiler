@@ -52,10 +52,24 @@ std::unique_ptr<ASTNode> Parser::parseTerm() {
 	auto factor = parseFactor();
 	while (true) {
 		Token next = peekToken();
-		if (!std::holds_alternative<Symbol>(next) || !(std::get<Symbol>(next) == ASTERISK || std::get<Symbol>(next) == FORWARD_SLASH)) {
+		if (!std::holds_alternative<Symbol>(next)) {
 			break;
 		}
-		BinaryOperator op = std::get<Symbol>(getTokenAndAdvance()) == ASTERISK ? MULTIPLY : DIVIDE;
+		BinaryOperator op;
+		switch (std::get<Symbol>(next)) {
+		case ASTERISK:
+			op = MULTIPLY;
+			break;
+		case FORWARD_SLASH:
+			op = DIVIDE;
+			break;
+		case PERCENTAGE:
+			op = MODULO;
+			break;
+		default:
+			return factor;
+		}
+		getTokenAndAdvance();
 		auto nextFactor = parseFactor();
 		auto binaryNode = std::make_unique<BinaryNode>(op, factor, nextFactor);
 		factor = std::move(binaryNode);

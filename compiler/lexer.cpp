@@ -7,40 +7,43 @@ Lexer::Lexer(std::string& source) : source(source) {}
 void TokenPrinter::operator()(Symbol s) const {
 	switch (s) {
 	case OPEN_BRACE:
-		os << "OPEN_BRACE";
+		os << "{";
 		break;
 	case CLOSED_BRACE:
-		os << "CLOSED_BRACE";
+		os << "}";
 		break;
 	case OPEN_PAREN:
-		os << "OPEN_PAREN";
+		os << "(";
 		break;
 	case CLOSED_PAREN:
-		os << "CLOSED_PAREN";
+		os << ")";
 		break;
 	case SEMICOLON:
-		os << "SEMICOLON";
+		os << ";";
 		break;
 	case MINUS:
-		os << "MINUS";
+		os << "-";
 		break;
 	case TILDE:
-		os << "TILDE";
+		os << "~";
 		break;
 	case EXCLAMATION_MARK:
-		os << "EXCLAMATION_MARK";
+		os << "!";
 		break;
 	case PLUS:
-		os << "PLUS";
+		os << "+";
 		break;
 	case ASTERISK:
-		os << "ASTERISK";
+		os << "*";
 		break;
 	case FORWARD_SLASH:
-		os << "FORWARD_SLASH";
+		os << "//";
 		break;
 	case DOUBLE_MINUS:
-		os << "DOUBLE_MINUS";
+		os << "--";
+		break;
+	case PERCENTAGE:
+		os << "%";
 		break;
 	default:
 		os << "UNKNOWN SYMBOL";
@@ -119,6 +122,9 @@ void Lexer::lex() {
 			break;
 		case '/':
 			tokens.push_back(FORWARD_SLASH);
+			break;
+		case '%':
+			tokens.push_back(PERCENTAGE);
 			break;
 		case ' ': // whitespace, do nothing
 		case '\n':

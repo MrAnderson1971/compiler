@@ -20,7 +20,8 @@ enum Symbol {
 	ASTERISK,
 	FORWARD_SLASH,
 	DOUBLE_MINUS,
-	DOUBLE_PLUS
+	DOUBLE_PLUS,
+	PERCENTAGE,
 };
 
 enum class Keyword {
