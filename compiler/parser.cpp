@@ -48,15 +48,77 @@ std::unique_ptr<ASTNode> Parser::parseConst(Number value) {
 	return constNode;
 }
 
-std::unique_ptr<ASTNode> Parser::parseTerm() {
-	auto factor = parseFactor();
-	while (true) {
-		Token next = peekToken();
-		if (!std::holds_alternative<Symbol>(next)) {
+int getPrecedence(Symbol op) {
+	switch (op) {
+	case DOUBLE_GREATER_THAN: case DOUBLE_LESS_THAN:
+		return 6;
+	case AMPERSAND:
+		return 5;
+	case CARET:
+		return 4;
+	case PIPE:
+		return 3;
+	case ASTERISK: case FORWARD_SLASH: case PERCENTAGE:
+		return 2;
+	case PLUS: case MINUS:
+		return 1;
+	default:
+		return -1;
+	}
+}
+
+std::unique_ptr<ASTNode> Parser::parsePrimary() {
+	Token token = peekToken();
+	if (std::holds_alternative<Number>(token)) {
+		return parseConst(getTokenAndAdvance<Number>());
+	}
+	else if (std::holds_alternative<Symbol>(token)) {
+		getTokenAndAdvance(OPEN_PAREN);
+		auto expression = parseExpression();
+		getTokenAndAdvance(CLOSED_PAREN);
+		return expression;
+	}
+	throw std::runtime_error("Unexpected token");
+}
+
+std::unique_ptr<ASTNode> Parser::parseUnaryOrPrimary() {
+	Token token = peekToken();
+	if (std::holds_alternative<Symbol>(token) && isOneOf(std::get<Symbol>(token), TILDE, EXCLAMATION_MARK, MINUS)) {
+		UnaryOperator op;
+		switch (getTokenAndAdvance<Symbol>()) {
+		case TILDE:
+			op = BITWISE_NOT;
+			break;
+		case EXCLAMATION_MARK:
+			op = LOGICAL_NOT;
+			break;
+		case MINUS:
+			op = NEGATION;
 			break;
 		}
+		auto expression = parseUnaryOrPrimary();
+		auto unaryNode = std::make_unique<UnaryNode>(op, expression);
+		return unaryNode;
+	} else {
+		return parsePrimary();
+	}
+}
+
+std::unique_ptr<ASTNode> Parser::parseBinaryOp(int minPrecedence) {
+	auto left = parseUnaryOrPrimary();
+	Symbol token = std::get<Symbol>(peekToken());
+	while (isOneOf(token, PLUS, MINUS, ASTERISK, FORWARD_SLASH, PERCENTAGE, CARET, AMPERSAND, PIPE, DOUBLE_GREATER_THAN, DOUBLE_LESS_THAN) &&
+		getPrecedence(token) >= minPrecedence) {
+		Symbol symbol = getTokenAndAdvance<Symbol>();
+		auto right = parseBinaryOp(getPrecedence(symbol) + 1);
 		BinaryOperator op;
-		switch (std::get<Symbol>(next)) {
+		switch (symbol) {
+		case PLUS:
+			op = ADD;
+			break;
+		case MINUS:
+			op = SUBTRACT;
+			break;
 		case ASTERISK:
 			op = MULTIPLY;
 			break;
@@ -66,100 +128,33 @@ std::unique_ptr<ASTNode> Parser::parseTerm() {
 		case PERCENTAGE:
 			op = MODULO;
 			break;
-		default:
-			return factor;
+		case CARET:
+			op = XOR;
+			break;
+		case AMPERSAND:
+			op = AND;
+			break;
+		case PIPE:
+			op = OR;
+			break;
+		case DOUBLE_LESS_THAN:
+			op = SHIFT_LEFT;
+			break;
+		case DOUBLE_GREATER_THAN:
+			op = SHIFT_RIGHT;
+			break;
 		}
-		getTokenAndAdvance();
-		auto nextFactor = parseFactor();
-		auto binaryNode = std::make_unique<BinaryNode>(op, factor, nextFactor);
-		factor = std::move(binaryNode);
+		auto binaryNode = std::make_unique<BinaryNode>(op, left, right);
+		left = std::move(binaryNode);
+		token = std::get<Symbol>(peekToken());
 	}
-	return factor;
+	return left;
 }
 
 std::unique_ptr<ASTNode> Parser::parseExpression() {
-/*def parse_expression(toks):
-    term = parse_term(toks) //pops off some tokens
-    next = toks.peek() //check the next token, but don't pop it off the list yet
-    while next == PLUS or next == MINUS: //there's another term!
-        op = convert_to_op(toks.next())
-        next_term = parse_term(toks) //pops off some more tokens
-        term = BinOp(op, term, next_term)
-        next = toks.peek()
-
-    return t1*/
-	auto term = parseTerm();
-	while (true) {
-		Token next = peekToken();
-		if (!std::holds_alternative<Symbol>(next) || !(std::get<Symbol>(next) == Symbol::PLUS || std::get<Symbol>(next) == Symbol::MINUS)) {
-			break;
-		}
-
-		BinaryOperator op = std::get<Symbol>(getTokenAndAdvance()) == Symbol::PLUS ? BinaryOperator::ADD : BinaryOperator::SUBTRACT;
-		auto nextTerm = parseTerm();
-		auto binaryNode = std::make_unique<BinaryNode>(op, term, nextTerm);
-		term = std::move(binaryNode);
-	
-	}
-	return term;
+	return parseBinaryOp(0);
 }
 
-std::unique_ptr<ASTNode> Parser::parseFactor() {
-	/*def parse_factor(toks)
-    next = toks.next()
-    if next == OPEN_PAREN:
-        //<factor> ::= "(" <exp> ")"
-        exp = parse_exp(toks) //parse expression inside parens
-        if toks.next() != CLOSE_PAREN: //make sure parens are balanced
-            fail()
-        return exp
-    else if is_unop(next)
-        //<factor> ::= <unary_op> <factor>
-        op = convert_to_op(next)
-        factor = parse_factor(toks)
-        return UnOp(op, factor)
-    else if next.type == "INT":
-        //<factor> ::= <int>
-        return Const(convert_to_int(next))
-    else:
-        fail()*/
-	Token next = getTokenAndAdvance();
-	if (std::holds_alternative<Symbol>(next) && std::get<Symbol>(next) == Symbol::OPEN_PAREN) {
-		auto expression = parseExpression();
-		getTokenAndAdvance(Symbol::CLOSED_PAREN);
-		return expression;
-	}
-	else if (auto* symbol = std::get_if<Symbol>(&next)) {
-		UnaryOperator op;
-		switch (*symbol) {
-		case MINUS:
-			op = NEGATION;
-			break;
-		case EXCLAMATION_MARK:
-			op = LOGICAL_NOT;
-			break;
-		case TILDE:
-			op = BITWISE_NOT;
-			break;
-		default:
-			std::stringstream ss;
-			ss << "Unexpected unary operator ";
-			std::visit(TokenPrinter{ ss }, next);
-			throw compiler_error(ss.str());
-		}
-		auto factor = parseFactor();
-		return std::make_unique<UnaryNode>(op, factor);
-	}
-	else if (auto* number = std::get_if<Number>(&next)) {
-		return parseConst(*number);
-	}
-	else {
-		std::stringstream ss;
-		ss << "Unexpected token ";
-		std::visit(TokenPrinter{ ss }, next);
-		throw compiler_error(ss.str());
-	}
-}
 
 std::unique_ptr<ASTNode> Parser::parse() {
 	return parseProgram();

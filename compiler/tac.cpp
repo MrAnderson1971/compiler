@@ -72,86 +72,110 @@ std::string BinaryOpInstruction::print() const {
 	case DIVIDE:
 		ss << " / ";
 		break;
+	case MODULO:
+		ss << " % ";
+		break;
+	case XOR:
+		ss << " ^ ";
+		break;
+	case AND:
+		ss << " & ";
+		break;
+	case OR:
+		ss << " | ";
+		break;
+	case SHIFT_LEFT:
+		ss << " << ";
+		break;
+	case SHIFT_RIGHT:
+		ss << " >> ";
+		break;
 	}
 	std::visit(OperandPrinter{ ss }, right);
 	return ss.str();
 }
 
 void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
-    std::string src1 = std::visit(operandToAsm, left);
-    std::string src2 = std::visit(operandToAsm, right);
-    std::string d = operandToAsm(dest);
+	std::string src1 = std::visit(operandToAsm, left);
+	std::string src2 = std::visit(operandToAsm, right);
+	std::string d = operandToAsm(dest);
 
-    bool src2IsImmediate = src2.find('$') != std::string::npos;
+	bool src2IsImmediate = src2.find('$') != std::string::npos;
 
-    switch (op) {
-    case ADD: case SUBTRACT:
-        ss << std::format("movl {}, %r10d\n", src1);
-        ss << std::format("movl %r10d, {}\n", d);
+	if (isOneOf(op, ADD, SUBTRACT, AND, OR, XOR, SHIFT_LEFT, SHIFT_RIGHT)) {
+		ss << std::format("movl {}, %r10d\n", src1);
+		ss << std::format("movl %r10d, {}\n", d);
 
-        // For add/subtract, we need to handle memory-to-memory operations
-        if (src2IsImmediate) {
-            switch (op) {
-            case ADD:
-                ss << std::format("addl {}, {}\n", src2, d);
-                break;
-            case SUBTRACT:
-                ss << std::format("subl {}, {}\n", src2, d);
-                break;
-            }
-        }
-        else {
-            ss << std::format("movl {}, %r10d\n", src2);
-            switch (op) {
-            case ADD:
-                ss << std::format("addl %r10d, {}\n", d);
-                break;
-            case SUBTRACT:
-                ss << std::format("subl %r10d, {}\n", d);
-                break;
-            }
-        }
-        break;
+		// For add/subtract, we need to handle memory-to-memory operations
+		std::string opcode;
+		switch (op) {
+		case ADD:
+			opcode = "addl";
+			break;
+		case SUBTRACT:
+			opcode = "subl";
+			break;
+		case AND:
+			opcode = "and";
+			break;
+		case OR:
+			opcode = "or";
+			break;
+		case XOR:
+			opcode = "xor";
+			break;
+		case SHIFT_LEFT:
+			opcode = "shl";
+			break;
+		case SHIFT_RIGHT:
+			opcode = "shr";
+			break;
+		}
+		if (src2IsImmediate) {
+			ss << std::format("{} {}, {}\n", opcode, src2, d);
+		}
+		else {
+			ss << std::format("movl {}, %r10d\n", src2);
+			ss << std::format("{} %r10d, {}\n", opcode, d);
+		}
+	}
+	else if (op == MULTIPLY) {
+		ss << std::format("movl {}, %r10d\n", src1);
+		ss << std::format("movl %r10d, {}\n", d);
 
-    case MULTIPLY:
-        ss << std::format("movl {}, %r10d\n", src1);
-        ss << std::format("movl %r10d, {}\n", d);
+		ss << std::format("movl {}, %r11d\n", d);
 
-        ss << std::format("movl {}, %r11d\n", d);
+		if (src2IsImmediate) {
+			ss << std::format("imull {}, %r11d\n", src2);
+		}
+		else {
+			ss << std::format("movl {}, %r10d\n", src2);
+			ss << std::format("imull %r10d, %r11d\n");
+		}
 
-        if (src2IsImmediate) {
-            ss << std::format("imull {}, %r11d\n", src2);
-        }
-        else {
-            ss << std::format("movl {}, %r10d\n", src2);
-            ss << std::format("imull %r10d, %r11d\n");
-        }
+		ss << std::format("movl %r11d, {}\n", d);
+	}
+	else if (isOneOf(op, DIVIDE, MODULO)) {
+		ss << std::format("movl {}, %eax\n", src1);
+		ss << "cdq\n";
 
-        ss << std::format("movl %r11d, {}\n", d);
-        break;
+		if (src2IsImmediate) {
+			std::string immValue = src2.substr(1);
+			ss << std::format("movl {}, %ecx\n", src2);
+			ss << "idiv %ecx\n";  // Use idiv without suffix
+		}
+		else {
+			ss << std::format("movl {}, %ecx\n", src2);
+			ss << "idiv %ecx\n";
+		}
 
-    case DIVIDE: case MODULO:
-        ss << std::format("movl {}, %eax\n", src1);
-        ss << "cdq\n";  
-
-        if (src2IsImmediate) {
-            std::string immValue = src2.substr(1);
-            ss << std::format("movl {}, %ecx\n", src2);
-            ss << "idiv %ecx\n";  // Use idiv without suffix
-        }
-        else {
-            ss << std::format("movl {}, %ecx\n", src2);
-            ss << "idiv %ecx\n"; 
-        }
-
-        if (op == DIVIDE) {
-            ss << std::format("movl %eax, {}\n", d);  
-        }
-        else {
-            ss << std::format("movl %edx, {}\n", d); 
-        }
-        break;
-    }
+		if (op == DIVIDE) {
+			ss << std::format("movl %eax, {}\n", d);
+		}
+		else {
+			ss << std::format("movl %edx, {}\n", d);
+		}
+	}
 }
 
 std::string ReturnInstruction::print() const {

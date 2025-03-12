@@ -173,5 +173,6 @@ void FunctionDeclarationNode::generate(CodeContext& context) const {
 			instruction->makeAssembly(ss, body);
 		}
 		context.out << ss.str();
+		std::cout << body << std::endl;
 	}
 }

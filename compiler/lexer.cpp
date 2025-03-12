@@ -45,6 +45,21 @@ void TokenPrinter::operator()(Symbol s) const {
 	case PERCENTAGE:
 		os << "%";
 		break;
+	case PIPE:
+		os << "|";
+		break;
+	case AMPERSAND:
+		os << "&";
+		break;
+	case CARET:
+		os << "^";
+		break;
+	case DOUBLE_LESS_THAN:
+		os << "<<";
+		break;
+	case DOUBLE_GREATER_THAN:
+		os << ">>";
+		break;
 	default:
 		os << "UNKNOWN SYMBOL";
 	}
@@ -125,6 +140,31 @@ void Lexer::lex() {
 			break;
 		case '%':
 			tokens.push_back(PERCENTAGE);
+			break;
+		case '|':
+			tokens.push_back(PIPE);
+			break;
+		case '&':
+			tokens.push_back(AMPERSAND);
+			break;
+		case '^':
+			tokens.push_back(CARET);
+			break;
+		case '<':
+			if (i + 1 < source.size() && source[i + 1] == '<') {
+				tokens.push_back(DOUBLE_LESS_THAN);
+				i++;
+			} else {
+				tokens.push_back(LESS_THAN);
+			}
+			break;
+		case '>':
+			if (i + 1 < source.size() && source[i + 1] == '>') {
+				tokens.push_back(DOUBLE_GREATER_THAN);
+				i++;
+			} else {
+				tokens.push_back(GREATER_THAN);
+			}
 			break;
 		case ' ': // whitespace, do nothing
 		case '\n':

@@ -70,7 +70,7 @@ TEST_F(CompilerTest, TestAssociativityAndPrecedence) {
 })";
 	compile(source, ss);
 	simulator.loadProgram(ss.str());
-	EXPECT_EQ(simulator.execute(), 10);
+	EXPECT_EQ(simulator.execute(), 5 * 4 / 2 - 3 % (2 + 1));
 }
 
 TEST_F(CompilerTest, TestDivideNegative) {
@@ -83,10 +83,28 @@ TEST_F(CompilerTest, TestDivideNegative) {
 }
 
 TEST_F(CompilerTest, TestUnaryAndBinary) {
-	std::string source = R"(int main(void) {
+	std::string source = R"(int main() {
 	return ~(1+1);
 })";
 	compile(source, ss);
 	simulator.loadProgram(ss.str());
-	EXPECT_EQ(simulator.execute(), -2);
+	EXPECT_EQ(simulator.execute(), ~(1 + 1));
+}
+
+TEST_F(CompilerTest, TestBitwiseAnd) {
+	std::string source = R"(int main() {
+    return 3 & 5;
+})";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_EQ(simulator.execute(), 3 & 5);
+}
+
+TEST_F(CompilerTest, TestComplicated) {
+	std::string source = R"(int main() {
+	return ((42 * 3) - (15 / 5) % 4 + (7 << 2)) & ~(255 - 128) | ((16 >> 2) ^ 10);
+})";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_EQ(simulator.execute(), ((42 * 3) - (15 / 5) % 4 + (7 << 2)) & ~(255 - 128) | ((16 >> 2) ^ 10));
 }

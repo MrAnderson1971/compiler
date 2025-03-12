@@ -5,6 +5,16 @@
 #include <ostream>
 #include <format>
 
+template<typename T>
+bool isOneOf(T first) {
+	return false;
+}
+
+template<typename T, typename... Args>
+bool isOneOf(T first, T second, Args... rest) {
+	return first == second || isOneOf(first, rest...);
+}
+
 class compiler_error : public std::exception {
 	const std::string message;
 
@@ -52,5 +62,10 @@ enum BinaryOperator {
 	SUBTRACT,
 	MULTIPLY,
 	DIVIDE,
-	MODULO
+	MODULO,
+	XOR,
+	AND,
+	OR,
+	SHIFT_LEFT,
+	SHIFT_RIGHT
 };

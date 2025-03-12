@@ -26,14 +26,11 @@ class Parser {
 	std::unique_ptr<ASTNode> parseProgram();
 	std::unique_ptr<ASTNode> parseFunctionDeclaration();
 	std::unique_ptr<ASTNode> parseReturn();
+	std::unique_ptr<ASTNode> parsePrimary();
+	std::unique_ptr<ASTNode> parseUnaryOrPrimary();
+	std::unique_ptr<ASTNode> parseBinaryOp(int minPrecedence);
 	std::unique_ptr<ASTNode> parseExpression();
 	std::unique_ptr<ASTNode> parseConst(Number value);
-
-	// Term represents multiplication and division	
-	std::unique_ptr<ASTNode> parseTerm();
-
-	// Factor is something an unary operator can be applied to
-	std::unique_ptr<ASTNode> parseFactor();
 
 	Token getTokenAndAdvance();
 
