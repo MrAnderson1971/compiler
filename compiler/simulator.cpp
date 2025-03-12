@@ -73,7 +73,7 @@ void Simulator::loadProgram(const std::string& asmCode) {
     std::cout << "Successfully compiled and linked assembly" << std::endl;
 }
 
-int64_t Simulator::execute() {
+int Simulator::execute() {
     // Load the DLL
     dllHandle = LoadLibraryA(tempDllFile.c_str());
     if (dllHandle == NULL) {
@@ -104,5 +104,5 @@ int64_t Simulator::execute() {
     FreeLibrary(dllHandle);
     dllHandle = NULL;
 
-    return result;
+    return static_cast<int>(result);
 }

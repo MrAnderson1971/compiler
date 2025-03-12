@@ -15,7 +15,7 @@ public:
     ~Simulator();
 
     void loadProgram(const std::string& asmCode);
-    int64_t execute();
+    int execute();
 };
 
 class CompilerTest : public ::testing::Test {

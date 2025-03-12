@@ -37,7 +37,7 @@ void TokenPrinter::operator()(Symbol s) const {
 		os << "*";
 		break;
 	case FORWARD_SLASH:
-		os << "//";
+		os << "/";
 		break;
 	case DOUBLE_MINUS:
 		os << "--";
