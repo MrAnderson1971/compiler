@@ -4,11 +4,27 @@
 TEST_F(CompilerTest, TestSuccess) {
 	std::string source = R"(
 int main() {
-	return 2;
+	return 42;
 }
 )";
 	compile(source, ss);
+	std::cout << ss.str() << std::endl;
 	simulator.loadProgram(ss.str());
+	int64_t output = simulator.execute();
+	EXPECT_EQ(42, output);
+}
+
+TEST_F(CompilerTest, TestHardcoded) {
+	std::string source = R"(
+.global main
+main:
+pushq %rbp
+movq %rsp, %rbp
+movq $2, %rax
+popq %rbp
+ret
+)";
+	simulator.loadProgram(source);
 	int64_t output = simulator.execute();
 	EXPECT_EQ(2, output);
 }
