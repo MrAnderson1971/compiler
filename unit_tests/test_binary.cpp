@@ -108,3 +108,12 @@ TEST_F(CompilerTest, TestComplicated) {
 	simulator.loadProgram(ss.str());
 	EXPECT_EQ(simulator.execute(), ((42 * 3) - (15 / 5) % 4 + (7 << 2)) & ~(255 - 128) | ((16 >> 2) ^ 10));
 }
+
+TEST_F(CompilerTest, TestDivideByZero) {
+	std::string source = R"(int main() {
+	return 1/0;
+})";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_DEATH(simulator.execute(), "");
+}
