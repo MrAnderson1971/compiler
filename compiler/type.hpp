@@ -6,7 +6,7 @@
 #include <format>
 
 template<typename T>
-bool isOneOf(T first) {
+bool isOneOf(T) {
 	return false;
 }
 
@@ -49,23 +49,4 @@ using Operand = std::variant<PseudoRegister,
 
 enum class Types {
 	INT
-};
-
-enum UnaryOperator {
-	NEGATION,
-	BITWISE_NOT,
-	LOGICAL_NOT
-};
-
-enum BinaryOperator {
-	ADD,
-	SUBTRACT,
-	MULTIPLY,
-	DIVIDE,
-	MODULO,
-	XOR,
-	AND,
-	OR,
-	SHIFT_LEFT,
-	SHIFT_RIGHT
 };

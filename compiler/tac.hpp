@@ -2,10 +2,34 @@
 
 #include <vector>
 #include <memory>
-#include <sstream>
 #include "type.hpp"
+#include "lexer.hpp"
 
 struct FunctionBody;
+
+
+enum class UnaryOperator {
+	NEGATION,
+
+	_BEGIN = static_cast<int>(Symbol::_UNARY_BEGIN),
+	BITWISE_NOT,
+	LOGICAL_NOT
+};
+
+enum class BinaryOperator {
+	SUBTRACT,
+
+	_BEGIN = static_cast<int>(Symbol::_BINARY_BEGIN),
+	ADD,
+	MULTIPLY,
+	DIVIDE,
+	MODULO,
+	XOR,
+	AND,
+	OR,
+	SHIFT_LEFT,
+	SHIFT_RIGHT
+};
 
 // three address code
 struct TACInstruction {

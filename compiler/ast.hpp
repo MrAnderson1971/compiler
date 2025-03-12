@@ -1,9 +1,6 @@
 #pragma once
 #include <memory>
 #include <string>
-#include <ostream>
-#include <sstream>
-#include "lexer.hpp"
 #include "tac.hpp"
 #include "type.hpp"
 

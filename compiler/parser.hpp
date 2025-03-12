@@ -2,7 +2,6 @@
 
 #include <deque>
 #include <sstream>
-#include <optional>
 #include "lexer.hpp"
 #include "ast.hpp"
 
@@ -30,7 +29,6 @@ class Parser {
 	std::unique_ptr<ASTNode> parseUnaryOrPrimary();
 	std::unique_ptr<ASTNode> parseBinaryOp(int minPrecedence);
 	std::unique_ptr<ASTNode> parseExpression();
-	std::unique_ptr<ASTNode> parseConst(Number value);
 
 	Token getTokenAndAdvance();
 

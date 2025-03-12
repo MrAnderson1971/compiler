@@ -3,33 +3,53 @@
 #include <string>
 #include <variant>
 #include <vector>
-#include <ostream>
-#include <cstddef>
 #include "type.hpp"
 
-enum Symbol {
+enum class Symbol {
+	// unary or binary op
+	MINUS,
+
+	_UNARY_BEGIN = 99,
+	// unary op
+	TILDE,
+	EXCLAMATION_MARK,
+	DOUBLE_MINUS,
+	DOUBLE_PLUS,
+
+	_BINARY_BEGIN = 199,
+	// binary op
+	PLUS,
+	ASTERISK,
+	FORWARD_SLASH,
+	PERCENTAGE,
+	CARET,
+	AMPERSAND,
+	PIPE,
+	DOUBLE_LESS_THAN,
+	DOUBLE_GREATER_THAN,
+	LESS_THAN,
+	GREATER_THAN,
+
+	_MISC_BEGIN = 299,
+	// misc
 	OPEN_BRACE,
 	CLOSED_BRACE,
 	OPEN_PAREN,
 	CLOSED_PAREN,
 	SEMICOLON,
-	MINUS,
-	TILDE,
-	EXCLAMATION_MARK,
-	PLUS,
-	ASTERISK,
-	FORWARD_SLASH,
-	DOUBLE_MINUS,
-	DOUBLE_PLUS,
-	PERCENTAGE,
-	PIPE,
-	AMPERSAND,
-	CARET,
-	LESS_THAN,
-	GREATER_THAN,
-	DOUBLE_LESS_THAN,
-	DOUBLE_GREATER_THAN,
 };
+
+inline bool isUnaryOp(Symbol s) {
+	return s == Symbol::MINUS ||
+	static_cast<int>(s) > static_cast<int>(Symbol::_UNARY_BEGIN) &&
+		static_cast<int>(s) < static_cast<int>(Symbol::_BINARY_BEGIN);
+}
+
+inline bool isBinaryOp(Symbol s) {
+	return s == Symbol::MINUS ||
+	static_cast<int>(s) > static_cast<int>(Symbol::_BINARY_BEGIN) &&
+		static_cast<int>(s) < static_cast<int>(Symbol::_MISC_BEGIN);
+}
 
 enum class Keyword {
 	RETURN,

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 #include "ast.hpp"
 #include "tac.hpp"
 
@@ -61,13 +62,13 @@ Operand ConstNode::makeTac(FunctionBody& body) const {
 std::ostream& UnaryNode::print(std::ostream& os, int indent) const {
 	os << std::string(indent, ' ') << "UNARY NODE: ";
 	switch (op) {
-	case NEGATION:
+	case UnaryOperator::NEGATION:
 		os << "MINUS\n";
 		break;
-	case BITWISE_NOT:
+	case UnaryOperator::BITWISE_NOT:
 		os << "BITWISE NOT\n";
 		break;
-	case LOGICAL_NOT:
+	case UnaryOperator::LOGICAL_NOT:
 		os << "LOGICAL NOT\n";
 		break;
 	}
@@ -78,13 +79,13 @@ std::ostream& UnaryNode::print(std::ostream& os, int indent) const {
 void UnaryNode::generate(CodeContext& context) const {
 	expression->generate(context);
 	switch (op) {
-	case NEGATION:
+	case UnaryOperator::NEGATION:
 		context.out << "    neg %eax\n";
 		break;
-	case BITWISE_NOT:
+	case UnaryOperator::BITWISE_NOT:
 		context.out << "    not %eax\n";
 		break;
-	case LOGICAL_NOT:
+	case UnaryOperator::LOGICAL_NOT:
 		context.out << "    cmp $0, %eax\n";
 		context.out << "    sete %al\n";
 		context.out << "    movzx %al, %eax\n";
@@ -101,16 +102,16 @@ Operand UnaryNode::makeTac(FunctionBody& body) const {
 std::ostream& BinaryNode::print(std::ostream& os, int indent) const {
 	os << std::string(indent, ' ');
 	switch (op) {
-	case ADD:
+	case BinaryOperator::ADD:
 		os << "ADD\n";
 		break;
-	case SUBTRACT:
+	case BinaryOperator::SUBTRACT:
 		os << "SUBTRACT\n";
 		break;
-	case MULTIPLY:
+	case BinaryOperator::MULTIPLY:
 		os << "MULTIPLY\n";
 		break;
-	case DIVIDE:
+	case BinaryOperator::DIVIDE:
 		os << "DIVIDE\n";
 		break;
 	}
@@ -125,16 +126,16 @@ void BinaryNode::generate(CodeContext& context) const {
 	right->generate(context);
 	context.out << "    pop %ecx\n";
 	switch (op) {
-	case ADD:
+	case BinaryOperator::ADD:
 		context.out << "    add %ecx, %eax\n";
 		break;
-	case SUBTRACT:
+	case BinaryOperator::SUBTRACT:
 		context.out << "    sub %ecx, %eax\n";
 		break;
-	case MULTIPLY:
+	case BinaryOperator::MULTIPLY:
 		context.out << "    imul %ecx, %eax\n";
 		break;
-	case DIVIDE:
+	case BinaryOperator::DIVIDE:
 		context.out << "    cdq\n";
 		context.out << "    idiv %ecx\n";
 		break;

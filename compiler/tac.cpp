@@ -1,6 +1,7 @@
 #include "tac.hpp"
 #include "ast.hpp"
 #include <format>
+#include <sstream>
 
 OperandToAsm operandToAsm;
 
@@ -27,13 +28,13 @@ std::string UnaryOpInstruction::print() const {
 	std::stringstream ss;
 	ss << dest << " = ";
 	switch (op) {
-	case NEGATION:
+	case UnaryOperator::NEGATION:
 		ss << "-";
 		break;
-	case BITWISE_NOT:
+	case UnaryOperator::BITWISE_NOT:
 		ss << "~";
 		break;
-	case LOGICAL_NOT:
+	case UnaryOperator::LOGICAL_NOT:
 		ss << "!";
 		break;
 	}
@@ -45,10 +46,10 @@ void UnaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body)
 	ss << std::format("movl {}, %r10d\n", std::visit(operandToAsm, arg));
 	ss << std::format("movl %r10d, {}\n", dest);
 	switch (op) {
-	case NEGATION:
+	case UnaryOperator::NEGATION:
 		ss << "negl ";
 		break;
-	case BITWISE_NOT:
+	case UnaryOperator::BITWISE_NOT:
 		ss << "notl ";
 		break;
 	}
@@ -60,34 +61,34 @@ std::string BinaryOpInstruction::print() const {
 	ss << dest << " = ";
 	std::visit(OperandPrinter{ ss }, left);
 	switch (op) {
-	case ADD:
+	case BinaryOperator::ADD:
 		ss << " + ";
 		break;
-	case SUBTRACT:
+	case BinaryOperator::SUBTRACT:
 		ss << " - ";
 		break;
-	case MULTIPLY:
+	case BinaryOperator::MULTIPLY:
 		ss << " * ";
 		break;
-	case DIVIDE:
+	case BinaryOperator::DIVIDE:
 		ss << " / ";
 		break;
-	case MODULO:
+	case BinaryOperator::MODULO:
 		ss << " % ";
 		break;
-	case XOR:
+	case BinaryOperator::XOR:
 		ss << " ^ ";
 		break;
-	case AND:
+	case BinaryOperator::AND:
 		ss << " & ";
 		break;
-	case OR:
+	case BinaryOperator::OR:
 		ss << " | ";
 		break;
-	case SHIFT_LEFT:
+	case BinaryOperator::SHIFT_LEFT:
 		ss << " << ";
 		break;
-	case SHIFT_RIGHT:
+	case BinaryOperator::SHIFT_RIGHT:
 		ss << " >> ";
 		break;
 	}
@@ -102,32 +103,32 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 
 	bool src2IsImmediate = src2.find('$') != std::string::npos;
 
-	if (isOneOf(op, ADD, SUBTRACT, AND, OR, XOR, SHIFT_LEFT, SHIFT_RIGHT)) {
+	if (isOneOf(op, BinaryOperator::ADD, BinaryOperator::SUBTRACT, BinaryOperator::AND, BinaryOperator::OR, BinaryOperator::XOR, BinaryOperator::SHIFT_LEFT, BinaryOperator::SHIFT_RIGHT)) {
 		ss << std::format("movl {}, %r10d\n", src1);
 		ss << std::format("movl %r10d, {}\n", d);
 
 		// For add/subtract, we need to handle memory-to-memory operations
 		std::string opcode;
 		switch (op) {
-		case ADD:
+		case BinaryOperator::ADD:
 			opcode = "addl";
 			break;
-		case SUBTRACT:
+		case BinaryOperator::SUBTRACT:
 			opcode = "subl";
 			break;
-		case AND:
+		case BinaryOperator::AND:
 			opcode = "and";
 			break;
-		case OR:
+		case BinaryOperator::OR:
 			opcode = "or";
 			break;
-		case XOR:
+		case BinaryOperator::XOR:
 			opcode = "xor";
 			break;
-		case SHIFT_LEFT:
+		case BinaryOperator::SHIFT_LEFT:
 			opcode = "shl";
 			break;
-		case SHIFT_RIGHT:
+		case BinaryOperator::SHIFT_RIGHT:
 			opcode = "shr";
 			break;
 		}
@@ -139,7 +140,7 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 			ss << std::format("{} %r10d, {}\n", opcode, d);
 		}
 	}
-	else if (op == MULTIPLY) {
+	else if (op == BinaryOperator::MULTIPLY) {
 		ss << std::format("movl {}, %r10d\n", src1);
 		ss << std::format("movl %r10d, {}\n", d);
 
@@ -155,7 +156,7 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 
 		ss << std::format("movl %r11d, {}\n", d);
 	}
-	else if (isOneOf(op, DIVIDE, MODULO)) {
+	else if (isOneOf(op, BinaryOperator::DIVIDE, BinaryOperator::MODULO)) {
 		ss << std::format("movl {}, %eax\n", src1);
 		ss << "cdq\n";
 
@@ -169,7 +170,7 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 			ss << "idiv %ecx\n";
 		}
 
-		if (op == DIVIDE) {
+		if (op == BinaryOperator::DIVIDE) {
 			ss << std::format("movl %eax, {}\n", d);
 		}
 		else {

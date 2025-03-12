@@ -6,58 +6,58 @@ Lexer::Lexer(std::string& source) : source(source) {}
 
 void TokenPrinter::operator()(Symbol s) const {
 	switch (s) {
-	case OPEN_BRACE:
+	case Symbol::OPEN_BRACE:
 		os << "{";
 		break;
-	case CLOSED_BRACE:
+	case Symbol::CLOSED_BRACE:
 		os << "}";
 		break;
-	case OPEN_PAREN:
+	case Symbol::OPEN_PAREN:
 		os << "(";
 		break;
-	case CLOSED_PAREN:
+	case Symbol::CLOSED_PAREN:
 		os << ")";
 		break;
-	case SEMICOLON:
+	case Symbol::SEMICOLON:
 		os << ";";
 		break;
-	case MINUS:
+	case Symbol::MINUS:
 		os << "-";
 		break;
-	case TILDE:
+	case Symbol::TILDE:
 		os << "~";
 		break;
-	case EXCLAMATION_MARK:
+	case Symbol::EXCLAMATION_MARK:
 		os << "!";
 		break;
-	case PLUS:
+	case Symbol::PLUS:
 		os << "+";
 		break;
-	case ASTERISK:
+	case Symbol::ASTERISK:
 		os << "*";
 		break;
-	case FORWARD_SLASH:
+	case Symbol::FORWARD_SLASH:
 		os << "/";
 		break;
-	case DOUBLE_MINUS:
+	case Symbol::DOUBLE_MINUS:
 		os << "--";
 		break;
-	case PERCENTAGE:
+	case Symbol::PERCENTAGE:
 		os << "%";
 		break;
-	case PIPE:
+	case Symbol::PIPE:
 		os << "|";
 		break;
-	case AMPERSAND:
+	case Symbol::AMPERSAND:
 		os << "&";
 		break;
-	case CARET:
+	case Symbol::CARET:
 		os << "^";
 		break;
-	case DOUBLE_LESS_THAN:
+	case Symbol::DOUBLE_LESS_THAN:
 		os << "<<";
 		break;
-	case DOUBLE_GREATER_THAN:
+	case Symbol::DOUBLE_GREATER_THAN:
 		os << ">>";
 		break;
 	default:
@@ -94,76 +94,76 @@ void Lexer::lex() {
 	for (int i = 0; i < source.size(); i++) {
 		switch (source[i]) {
 		case '{':
-			tokens.push_back(OPEN_BRACE);
+			tokens.push_back(Symbol::OPEN_BRACE);
 			break;
 		case '}':
-			tokens.push_back(CLOSED_BRACE);
+			tokens.push_back(Symbol::CLOSED_BRACE);
 			break;
 		case '(':
-			tokens.push_back(OPEN_PAREN);
+			tokens.push_back(Symbol::OPEN_PAREN);
 			break;
 		case ')':
-			tokens.push_back(CLOSED_PAREN);
+			tokens.push_back(Symbol::CLOSED_PAREN);
 			break;
 		case ';':
-			tokens.push_back(SEMICOLON);
+			tokens.push_back(Symbol::SEMICOLON);
 			break;
 		case '-':
 			if (i + 1 < source.size() && source[i + 1] == '-') {
-				tokens.push_back(DOUBLE_MINUS);
+				tokens.push_back(Symbol::DOUBLE_MINUS);
 				i++;
 			}
 			else {
-				tokens.push_back(MINUS);
+				tokens.push_back(Symbol::MINUS);
 			}
 			break;
 		case '~':
-			tokens.push_back(TILDE);
+			tokens.push_back(Symbol::TILDE);
 			break;
 		case '!':
-			tokens.push_back(EXCLAMATION_MARK);
+			tokens.push_back(Symbol::EXCLAMATION_MARK);
 			break;
 		case '+':
 			if (i + 1 < source.size() && source[i + 1] == '+') {
-				tokens.push_back(DOUBLE_PLUS);
+				tokens.push_back(Symbol::DOUBLE_PLUS);
 				i++;
 			}
 			else {
-				tokens.push_back(PLUS);
+				tokens.push_back(Symbol::PLUS);
 			}
 			break;
 		case '*':
-			tokens.push_back(ASTERISK);
+			tokens.push_back(Symbol::ASTERISK);
 			break;
 		case '/':
-			tokens.push_back(FORWARD_SLASH);
+			tokens.push_back(Symbol::FORWARD_SLASH);
 			break;
 		case '%':
-			tokens.push_back(PERCENTAGE);
+			tokens.push_back(Symbol::PERCENTAGE);
 			break;
 		case '|':
-			tokens.push_back(PIPE);
+			tokens.push_back(Symbol::PIPE);
 			break;
 		case '&':
-			tokens.push_back(AMPERSAND);
+			tokens.push_back(Symbol::AMPERSAND);
 			break;
 		case '^':
-			tokens.push_back(CARET);
+			tokens.push_back(Symbol::CARET);
 			break;
 		case '<':
 			if (i + 1 < source.size() && source[i + 1] == '<') {
-				tokens.push_back(DOUBLE_LESS_THAN);
+				tokens.push_back(Symbol::DOUBLE_LESS_THAN);
 				i++;
 			} else {
-				tokens.push_back(LESS_THAN);
+				tokens.push_back(Symbol::LESS_THAN);
 			}
 			break;
 		case '>':
 			if (i + 1 < source.size() && source[i + 1] == '>') {
-				tokens.push_back(DOUBLE_GREATER_THAN);
+				tokens.push_back(Symbol::DOUBLE_GREATER_THAN);
 				i++;
 			} else {
-				tokens.push_back(GREATER_THAN);
+				tokens.push_back(Symbol::GREATER_THAN);
 			}
 			break;
 		case ' ': // whitespace, do nothing

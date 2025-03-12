@@ -43,24 +43,24 @@ std::unique_ptr<ASTNode> Parser::parseReturn() {
 	return returnNode;
 }
 
-std::unique_ptr<ASTNode> Parser::parseConst(Number value) {
+static std::unique_ptr<ASTNode> parseConst(Number value) {
 	auto constNode = std::make_unique<ConstNode>(value);
 	return constNode;
 }
 
-int getPrecedence(Symbol op) {
+static int getPrecedence(Symbol op) {
 	switch (op) {
-	case DOUBLE_GREATER_THAN: case DOUBLE_LESS_THAN:
+	case Symbol::DOUBLE_GREATER_THAN: case Symbol::DOUBLE_LESS_THAN:
 		return 6;
-	case AMPERSAND:
+	case Symbol::AMPERSAND:
 		return 5;
-	case CARET:
+	case Symbol::CARET:
 		return 4;
-	case PIPE:
+	case Symbol::PIPE:
 		return 3;
-	case ASTERISK: case FORWARD_SLASH: case PERCENTAGE:
+	case Symbol::ASTERISK: case Symbol::FORWARD_SLASH: case Symbol::PERCENTAGE:
 		return 2;
-	case PLUS: case MINUS:
+	case Symbol::PLUS: case Symbol::MINUS:
 		return 1;
 	default:
 		return -1;
@@ -73,9 +73,9 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
 		return parseConst(getTokenAndAdvance<Number>());
 	}
 	else if (std::holds_alternative<Symbol>(token)) {
-		getTokenAndAdvance(OPEN_PAREN);
+		getTokenAndAdvance(Symbol::OPEN_PAREN);
 		auto expression = parseExpression();
-		getTokenAndAdvance(CLOSED_PAREN);
+		getTokenAndAdvance(Symbol::CLOSED_PAREN);
 		return expression;
 	}
 	throw std::runtime_error("Unexpected token");
@@ -83,67 +83,22 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
 
 std::unique_ptr<ASTNode> Parser::parseUnaryOrPrimary() {
 	Token token = peekToken();
-	if (std::holds_alternative<Symbol>(token) && isOneOf(std::get<Symbol>(token), TILDE, EXCLAMATION_MARK, MINUS)) {
-		UnaryOperator op;
-		switch (getTokenAndAdvance<Symbol>()) {
-		case TILDE:
-			op = BITWISE_NOT;
-			break;
-		case EXCLAMATION_MARK:
-			op = LOGICAL_NOT;
-			break;
-		case MINUS:
-			op = NEGATION;
-			break;
-		}
+	if (std::holds_alternative<Symbol>(token) && isUnaryOp(std::get<Symbol>(token))) {
+		auto op = static_cast<UnaryOperator>(getTokenAndAdvance<Symbol>());
 		auto expression = parseUnaryOrPrimary();
 		auto unaryNode = std::make_unique<UnaryNode>(op, expression);
 		return unaryNode;
-	} else {
-		return parsePrimary();
 	}
+	return parsePrimary();
 }
 
 std::unique_ptr<ASTNode> Parser::parseBinaryOp(int minPrecedence) {
 	auto left = parseUnaryOrPrimary();
 	Symbol token = std::get<Symbol>(peekToken());
-	while (isOneOf(token, PLUS, MINUS, ASTERISK, FORWARD_SLASH, PERCENTAGE, CARET, AMPERSAND, PIPE, DOUBLE_GREATER_THAN, DOUBLE_LESS_THAN) &&
-		getPrecedence(token) >= minPrecedence) {
+	while (isBinaryOp(token) && getPrecedence(token) >= minPrecedence) {
 		Symbol symbol = getTokenAndAdvance<Symbol>();
 		auto right = parseBinaryOp(getPrecedence(symbol) + 1);
-		BinaryOperator op;
-		switch (symbol) {
-		case PLUS:
-			op = ADD;
-			break;
-		case MINUS:
-			op = SUBTRACT;
-			break;
-		case ASTERISK:
-			op = MULTIPLY;
-			break;
-		case FORWARD_SLASH:
-			op = DIVIDE;
-			break;
-		case PERCENTAGE:
-			op = MODULO;
-			break;
-		case CARET:
-			op = XOR;
-			break;
-		case AMPERSAND:
-			op = AND;
-			break;
-		case PIPE:
-			op = OR;
-			break;
-		case DOUBLE_LESS_THAN:
-			op = SHIFT_LEFT;
-			break;
-		case DOUBLE_GREATER_THAN:
-			op = SHIFT_RIGHT;
-			break;
-		}
+		BinaryOperator op = static_cast<BinaryOperator>(symbol);
 		auto binaryNode = std::make_unique<BinaryNode>(op, left, right);
 		left = std::move(binaryNode);
 		token = std::get<Symbol>(peekToken());
