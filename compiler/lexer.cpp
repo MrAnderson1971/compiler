@@ -60,6 +60,30 @@ void TokenPrinter::operator()(Symbol s) const {
 	case Symbol::DOUBLE_GREATER_THAN:
 		os << ">>";
 		break;
+	case Symbol::DOUBLE_AMPERSAND:
+		os << "&&";
+		break;
+	case Symbol::DOUBLE_PIPE:
+		os << "||";
+		break;
+	case Symbol::DOUBLE_EQUALS:
+		os << "==";
+		break;
+	case Symbol::NOT_EQUALS:
+		os << "!=";
+		break;
+	case Symbol::LESS_THAN_OR_EQUAL:
+		os << "<=";
+		break;
+	case Symbol::GREATER_THAN_OR_EQUAL:
+		os << ">=";
+		break;
+	case Symbol::LESS_THAN:
+		os << "<";
+		break;
+	case Symbol::GREATER_THAN:
+		os << ">";
+		break;
 	default:
 		os << "UNKNOWN SYMBOL";
 	}
@@ -94,76 +118,105 @@ void Lexer::lex() {
 	for (int i = 0; i < source.size(); i++) {
 		switch (source[i]) {
 		case '{':
-			tokens.push_back(Symbol::OPEN_BRACE);
+			tokens.emplace_back(Symbol::OPEN_BRACE);
 			break;
 		case '}':
-			tokens.push_back(Symbol::CLOSED_BRACE);
+			tokens.emplace_back(Symbol::CLOSED_BRACE);
 			break;
 		case '(':
-			tokens.push_back(Symbol::OPEN_PAREN);
+			tokens.emplace_back(Symbol::OPEN_PAREN);
 			break;
 		case ')':
-			tokens.push_back(Symbol::CLOSED_PAREN);
+			tokens.emplace_back(Symbol::CLOSED_PAREN);
 			break;
 		case ';':
-			tokens.push_back(Symbol::SEMICOLON);
+			tokens.emplace_back(Symbol::SEMICOLON);
 			break;
 		case '-':
 			if (i + 1 < source.size() && source[i + 1] == '-') {
-				tokens.push_back(Symbol::DOUBLE_MINUS);
+				tokens.emplace_back(Symbol::DOUBLE_MINUS);
 				i++;
 			}
 			else {
-				tokens.push_back(Symbol::MINUS);
+				tokens.emplace_back(Symbol::MINUS);
 			}
 			break;
 		case '~':
-			tokens.push_back(Symbol::TILDE);
+			tokens.emplace_back(Symbol::TILDE);
 			break;
 		case '!':
-			tokens.push_back(Symbol::EXCLAMATION_MARK);
+			if (i + 1 < source.size() && source[i + 1] == '=') {
+				tokens.emplace_back(Symbol::NOT_EQUALS);
+				i++;
+			} else {
+				tokens.emplace_back(Symbol::EXCLAMATION_MARK);
+			}
 			break;
 		case '+':
 			if (i + 1 < source.size() && source[i + 1] == '+') {
-				tokens.push_back(Symbol::DOUBLE_PLUS);
+				tokens.emplace_back(Symbol::DOUBLE_PLUS);
 				i++;
 			}
 			else {
-				tokens.push_back(Symbol::PLUS);
+				tokens.emplace_back(Symbol::PLUS);
 			}
 			break;
 		case '*':
-			tokens.push_back(Symbol::ASTERISK);
+			tokens.emplace_back(Symbol::ASTERISK);
 			break;
 		case '/':
-			tokens.push_back(Symbol::FORWARD_SLASH);
+			tokens.emplace_back(Symbol::FORWARD_SLASH);
 			break;
 		case '%':
-			tokens.push_back(Symbol::PERCENTAGE);
+			tokens.emplace_back(Symbol::PERCENTAGE);
 			break;
 		case '|':
-			tokens.push_back(Symbol::PIPE);
+			if (i + 1 < source.size() && source[i + 1] == '|') {
+				tokens.emplace_back(Symbol::DOUBLE_PIPE);
+				i++;
+			} else {
+				tokens.emplace_back(Symbol::PIPE);
+			}
 			break;
 		case '&':
-			tokens.push_back(Symbol::AMPERSAND);
+			if (i + 1 < source.size() && source[i + 1] == '&') {
+				tokens.emplace_back(Symbol::DOUBLE_AMPERSAND);
+				i++;
+			} else {
+				tokens.emplace_back(Symbol::AMPERSAND);
+			}
 			break;
 		case '^':
-			tokens.push_back(Symbol::CARET);
+			tokens.emplace_back(Symbol::CARET);
 			break;
 		case '<':
 			if (i + 1 < source.size() && source[i + 1] == '<') {
-				tokens.push_back(Symbol::DOUBLE_LESS_THAN);
+				tokens.emplace_back(Symbol::DOUBLE_LESS_THAN);
+				i++;
+			} else if (i + 1 < source.size() && source[i + 1] == '=') {
+				tokens.emplace_back(Symbol::LESS_THAN_OR_EQUAL);
 				i++;
 			} else {
-				tokens.push_back(Symbol::LESS_THAN);
+				tokens.emplace_back(Symbol::LESS_THAN);
 			}
 			break;
 		case '>':
 			if (i + 1 < source.size() && source[i + 1] == '>') {
-				tokens.push_back(Symbol::DOUBLE_GREATER_THAN);
+				tokens.emplace_back(Symbol::DOUBLE_GREATER_THAN);
+				i++;
+			} else if (i + 1 < source.size() && source[i + 1] == '=') {
+				tokens.emplace_back(Symbol::GREATER_THAN_OR_EQUAL);
 				i++;
 			} else {
-				tokens.push_back(Symbol::GREATER_THAN);
+				tokens.emplace_back(Symbol::GREATER_THAN);
+			}
+			break;
+		case '=':
+			if (i + 1 < source.size() && source[i + 1] == '=') {
+				tokens.emplace_back(Symbol::DOUBLE_EQUALS);
+				i++;
+			} else {
+				tokens.emplace_back(UnknownToken{i}); // no assignment for now
 			}
 			break;
 		case ' ': // whitespace, do nothing
@@ -179,13 +232,13 @@ void Lexer::lex() {
 				}
 				i--;
 				if (identifier == "return") {
-					tokens.push_back(Keyword::RETURN);
+					tokens.emplace_back(Keyword::RETURN);
 				}
 				else if (identifier == "int") {
-					tokens.push_back(Keyword::INT);
+					tokens.emplace_back(Keyword::INT);
 				}
 				else {
-					tokens.push_back(identifier);
+					tokens.emplace_back(identifier);
 				}
 			}
 			else if (std::isdigit(source[i])) { // int literal
@@ -194,10 +247,10 @@ void Lexer::lex() {
 					intToken = intToken * 10 + (source[i++] - '0');
 				}
 				i--;
-				tokens.push_back(intToken);
+				tokens.emplace_back(intToken);
 			}
 			else {
-				tokens.push_back(UnknownToken{i}); // unknown
+				tokens.emplace_back(UnknownToken{i}); // unknown
 			}
 		}
 	}

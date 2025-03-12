@@ -60,38 +60,9 @@ std::string BinaryOpInstruction::print() const {
 	std::stringstream ss;
 	ss << dest << " = ";
 	std::visit(OperandPrinter{ ss }, left);
-	switch (op) {
-	case BinaryOperator::ADD:
-		ss << " + ";
-		break;
-	case BinaryOperator::SUBTRACT:
-		ss << " - ";
-		break;
-	case BinaryOperator::MULTIPLY:
-		ss << " * ";
-		break;
-	case BinaryOperator::DIVIDE:
-		ss << " / ";
-		break;
-	case BinaryOperator::MODULO:
-		ss << " % ";
-		break;
-	case BinaryOperator::XOR:
-		ss << " ^ ";
-		break;
-	case BinaryOperator::AND:
-		ss << " & ";
-		break;
-	case BinaryOperator::OR:
-		ss << " | ";
-		break;
-	case BinaryOperator::SHIFT_LEFT:
-		ss << " << ";
-		break;
-	case BinaryOperator::SHIFT_RIGHT:
-		ss << " >> ";
-		break;
-	}
+	ss << " ";
+	TokenPrinter{ ss }(static_cast<Symbol>(op));
+	ss << " ";
 	std::visit(OperandPrinter{ ss }, right);
 	return ss.str();
 }
@@ -103,7 +74,7 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 
 	bool src2IsImmediate = src2.find('$') != std::string::npos;
 
-	if (isOneOf(op, BinaryOperator::ADD, BinaryOperator::SUBTRACT, BinaryOperator::AND, BinaryOperator::OR, BinaryOperator::XOR, BinaryOperator::SHIFT_LEFT, BinaryOperator::SHIFT_RIGHT)) {
+	if (isOneOf(op, BinaryOperator::ADD, BinaryOperator::SUBTRACT, BinaryOperator::BITWISE_AND, BinaryOperator::BITWISE_OR, BinaryOperator::BITWISE_XOR, BinaryOperator::SHIFT_LEFT, BinaryOperator::SHIFT_RIGHT)) {
 		ss << std::format("movl {}, %r10d\n", src1);
 		ss << std::format("movl %r10d, {}\n", d);
 
@@ -116,13 +87,13 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 		case BinaryOperator::SUBTRACT:
 			opcode = "subl";
 			break;
-		case BinaryOperator::AND:
+		case BinaryOperator::BITWISE_AND:
 			opcode = "and";
 			break;
-		case BinaryOperator::OR:
+		case BinaryOperator::BITWISE_OR:
 			opcode = "or";
 			break;
-		case BinaryOperator::XOR:
+		case BinaryOperator::BITWISE_XOR:
 			opcode = "xor";
 			break;
 		case BinaryOperator::SHIFT_LEFT:
@@ -176,6 +147,32 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 		else {
 			ss << std::format("movl %edx, {}\n", d);
 		}
+	} else if (isOneOf(op, BinaryOperator::EQUALS, BinaryOperator::NOT_EQUALS, BinaryOperator::LESS_THAN, BinaryOperator::GREATER_THAN, BinaryOperator::LESS_THAN_OR_EQUAL, BinaryOperator::GREATER_THAN_OR_EQUAL)) {
+		ss << std::format("movl {}, %edx\n", src1);
+		ss << std::format("movl %edx, {}\n", d);
+		ss << std::format("cmpl {}, %edx\n", src2);
+		ss << std::format("movl $0, {}\n", d);
+		switch (op) {
+		case BinaryOperator::EQUALS:
+			ss << std::format("sete {}\n", d);
+			break;
+		case BinaryOperator::NOT_EQUALS:
+			ss << std::format("setne {}\n", d);
+			break;
+		case BinaryOperator::LESS_THAN:
+			ss << std::format("setl {}\n", d);
+			break;
+		case BinaryOperator::GREATER_THAN:
+			ss << std::format("setg {}\n", d);
+			break;
+		case BinaryOperator::LESS_THAN_OR_EQUAL:
+			ss << std::format("setle {}\n", d);
+			break;
+		case BinaryOperator::GREATER_THAN_OR_EQUAL:
+			ss << std::format("setge {}\n", d);
+			break;
+		}
+		//ss << std::format("movl %al, {}\n", dest);
 	}
 }
 

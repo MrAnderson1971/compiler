@@ -50,18 +50,27 @@ static std::unique_ptr<ASTNode> parseConst(Number value) {
 
 static int getPrecedence(Symbol op) {
 	switch (op) {
-	case Symbol::DOUBLE_GREATER_THAN: case Symbol::DOUBLE_LESS_THAN:
-		return 6;
-	case Symbol::AMPERSAND:
-		return 5;
-	case Symbol::CARET:
-		return 4;
-	case Symbol::PIPE:
-		return 3;
 	case Symbol::ASTERISK: case Symbol::FORWARD_SLASH: case Symbol::PERCENTAGE:
-		return 2;
+		return 50;
 	case Symbol::PLUS: case Symbol::MINUS:
-		return 1;
+		return 45;
+	case Symbol::DOUBLE_GREATER_THAN: case Symbol::DOUBLE_LESS_THAN:
+		return 40;
+	case Symbol::LESS_THAN: case Symbol::LESS_THAN_OR_EQUAL:
+	case Symbol::GREATER_THAN: case Symbol::GREATER_THAN_OR_EQUAL:
+		return 35;
+	case Symbol::DOUBLE_EQUALS: case Symbol::NOT_EQUALS:
+		return 30;
+	case Symbol::AMPERSAND:
+		return 25;
+	case Symbol::CARET:
+		return 20;
+	case Symbol::PIPE:
+		return 15;
+	case Symbol::DOUBLE_AMPERSAND:
+		return 10;
+	case Symbol::DOUBLE_PIPE:
+		return 5;
 	default:
 		return -1;
 	}
@@ -72,7 +81,7 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
 	if (std::holds_alternative<Number>(token)) {
 		return parseConst(getTokenAndAdvance<Number>());
 	}
-	else if (std::holds_alternative<Symbol>(token)) {
+	if (std::holds_alternative<Symbol>(token)) {
 		getTokenAndAdvance(Symbol::OPEN_PAREN);
 		auto expression = parseExpression();
 		getTokenAndAdvance(Symbol::CLOSED_PAREN);
