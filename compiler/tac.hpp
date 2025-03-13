@@ -112,6 +112,14 @@ struct JumpIfZero : public TACInstruction {
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
 
+struct JumpIfNotZero : public TACInstruction {
+	std::string label;
+	Operand op;
+	JumpIfNotZero(Operand operand, const std::string& label) : op(operand), label(label) {}
+	std::string print() const override;
+	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
+};
+
 struct Jump : public TACInstruction {
 	std::string label;
 	Jump(const std::string& label) : label(label) {}

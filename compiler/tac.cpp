@@ -47,13 +47,16 @@ void UnaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body)
 	ss << std::format("movl %r10d, {}\n", dest);
 	switch (op) {
 	case UnaryOperator::NEGATION:
-		ss << "negl ";
+		ss << std::format("negl {}\n", dest);
 		break;
 	case UnaryOperator::BITWISE_NOT:
-		ss << "notl ";
+		ss << std::format("notl {}\n", dest);
+		break;
+	case UnaryOperator::LOGICAL_NOT:
+		ss << std::format("cmpl $0, {}\n", dest);
+		ss << std::format("sete {}\n", dest);
 		break;
 	}
-	ss << operandToAsm(dest) << "\n";
 }
 
 std::string BinaryOpInstruction::print() const {
@@ -189,6 +192,21 @@ void JumpIfZero::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
 	ss << std::format("movl {}, %edx\n", src);
 	ss << "cmpl $0, %edx\n";
 	ss << std::format("je {}\n", label);
+}
+
+std::string JumpIfNotZero::print() const {
+	std::stringstream ss;
+	ss << "if ";
+	std::visit(OperandPrinter{ ss }, op);
+	ss << " != 0 goto " << label;
+	return ss.str();
+}
+
+void JumpIfNotZero::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
+	std::string src = std::visit(operandToAsm, op);
+	ss << std::format("movl {}, %edx\n", src);
+	ss << "cmpl $0, %edx\n";
+	ss << std::format("jne {}\n", label);
 }
 
 std::string Jump::print() const {

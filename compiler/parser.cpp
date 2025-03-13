@@ -1,4 +1,3 @@
-#include <functional>
 #include "parser.hpp"
 
 Token Parser::peekToken() {
