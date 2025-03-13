@@ -145,34 +145,34 @@ void BinaryNode::generate(CodeContext& context) const {
 
 Operand BinaryNode::makeTac(FunctionBody& body) const {
 	if (op == BinaryOperator::LOGICAL_AND) {
-		int falseLabel = ++body.labelCount;
-		int endLabel = ++body.labelCount;
+		std::string falseLabel = std::format(".{}{}_false", body.name, ++body.labelCount);
+		std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
 		// Short-circuiting
 		Operand leftOperand = left->makeTac(body);
-		body.emplaceInstruction<JumpIfZero>(leftOperand, body.name + std::to_string(falseLabel)); // goto false label
+		body.emplaceInstruction<JumpIfZero>(leftOperand, falseLabel); // goto false label
 		Operand rightOperand = right->makeTac(body);
-		body.emplaceInstruction<JumpIfZero>(rightOperand, body.name + std::to_string(falseLabel));
+		body.emplaceInstruction<JumpIfZero>(rightOperand, falseLabel);
 		PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(1));
-		body.emplaceInstruction<Jump>(body.name + std::to_string(endLabel)); // goto end
-		body.emplaceInstruction<Label>(body.name + std::to_string(falseLabel)); // false label
+		body.emplaceInstruction<Jump>(endLabel); // goto end
+		body.emplaceInstruction<Label>(falseLabel); // false label
 		dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(0));
-		body.emplaceInstruction<Label>(body.name + std::to_string(endLabel)); // end
+		body.emplaceInstruction<Label>(endLabel); // end
 		body.variableCount++;
 		return dest;
 	}
 	if (op == BinaryOperator::LOGICAL_OR) {
-		int trueLabel = ++body.labelCount;
-		int endLabel = ++body.labelCount;
+		std::string trueLabel = std::format(".{}{}_true", body.name, ++body.labelCount);
+		std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
 		// Short-circuiting
 		Operand leftOperand = left->makeTac(body);
-		body.emplaceInstruction<JumpIfNotZero>(leftOperand, body.name + std::to_string(trueLabel)); // goto true label
+		body.emplaceInstruction<JumpIfNotZero>(leftOperand, trueLabel); // goto true label
 		Operand rightOperand = right->makeTac(body);
-		body.emplaceInstruction<JumpIfNotZero>(rightOperand, body.name + std::to_string(trueLabel));
+		body.emplaceInstruction<JumpIfNotZero>(rightOperand, trueLabel);
 		PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(0));
-		body.emplaceInstruction<Jump>(body.name + std::to_string(endLabel)); // goto end
-		body.emplaceInstruction<Label>(body.name + std::to_string(trueLabel)); // true label
+		body.emplaceInstruction<Jump>(endLabel); // goto end
+		body.emplaceInstruction<Label>(trueLabel); // true label
 		dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(1));
-		body.emplaceInstruction<Label>(body.name + std::to_string(endLabel)); // end
+		body.emplaceInstruction<Label>(endLabel); // end
 		body.variableCount++;
 		return dest;
 	}
