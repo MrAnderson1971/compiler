@@ -96,6 +96,7 @@ void UnaryNode::generate(CodeContext& context) const {
 Operand UnaryNode::makeTac(FunctionBody& body) const {
 	Operand src = expression->makeTac(body);
 	PseudoRegister dest = body.emplaceInstruction<UnaryOpInstruction>(op, src);
+	body.variableCount++;
 	return dest;
 }
 
@@ -143,9 +144,27 @@ void BinaryNode::generate(CodeContext& context) const {
 }
 
 Operand BinaryNode::makeTac(FunctionBody& body) const {
+	if (op == BinaryOperator::LOGICAL_AND) {
+		int falseLabel = ++body.labelCount;
+		int endLabel = ++body.labelCount;
+		// Short-circuiting
+		Operand leftOperand = left->makeTac(body);
+		body.emplaceInstruction<JumpIfZero>(leftOperand, body.name + std::to_string(falseLabel)); // goto false label
+		Operand rightOperand = right->makeTac(body);
+		body.emplaceInstruction<JumpIfZero>(rightOperand, body.name + std::to_string(falseLabel));
+		PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(1));
+		body.emplaceInstruction<Jump>(body.name + std::to_string(endLabel)); // goto end
+		body.emplaceInstruction<Label>(body.name + std::to_string(falseLabel));
+		dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(0));
+		body.emplaceInstruction<Label>(body.name + std::to_string(endLabel));
+		body.variableCount++;
+		return dest;
+	}
 	Operand leftOperand = left->makeTac(body);
 	Operand rightOperand = right->makeTac(body);
+
 	PseudoRegister dest = body.emplaceInstruction<BinaryOpInstruction>(op, leftOperand, rightOperand);
+	body.variableCount++;
 	return dest;
 }
 

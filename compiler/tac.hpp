@@ -103,6 +103,37 @@ struct BinaryOpInstruction : public has_dest {
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
 
+struct JumpIfZero : public TACInstruction {
+	std::string label;
+	Operand op;
+
+	JumpIfZero(Operand operand, const std::string& label) : op(operand), label(label) {}
+	std::string print() const override;
+	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
+};
+
+struct Jump : public TACInstruction {
+	std::string label;
+	Jump(const std::string& label) : label(label) {}
+	std::string print() const override;
+	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
+};
+
+struct Label : public TACInstruction {
+	std::string label;
+	Label(const std::string& label) : label(label) {}
+	std::string print() const override;
+	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
+};
+
+struct StoreValueInstruction : public has_dest {
+	Operand val;
+	StoreValueInstruction(PseudoRegister dest, Operand val) : has_dest(dest), val(val) {}
+	std::string print() const override;
+
+	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;;
+};
+
 struct ReturnInstruction : public TACInstruction {
 	Operand val;
 
@@ -119,13 +150,14 @@ struct AllocateStackInstruction : public TACInstruction {
 struct FunctionBody {
 	std::string name;
 	int variableCount = 1;
+	int labelCount = 0;
 	std::vector<std::unique_ptr<TACInstruction>> instructions;
 
 	template<typename Instruction, typename... Args>
 	PseudoRegister emplaceInstruction(Args... args) 
 		requires std::is_base_of_v<has_dest, Instruction>
 	{
-		PseudoRegister destination{ name, variableCount++ };
+		PseudoRegister destination{ name, variableCount };
 		instructions.push_back(std::make_unique<Instruction>(destination, std::forward<Args>(args)...));
 		return destination;
 	}

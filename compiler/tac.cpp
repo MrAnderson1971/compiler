@@ -176,6 +176,48 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 	}
 }
 
+std::string JumpIfZero::print() const {
+	std::stringstream ss;
+	ss << "if ";
+	std::visit(OperandPrinter{ ss }, op);
+	ss << " == 0 goto " << label;
+	return ss.str();
+}
+
+void JumpIfZero::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
+	std::string src = std::visit(operandToAsm, op);
+	ss << std::format("movl {}, %edx\n", src);
+	ss << "cmpl $0, %edx\n";
+	ss << std::format("je {}\n", label);
+}
+
+std::string Jump::print() const {
+	return "goto " + label;
+}
+
+void Jump::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
+	ss << "jmp " << label << "\n";
+}
+
+std::string Label::print() const {
+	return label + ":";
+}
+
+void Label::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
+	ss << label << ":\n";
+}
+
+std::string StoreValueInstruction::print() const {
+	std::stringstream ss;
+	ss << dest << " = ";
+	std::visit(OperandPrinter{ ss }, val);
+	return ss.str();
+}
+
+void StoreValueInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
+	ss << std::format("movl {}, {}\n", val, dest);
+}
+
 std::string ReturnInstruction::print() const {
 	std::stringstream ss;
 	ss << "return ";
