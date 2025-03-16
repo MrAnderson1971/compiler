@@ -50,7 +50,7 @@ struct TACInstruction {
 
 struct has_dest : public TACInstruction {
 	PseudoRegister dest;
-	has_dest(PseudoRegister dest) : dest(dest) {}
+	has_dest(const PseudoRegister& dest) : dest(dest) {}
 };
 
 struct OperandPrinter {
@@ -81,14 +81,14 @@ struct FunctionInstruction : public TACInstruction {
 	std::string name;
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
-	FunctionInstruction(std::string name) : name(name) {}
+	FunctionInstruction(std::string name) : name(std::move(name)) {}
 };
 
 struct UnaryOpInstruction : public has_dest {
 	UnaryOperator op;
 	Operand arg;
 
-	UnaryOpInstruction(PseudoRegister dest, UnaryOperator op, Operand arg) : has_dest(dest), op(op), arg(arg) {}
+	UnaryOpInstruction(const PseudoRegister& dest, UnaryOperator op, Operand arg) : has_dest(dest), op(op), arg(std::move(arg)) {}
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
@@ -98,7 +98,8 @@ struct BinaryOpInstruction : public has_dest {
 	Operand left;
 	Operand right;
 
-	BinaryOpInstruction(PseudoRegister dest, BinaryOperator op, Operand left, Operand right) : has_dest(dest), op(op), left(left), right(right) {}
+	BinaryOpInstruction(PseudoRegister dest, BinaryOperator op, Operand left, Operand right) :
+	has_dest(dest), op(op), left(std::move(left)), right(std::move(right)) {}
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
@@ -107,7 +108,7 @@ struct JumpIfZero : public TACInstruction {
 	std::string label;
 	Operand op;
 
-	JumpIfZero(Operand operand, const std::string& label) : op(operand), label(label) {}
+	JumpIfZero(Operand operand, std::string label) : op(std::move(operand)), label(std::move(label)) {}
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
@@ -115,28 +116,28 @@ struct JumpIfZero : public TACInstruction {
 struct JumpIfNotZero : public TACInstruction {
 	std::string label;
 	Operand op;
-	JumpIfNotZero(Operand operand, const std::string& label) : op(operand), label(label) {}
+	JumpIfNotZero(Operand operand, std::string label) : label(std::move(label)), op(std::move(operand)) {}
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
 
 struct Jump : public TACInstruction {
 	std::string label;
-	Jump(const std::string& label) : label(label) {}
+	Jump(std::string label) : label(std::move(label)) {}
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
 
 struct Label : public TACInstruction {
 	std::string label;
-	Label(const std::string& label) : label(label) {}
+	Label(std::string label) : label(std::move(label)) {}
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
 
 struct StoreValueInstruction : public has_dest {
 	Operand val;
-	StoreValueInstruction(PseudoRegister dest, Operand val) : has_dest(dest), val(val) {}
+	StoreValueInstruction(PseudoRegister dest, Operand val) : has_dest(dest), val(std::move(val)) {}
 	std::string print() const override;
 
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;;
@@ -145,7 +146,7 @@ struct StoreValueInstruction : public has_dest {
 struct ReturnInstruction : public TACInstruction {
 	Operand val;
 
-	ReturnInstruction(Operand val) : val(val) {}
+	ReturnInstruction(Operand val) : val(std::move(val)) {}
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
