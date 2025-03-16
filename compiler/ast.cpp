@@ -19,6 +19,13 @@ void ProgramNode::generate(CodeContext& context) const {
 	}
 }
 
+std::ostream& AssignmentNode::print(std::ostream& os, int indent) const {
+	os << std::string(indent, ' ') << "ASSIGNMENT NODE:\n";
+	left->print(os, indent + 1);
+	right->print(os, indent + 1);
+	return os;
+}
+
 std::ostream& ReturnNode::print(std::ostream& os, int indent) const {
 	os << std::string(indent, ' ') << "RETURN NODE\n";
 	expression->print(os, indent + 1);
@@ -184,25 +191,29 @@ Operand BinaryNode::makeTac(FunctionBody& body) const {
 	return dest;
 }
 
-std::ostream& FunctionDeclarationNode::print(std::ostream& os, int indent) const {
+std::ostream& FunctionDefinitionNode::print(std::ostream& os, int indent) const {
 	os << std::string(indent, ' ') << "FUNCTION DECLARATION NODE: " << identifier << '\n';
-	if (statement) {
-		statement->print(os, indent + 1);
+	if (!block_items.empty()) {
+		for (const auto& statement : block_items) {
+			statement->print(os, indent + 1);
+		}
 	}
 	return os;
 }
 
-Operand FunctionDeclarationNode::makeTac(FunctionBody& body) const {
+Operand FunctionDefinitionNode::makeTac(FunctionBody& body) const {
 	body.emplaceInstruction<FunctionInstruction>(body.name);
 	body.emplaceInstruction<AllocateStackInstruction>();
 	return nullptr;
 }
 
-void FunctionDeclarationNode::generate(CodeContext& context) const {
+void FunctionDefinitionNode::generate(CodeContext& context) const {
 	FunctionBody body(identifier);
 	makeTac(body);
-	if (statement) {
-		statement->makeTac(body);
+	if (!block_items.empty()) {
+		for (const auto& statement : block_items) {
+			statement->makeTac(body);
+		}
 		
 		std::stringstream ss;
 		for (const auto& instruction : body.instructions) {
@@ -211,4 +222,16 @@ void FunctionDeclarationNode::generate(CodeContext& context) const {
 		context.out << ss.str();
 		std::cout << body << std::endl;
 	}
+}
+
+std::ostream& DeclarationNode::print(std::ostream& os, int indent) const {
+	os << std::string(indent, ' ') << "DECLARATION NODE: " << identifier << '\n';
+	if (expression) {
+		expression->print(os, indent + 1);
+	}
+	return os;
+}
+
+std::ostream& VariableNode::print(std::ostream& os, int indent) const {
+	return os << std::string(indent, ' ') << "VARIABLE NODE: " << identifier << '\n';
 }

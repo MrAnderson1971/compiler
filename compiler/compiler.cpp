@@ -1,4 +1,5 @@
 #include "compiler.hpp"
+#include <iostream>
 
 #ifdef _DEBUG
 constexpr bool debug = true;
@@ -6,7 +7,7 @@ constexpr bool debug = true;
 constexpr bool debug = false;
 #endif
 
-void compile(std::string& source, std::ostream& os) {
+void compile(const std::string& source, std::ostream& os) {
 	Lexer lexer(source);
 	lexer.lex();
 	if constexpr (debug) {

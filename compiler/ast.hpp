@@ -31,13 +31,33 @@ struct ProgramNode : public ASTNode {
 	void generate(CodeContext& context) const override;
 };
 
-struct FunctionDeclarationNode : public ASTNode {
+struct FunctionDefinitionNode : public ASTNode {
 	std::string identifier;
-	std::unique_ptr<ASTNode> statement;
+	std::vector<std::unique_ptr<ASTNode>> block_items;
 
 	std::ostream& print(std::ostream& os, int indent) const override;
 	void generate(CodeContext& context) const override;
 	Operand makeTac(FunctionBody& body) const override;
+};
+
+struct DeclarationNode : public ASTNode {
+	std::string identifier;
+	std::unique_ptr<ASTNode> expression;
+
+	std::ostream& print(std::ostream& os, int indent) const override;
+	void generate(CodeContext& context) const override {} // TODO
+	Operand makeTac(FunctionBody& body) const override { return nullptr; } // TODO
+};
+
+struct AssignmentNode : public ASTNode {
+	std::unique_ptr<ASTNode> left;
+	std::unique_ptr<ASTNode> right;
+
+	AssignmentNode(std::unique_ptr<ASTNode>& left, std::unique_ptr<ASTNode>& right) : left(std::move(left)), right(std::move(right)) {}
+
+	std::ostream& print(std::ostream& os, int indent) const override;
+	void generate(CodeContext& context) const override {} // TODO
+	Operand makeTac(FunctionBody& body) const override { return nullptr; } // TODO
 };
 
 struct ReturnNode : public ASTNode {
@@ -78,4 +98,14 @@ struct ConstNode : public ASTNode {
 	std::ostream& print(std::ostream&, int) const override;
 	void generate(CodeContext& context) const override;
 	Operand makeTac(FunctionBody& body) const override;
+};
+
+struct VariableNode : public ASTNode {
+	std::string identifier;
+
+	VariableNode(std::string identifier) : identifier(std::move(identifier)) {}
+
+	std::ostream& print(std::ostream&os, int indent) const override;
+	void generate(CodeContext& context) const override {}; // TODO
+	Operand makeTac(FunctionBody& body) const override { return nullptr; }; // TODO
 };

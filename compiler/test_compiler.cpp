@@ -53,13 +53,13 @@ return 0;
 	EXPECT_THROW(compile(source, ss), compiler_error);
 }
 
-TEST_F(CompilerTest, TestMissingReturnStatement) {
-	std::string source = R"(
-int main() {
-	0;
-})";
-	EXPECT_THROW(compile(source, ss), compiler_error);
-}
+//TEST_F(CompilerTest, TestMissingReturnStatement) {
+//	std::string source = R"(
+//int main() {
+//	0;
+//})";
+//	EXPECT_THROW(compile(source, ss), compiler_error);
+//}
 
 TEST_F(CompilerTest, TestInvalidReturnStatement) {
 	std::string source = R"(

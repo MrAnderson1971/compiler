@@ -7,7 +7,7 @@ Token Parser::peekToken() {
 	return tokens.front();
 }
 
-Parser::Parser(std::vector<Token>&& tokens) : tokens(tokens.begin(), tokens.end()) {}
+Parser::Parser(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()) {}
 
 Token Parser::getTokenAndAdvance() {
 	if (tokens.empty()) {
@@ -24,22 +24,52 @@ std::unique_ptr<ASTNode> Parser::parseProgram() {
 
 std::unique_ptr<ASTNode> Parser::parseFunctionDeclaration() {
 	getTokenAndAdvance(Keyword::INT);
-	auto function_declaration = std::make_unique<FunctionDeclarationNode>();
+	auto function_declaration = std::make_unique<FunctionDefinitionNode>();
 	function_declaration->identifier = getTokenAndAdvance<std::string>();
 	getTokenAndAdvance(Symbol::OPEN_PAREN);
 	getTokenAndAdvance(Symbol::CLOSED_PAREN);
 	getTokenAndAdvance(Symbol::OPEN_BRACE);
-	function_declaration->statement = parseReturn();
-	getTokenAndAdvance(Symbol::SEMICOLON);
+
+	for (Token nextToken = peekToken(); nextToken != Symbol::CLOSED_BRACE; nextToken = peekToken()) {
+		if (std::unique_ptr<ASTNode> blockItem = parseBlockItem()) {
+			function_declaration->block_items.emplace_back(std::move(blockItem));
+		}
+	}
 	getTokenAndAdvance(Symbol::CLOSED_BRACE);
 	return function_declaration;
 }
 
-std::unique_ptr<ASTNode> Parser::parseReturn() {
-	getTokenAndAdvance(Keyword::RETURN);
-	auto returnNode = std::make_unique<ReturnNode>();
-	returnNode->expression = parseExpression();
-	return returnNode;
+std::unique_ptr<ASTNode> Parser::parseDeclaration() {
+	auto declarationNode = std::make_unique<DeclarationNode>();
+	declarationNode->identifier = getTokenAndAdvance<std::string>();
+	if (peekToken() == Symbol::EQUALS) {
+		getTokenAndAdvance(Symbol::EQUALS);
+		declarationNode->expression = parseExpression();
+	}
+	return declarationNode;
+}
+
+std::unique_ptr<ASTNode> Parser::parseBlockItem() {
+	std::unique_ptr<ASTNode> blockItem = nullptr;
+	Token token = peekToken();
+	if (std::holds_alternative<Keyword>(token)) {
+		switch (getTokenAndAdvance<Keyword>()) {
+			case Keyword::RETURN: {
+				auto returnNode = std::make_unique<ReturnNode>();
+				returnNode->expression = parseExpression();
+				blockItem = std::move(returnNode);
+				break;
+			}
+			case Keyword::INT: {
+				blockItem = parseDeclaration();
+				break;
+			}
+		}
+	} else {
+		blockItem = parseExpression();
+	}
+	getTokenAndAdvance(Symbol::SEMICOLON); 
+	return blockItem;
 }
 
 static std::unique_ptr<ASTNode> parseConst(Number value) {
@@ -70,6 +100,8 @@ static int getPrecedence(Symbol op) {
 		return 10;
 	case Symbol::DOUBLE_PIPE:
 		return 5;
+	case Symbol::EQUALS:
+		return 1;
 	default:
 		return -1;
 	}
@@ -86,7 +118,10 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
 		getTokenAndAdvance(Symbol::CLOSED_PAREN);
 		return expression;
 	}
-	throw std::runtime_error("Unexpected token");
+	if (std::holds_alternative<std::string>(token)) { // variable
+		return parseDeclaration();
+	}
+	throw compiler_error("Unexpected token");
 }
 
 std::unique_ptr<ASTNode> Parser::parseUnaryOrPrimary() {
@@ -100,16 +135,34 @@ std::unique_ptr<ASTNode> Parser::parseUnaryOrPrimary() {
 	return parsePrimary();
 }
 
+/*
+ *parse_exp(tokens, min_prec):
+ left = parse_factor(tokens)
+ next_token = peek(tokens)
+ while next_token is a binary operator and precedence(next_token) >= min_prec:
+ if next_token is "=":
+ take_token(tokens) // remove "=" from list of tokens
+ right = parse_exp(tokens, precedence(next_token))
+ left = Assignment(left, right)
+ else:
+ operator = parse_binop(tokens)
+ right = parse_exp(tokens, precedence(next_token) + 1)
+ left = Binary(operator, left, right)
+ next_token = peek(tokens)
+ return left
+ */
 std::unique_ptr<ASTNode> Parser::parseBinaryOp(int minPrecedence) {
 	auto left = parseUnaryOrPrimary();
-	Symbol token = std::get<Symbol>(peekToken());
-	while (isBinaryOp(token) && getPrecedence(token) >= minPrecedence) {
+	for (Symbol token = std::get<Symbol>(peekToken()); isBinaryOp(token) && getPrecedence(token) >= minPrecedence;
+		token = std::get<Symbol>(peekToken())) {
 		Symbol symbol = getTokenAndAdvance<Symbol>();
-		auto right = parseBinaryOp(getPrecedence(symbol) + 1);
-		BinaryOperator op = static_cast<BinaryOperator>(symbol);
-		auto binaryNode = std::make_unique<BinaryNode>(op, left, right);
-		left = std::move(binaryNode);
-		token = std::get<Symbol>(peekToken());
+		if (symbol == Symbol::EQUALS) {
+			auto right = parseBinaryOp(getPrecedence(symbol));
+			left = std::make_unique<AssignmentNode>(left, right);
+		} else {
+			auto right = parseBinaryOp(getPrecedence(symbol) + 1);
+			left = std::make_unique<BinaryNode>(static_cast<BinaryOperator>(symbol), left, right);
+		}
 	}
 	return left;
 }

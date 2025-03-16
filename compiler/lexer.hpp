@@ -45,6 +45,7 @@ enum class Symbol {
 	OPEN_PAREN,
 	CLOSED_PAREN,
 	SEMICOLON,
+	EQUALS,
 };
 
 inline bool isUnaryOp(Symbol s) {
@@ -65,7 +66,7 @@ enum class Keyword {
 };
 
 struct UnknownToken {
-	const int position;
+	size_t position;
 };
 
 using Token = std::variant<Symbol, // tokens
@@ -74,6 +75,16 @@ using Token = std::variant<Symbol, // tokens
 	std::string, // identifiers
 	UnknownToken // unknown
 >;
+
+template<typename T>
+bool operator==(const Token& t, const T& s) {
+	return std::holds_alternative<T>(t) && std::get<T>(t) == s;
+}
+
+template<typename T>
+bool operator==(const T& s, const Token& t) {
+	return t == s;
+}
 
 struct TokenPrinter {
 	std::ostream& os;
@@ -89,10 +100,10 @@ class Lexer {
 
 public:
 	std::vector<Token> tokens;
-	Lexer(std::string& source);
+	Lexer(std::string source);
 	void lex();
 
-	friend std::ostream& operator<<(std::ostream&, Lexer);
+	friend std::ostream& operator<<(std::ostream&, const Lexer&);
 };
 
-std::ostream& operator<<(std::ostream&, Lexer);
+std::ostream& operator<<(std::ostream&, const Lexer&);

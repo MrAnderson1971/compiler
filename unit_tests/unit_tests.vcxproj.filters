@@ -33,6 +33,9 @@
     <ClCompile Include="test_booleans.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="test_assignment.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\compiler\simulator.hpp">

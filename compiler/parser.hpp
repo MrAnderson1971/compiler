@@ -10,7 +10,7 @@ class Parser {
 		std::deque<Token>& tokens;
 		
 		template<typename T>
-		Token operator()(T value) const {
+		Token operator()(const T&) const {
 			auto t = std::get<T>(tokens.front());
 			tokens.pop_front();
 			return t;
@@ -24,11 +24,12 @@ class Parser {
 
 	std::unique_ptr<ASTNode> parseProgram();
 	std::unique_ptr<ASTNode> parseFunctionDeclaration();
-	std::unique_ptr<ASTNode> parseReturn();
+	std::unique_ptr<ASTNode> parseBlockItem();
 	std::unique_ptr<ASTNode> parsePrimary();
 	std::unique_ptr<ASTNode> parseUnaryOrPrimary();
 	std::unique_ptr<ASTNode> parseBinaryOp(int minPrecedence);
 	std::unique_ptr<ASTNode> parseExpression();
+	std::unique_ptr<ASTNode> parseDeclaration();
 
 	Token getTokenAndAdvance();
 
@@ -73,6 +74,6 @@ class Parser {
 	Token peekToken();
 
 public:
-	Parser(std::vector<Token>&& tokens);
+	Parser(const std::vector<Token>& tokens);
 	std::unique_ptr<ASTNode> parse();
 };

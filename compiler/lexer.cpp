@@ -2,7 +2,7 @@
 #include <regex>
 #include <cctype>
 
-Lexer::Lexer(std::string& source) : source(source) {}
+Lexer::Lexer(std::string source) : source(std::move(source)) {}
 
 void TokenPrinter::operator()(Symbol s) const {
 	switch (s) {
@@ -84,6 +84,9 @@ void TokenPrinter::operator()(Symbol s) const {
 	case Symbol::GREATER_THAN:
 		os << ">";
 		break;
+	case Symbol::EQUALS:
+		os << "=";
+		break;
 	default:
 		os << "UNKNOWN SYMBOL";
 	}
@@ -115,7 +118,7 @@ void TokenPrinter::operator()(const std::string& s) const {
 }
 
 void Lexer::lex() {
-	for (int i = 0; i < source.size(); i++) {
+	for (size_t i = 0; i < source.size(); i++) {
 		switch (source[i]) {
 		case '{':
 			tokens.emplace_back(Symbol::OPEN_BRACE);
@@ -216,7 +219,7 @@ void Lexer::lex() {
 				tokens.emplace_back(Symbol::DOUBLE_EQUALS);
 				i++;
 			} else {
-				tokens.emplace_back(UnknownToken{i}); // no assignment for now
+				tokens.emplace_back(Symbol::EQUALS);
 			}
 			break;
 		case ' ': // whitespace, do nothing
@@ -256,7 +259,7 @@ void Lexer::lex() {
 	}
 }
 
-std::ostream& operator<<(std::ostream& os, Lexer lexer) {
+std::ostream& operator<<(std::ostream& os, const Lexer& lexer) {
 	os << "[";
 	for (const auto& token : lexer.tokens) {
 		std::visit(TokenPrinter{ os }, token);
