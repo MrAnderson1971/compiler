@@ -82,7 +82,7 @@ TEST_F(CompilerTest, TestMissingSpace) {
 int main() {
 	return0;
 })";
-	EXPECT_THROW(compile(source, ss), syntax_error);
+	EXPECT_THROW(compile(source, ss), semantic_error);
 }
 
 int main(int argc, char** argv) {

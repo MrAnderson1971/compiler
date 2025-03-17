@@ -4,9 +4,9 @@
 #include <memory>
 #include "type.hpp"
 #include "lexer.hpp"
+#include <unordered_map>
 
 struct FunctionBody;
-
 
 enum class UnaryOperator {
 	NEGATION,
@@ -137,10 +137,10 @@ struct Label : public TACInstruction {
 
 struct StoreValueInstruction : public has_dest {
 	Operand val;
-	StoreValueInstruction(PseudoRegister dest, Operand val) : has_dest(dest), val(std::move(val)) {}
+	StoreValueInstruction(const PseudoRegister& dest, Operand val) : has_dest(dest), val(std::move(val)) {}
 	std::string print() const override;
 
-	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;;
+	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
 
 struct ReturnInstruction : public TACInstruction {
@@ -161,6 +161,7 @@ struct FunctionBody {
 	int variableCount = 1;
 	int labelCount = 0;
 	std::vector<std::unique_ptr<TACInstruction>> instructions;
+	std::unordered_map<std::string, PseudoRegister> variableToPseudoregister;
 
 	template<typename Instruction, typename... Args>
 	PseudoRegister emplaceInstruction(Args... args) 

@@ -72,11 +72,6 @@ std::unique_ptr<ASTNode> Parser::parseBlockItem() {
 	return blockItem;
 }
 
-static std::unique_ptr<ASTNode> parseConst(Number value) {
-	auto constNode = std::make_unique<ConstNode>(value);
-	return constNode;
-}
-
 static int getPrecedence(Symbol op) {
 	switch (op) {
 	case Symbol::ASTERISK: case Symbol::FORWARD_SLASH: case Symbol::PERCENTAGE:
@@ -110,7 +105,7 @@ static int getPrecedence(Symbol op) {
 std::unique_ptr<ASTNode> Parser::parsePrimary() {
 	Token token = peekToken();
 	if (std::holds_alternative<Number>(token)) {
-		return parseConst(getTokenAndAdvance<Number>());
+		return std::make_unique<ConstNode>(getTokenAndAdvance<Number>());
 	}
 	if (std::holds_alternative<Symbol>(token)) {
 		getTokenAndAdvance(Symbol::OPEN_PAREN);
@@ -119,7 +114,7 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
 		return expression;
 	}
 	if (std::holds_alternative<std::string>(token)) { // variable
-		return parseDeclaration();
+		return std::make_unique<VariableNode>(getTokenAndAdvance<std::string>());
 	}
 	throw syntax_error("Unexpected token");
 }

@@ -134,7 +134,6 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="lexer.cpp" />
     <ClCompile Include="parser.cpp" />
-    <ClCompile Include="semantics.cpp" />
     <ClCompile Include="tac.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -142,7 +141,6 @@
     <ClInclude Include="compiler.hpp" />
     <ClInclude Include="lexer.hpp" />
     <ClInclude Include="parser.hpp" />
-    <ClInclude Include="semantics.hpp" />
     <ClInclude Include="tac.hpp" />
     <ClInclude Include="type.hpp" />
   </ItemGroup>

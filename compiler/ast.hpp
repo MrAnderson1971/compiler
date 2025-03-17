@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "tac.hpp"
 #include "type.hpp"
@@ -21,15 +22,15 @@ class Visitor {
 public:
     virtual ~Visitor() = default;
 
-    virtual void visitProgram(const ProgramNode& node) = 0;
-    virtual void visitFunctionDefinition(const FunctionDefinitionNode& node) = 0;
-    virtual void visitDeclaration(const DeclarationNode& node) = 0;
-    virtual void visitAssignment(const AssignmentNode& node) = 0;
-    virtual void visitReturn(const ReturnNode& node) = 0;
-    virtual void visitUnary(const UnaryNode& node) = 0;
-    virtual void visitBinary(const BinaryNode& node) = 0;
-    virtual void visitConst(const ConstNode& node) = 0;
-    virtual void visitVariable(const VariableNode& node) = 0;
+    virtual void visitProgram(ProgramNode* const node) = 0;
+    virtual void visitFunctionDefinition(FunctionDefinitionNode* const node) = 0;
+    virtual void visitDeclaration(DeclarationNode* const node) = 0;
+    virtual void visitAssignment(AssignmentNode* const node) = 0;
+    virtual void visitReturn(ReturnNode* const node) = 0;
+    virtual void visitUnary(UnaryNode* const node) = 0;
+    virtual void visitBinary(BinaryNode* const node) = 0;
+    virtual void visitConst(ConstNode* const node) = 0;
+    virtual void visitVariable(VariableNode* const node) = 0;
 };
 
 // CodeContext definition
@@ -44,19 +45,19 @@ struct ASTNode {
     virtual ~ASTNode() = default;
 
     // Single visitor pattern method
-    virtual void accept(Visitor& visitor) const = 0;
-	friend std::ostream& operator<<(std::ostream& os, const ASTNode& node);
+    virtual void accept(Visitor& visitor) = 0;
+    friend std::ostream& operator<<(std::ostream& os, const ASTNode& node);
 };
 
 // Program node (root of AST)
 struct ProgramNode : public ASTNode {
     std::unique_ptr<ASTNode> function_declaration;
 
-    void accept(Visitor& visitor) const override {
-        visitor.visitProgram(*this);
+    void accept(Visitor& visitor) override {
+        visitor.visitProgram(this);
     }
 
-	void generate(CodeContext& context) const;
+    void generate(const CodeContext& context) const;
 };
 
 // Function definition node
@@ -64,11 +65,11 @@ struct FunctionDefinitionNode : public ASTNode {
     std::string identifier;
     std::vector<std::unique_ptr<ASTNode>> block_items;
 
-    void accept(Visitor& visitor) const override {
-        visitor.visitFunctionDefinition(*this);
+    void accept(Visitor& visitor) override {
+        visitor.visitFunctionDefinition(this);
     }
 
-	void generate(CodeContext& context) const;
+    void generate(const CodeContext& context);
 };
 
 // Variable declaration node
@@ -76,8 +77,8 @@ struct DeclarationNode : public ASTNode {
     std::string identifier;
     std::unique_ptr<ASTNode> expression;
 
-    void accept(Visitor& visitor) const override {
-        visitor.visitDeclaration(*this);
+    void accept(Visitor& visitor) override {
+        visitor.visitDeclaration(this);
     }
 };
 
@@ -86,12 +87,12 @@ struct AssignmentNode : public ASTNode {
     std::unique_ptr<ASTNode> left;
     std::unique_ptr<ASTNode> right;
 
-	AssignmentNode(std::unique_ptr<ASTNode>& left, std::unique_ptr<ASTNode>& right)
-		: left(std::move(left)), right(std::move(right)) {
-	}
+    AssignmentNode(std::unique_ptr<ASTNode>& left, std::unique_ptr<ASTNode>& right)
+        : left(std::move(left)), right(std::move(right)) {
+    }
 
-    void accept(Visitor& visitor) const override {
-        visitor.visitAssignment(*this);
+    void accept(Visitor& visitor) override {
+        visitor.visitAssignment(this);
     }
 };
 
@@ -99,8 +100,8 @@ struct AssignmentNode : public ASTNode {
 struct ReturnNode : public ASTNode {
     std::unique_ptr<ASTNode> expression;
 
-    void accept(Visitor& visitor) const override {
-        visitor.visitReturn(*this);
+    void accept(Visitor& visitor) override {
+        visitor.visitReturn(this);
     }
 };
 
@@ -109,10 +110,10 @@ struct UnaryNode : public ASTNode {
     UnaryOperator op;
     std::unique_ptr<ASTNode> expression;
 
-	UnaryNode(UnaryOperator op, std::unique_ptr<ASTNode>& expression) : op(op), expression(std::move(expression)) {}
+    UnaryNode(UnaryOperator op, std::unique_ptr<ASTNode>& expression) : op(op), expression(std::move(expression)) {}
 
-    void accept(Visitor& visitor) const override {
-        visitor.visitUnary(*this);
+    void accept(Visitor& visitor) override {
+        visitor.visitUnary(this);
     }
 };
 
@@ -122,12 +123,12 @@ struct BinaryNode : public ASTNode {
     std::unique_ptr<ASTNode> left;
     std::unique_ptr<ASTNode> right;
 
-	BinaryNode(BinaryOperator op, std::unique_ptr<ASTNode>& left, std::unique_ptr<ASTNode>& right)
-		: op(op), left(std::move(left)), right(std::move(right)) {
-	}
+    BinaryNode(BinaryOperator op, std::unique_ptr<ASTNode>& left, std::unique_ptr<ASTNode>& right)
+        : op(op), left(std::move(left)), right(std::move(right)) {
+    }
 
-    void accept(Visitor& visitor) const override {
-        visitor.visitBinary(*this);
+    void accept(Visitor& visitor) override {
+        visitor.visitBinary(this);
     }
 };
 
@@ -135,10 +136,10 @@ struct BinaryNode : public ASTNode {
 struct ConstNode : public ASTNode {
     Number value;
 
-	explicit ConstNode(Number value) : value(value) {}
+    explicit ConstNode(Number value) : value(value) {}
 
-    void accept(Visitor& visitor) const override {
-        visitor.visitConst(*this);
+    void accept(Visitor& visitor) override {
+        visitor.visitConst(this);
     }
 };
 
@@ -146,24 +147,27 @@ struct ConstNode : public ASTNode {
 struct VariableNode : public ASTNode {
     std::string identifier;
 
-    void accept(Visitor& visitor) const override {
-        visitor.visitVariable(*this);
+	explicit VariableNode(const std::string& identifier) : identifier(identifier) {}
+
+    void accept(Visitor& visitor) override {
+        visitor.visitVariable(this);
     }
 };
 
+// Non-modifying visitor for printing
 class PrintVisitor : public Visitor {
 public:
     PrintVisitor(std::ostream& os, int indent = 0);
 
-    void visitProgram(const ProgramNode& node) override;
-    void visitFunctionDefinition(const FunctionDefinitionNode& node) override;
-    void visitDeclaration(const DeclarationNode& node) override;
-    void visitAssignment(const AssignmentNode& node) override;
-    void visitReturn(const ReturnNode& node) override;
-    void visitUnary(const UnaryNode& node) override;
-    void visitBinary(const BinaryNode& node) override;
-    void visitConst(const ConstNode& node) override;
-    void visitVariable(const VariableNode& node) override;
+    void visitProgram(ProgramNode* const node) override;
+    void visitFunctionDefinition(FunctionDefinitionNode* const node) override;
+    void visitDeclaration(DeclarationNode* const node) override;
+    void visitAssignment(AssignmentNode* const node) override;
+    void visitReturn(ReturnNode* const node) override;
+    void visitUnary(UnaryNode* const node) override;
+    void visitBinary(BinaryNode* const node) override;
+    void visitConst(ConstNode* const node) override;
+    void visitVariable(VariableNode* const node) override;
 
 private:
     std::ostream& os;
@@ -174,19 +178,20 @@ private:
     std::string getIndent() const;
 };
 
+// TAC generation visitor
 class TacVisitor : public Visitor {
 public:
     TacVisitor(FunctionBody& body);
 
-    void visitProgram(const ProgramNode& node) override;
-    void visitFunctionDefinition(const FunctionDefinitionNode& node) override;
-    void visitDeclaration(const DeclarationNode& node) override;
-    void visitAssignment(const AssignmentNode& node) override;
-    void visitReturn(const ReturnNode& node) override;
-    void visitUnary(const UnaryNode& node) override;
-    void visitBinary(const BinaryNode& node) override;
-    void visitConst(const ConstNode& node) override;
-    void visitVariable(const VariableNode& node) override;
+    void visitProgram(ProgramNode* const node) override;
+    void visitFunctionDefinition(FunctionDefinitionNode* const node) override;
+    void visitDeclaration(DeclarationNode* const node) override;
+    void visitAssignment(AssignmentNode* const node) override;
+    void visitReturn(ReturnNode* const node) override;
+    void visitUnary(UnaryNode* const node) override;
+    void visitBinary(BinaryNode* const node) override;
+    void visitConst(ConstNode* const node) override;
+    void visitVariable(VariableNode* const node) override;
 
     Operand getResult() const;
 
@@ -195,7 +200,31 @@ private:
     Operand result;
 };
 
-inline std::ostream& operator<<(std::ostream& os, const ASTNode& node) {
+// Variable resolution visitor
+class VariableResolutionVisitor : public Visitor {
+public:
+    VariableResolutionVisitor() : counter(0) {}
+
+    void visitProgram(ProgramNode* const node) override;
+    void visitFunctionDefinition(FunctionDefinitionNode* const node) override;
+    void visitDeclaration(DeclarationNode* const node) override;
+    void visitAssignment(AssignmentNode* const node) override;
+    void visitReturn(ReturnNode* const node) override;
+    void visitUnary(UnaryNode* const node) override;
+    void visitBinary(BinaryNode* const node) override;
+    void visitConst(ConstNode* const node) override {}
+    void visitVariable(VariableNode* const node) override;
+
+private:
+    int counter;
+    std::unordered_map<std::string, std::string> variableMap;
+
+    std::string makeTemporary(const std::string& name) {
+        return std::format("{}.{}", name, counter++);
+    }
+};
+
+inline std::ostream& operator<<(std::ostream& os, ASTNode& node) {
     PrintVisitor p(os);
     node.accept(p);
     return os;
