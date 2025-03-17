@@ -1,181 +1,259 @@
+#include "ast.hpp"
 #include <iostream>
 #include <sstream>
-#include "ast.hpp"
-#include "tac.hpp"
-
-std::ostream& ProgramNode::print(std::ostream& os, int indent) const {
-	os << "PROGRAM NODE\n";
-	function_declaration->print(os, 1);
-	return os;
-}
 
 void ProgramNode::generate(CodeContext& context) const {
-	// Assembly prologue
-	//context.out << ".text\n";
-
-	// Generate code for the function (only main for now)
 	if (function_declaration) {
 		dynamic_cast<FunctionDefinitionNode*>(function_declaration.get())->generate(context);
 	}
 }
 
-std::ostream& AssignmentNode::print(std::ostream& os, int indent) const {
-	os << std::string(indent, ' ') << "ASSIGNMENT NODE:\n";
-	left->print(os, indent + 1);
-	right->print(os, indent + 1);
-	return os;
-}
-
-std::ostream& ReturnNode::print(std::ostream& os, int indent) const {
-	os << std::string(indent, ' ') << "RETURN NODE\n";
-	expression->print(os, indent + 1);
-	return os;
-}
-
-Operand ReturnNode::makeTac(FunctionBody& body) const {
-	Operand dest = nullptr;
-	if (expression) {
-		dest = expression->makeTac(body);
-	}
-	body.emplaceInstruction<ReturnInstruction>(dest);
-	return nullptr;
-}
-
-std::ostream& ConstNode::print(std::ostream& os, int indent) const {
-	return os << std::string(indent, ' ') << "CONST NODE: " << value << '\n';
-}
-
-Operand ConstNode::makeTac(FunctionBody& body) const {
-	return value;
-}
-
-std::ostream& UnaryNode::print(std::ostream& os, int indent) const {
-	os << std::string(indent, ' ') << "UNARY NODE: ";
-	switch (op) {
-	case UnaryOperator::NEGATION:
-		os << "MINUS\n";
-		break;
-	case UnaryOperator::BITWISE_NOT:
-		os << "BITWISE NOT\n";
-		break;
-	case UnaryOperator::LOGICAL_NOT:
-		os << "LOGICAL NOT\n";
-		break;
-	}
-	expression->print(os, indent + 1);
-	return os;
-}
-
-Operand UnaryNode::makeTac(FunctionBody& body) const {
-	Operand src = expression->makeTac(body);
-	PseudoRegister dest = body.emplaceInstruction<UnaryOpInstruction>(op, src);
-	body.variableCount++;
-	return dest;
-}
-
-std::ostream& BinaryNode::print(std::ostream& os, int indent) const {
-	os << std::string(indent, ' ');
-	switch (op) {
-	case BinaryOperator::ADD:
-		os << "ADD\n";
-		break;
-	case BinaryOperator::SUBTRACT:
-		os << "SUBTRACT\n";
-		break;
-	case BinaryOperator::MULTIPLY:
-		os << "MULTIPLY\n";
-		break;
-	case BinaryOperator::DIVIDE:
-		os << "DIVIDE\n";
-		break;
-	}
-	left->print(os, indent + 1);
-	right->print(os, indent + 1);
-	return os;
-}
-
-Operand BinaryNode::makeTac(FunctionBody& body) const {
-	if (op == BinaryOperator::LOGICAL_AND) {
-		std::string falseLabel = std::format(".{}{}_false", body.name, ++body.labelCount);
-		std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
-		// Short-circuiting
-		Operand leftOperand = left->makeTac(body);
-		body.emplaceInstruction<JumpIfZero>(leftOperand, falseLabel); // goto false label
-		Operand rightOperand = right->makeTac(body);
-		body.emplaceInstruction<JumpIfZero>(rightOperand, falseLabel);
-		PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(1));
-		body.emplaceInstruction<Jump>(endLabel); // goto end
-		body.emplaceInstruction<Label>(falseLabel); // false label
-		dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(0));
-		body.emplaceInstruction<Label>(endLabel); // end
-		body.variableCount++;
-		return dest;
-	}
-	if (op == BinaryOperator::LOGICAL_OR) {
-		std::string trueLabel = std::format(".{}{}_true", body.name, ++body.labelCount);
-		std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
-		// Short-circuiting
-		Operand leftOperand = left->makeTac(body);
-		body.emplaceInstruction<JumpIfNotZero>(leftOperand, trueLabel); // goto true label
-		Operand rightOperand = right->makeTac(body);
-		body.emplaceInstruction<JumpIfNotZero>(rightOperand, trueLabel);
-		PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(0));
-		body.emplaceInstruction<Jump>(endLabel); // goto end
-		body.emplaceInstruction<Label>(trueLabel); // true label
-		dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(1));
-		body.emplaceInstruction<Label>(endLabel); // end
-		body.variableCount++;
-		return dest;
-	}
-	Operand leftOperand = left->makeTac(body);
-	Operand rightOperand = right->makeTac(body);
-
-	PseudoRegister dest = body.emplaceInstruction<BinaryOpInstruction>(op, leftOperand, rightOperand);
-	body.variableCount++;
-	return dest;
-}
-
-std::ostream& FunctionDefinitionNode::print(std::ostream& os, int indent) const {
-	os << std::string(indent, ' ') << "FUNCTION DECLARATION NODE: " << identifier << '\n';
-	if (!block_items.empty()) {
-		for (const auto& statement : block_items) {
-			statement->print(os, indent + 1);
-		}
-	}
-	return os;
-}
-
-Operand FunctionDefinitionNode::makeTac(FunctionBody& body) const {
-	body.emplaceInstruction<FunctionInstruction>(body.name);
-	body.emplaceInstruction<AllocateStackInstruction>();
-	return nullptr;
-}
-
 void FunctionDefinitionNode::generate(CodeContext& context) const {
-	FunctionBody body(identifier);
-	makeTac(body);
-	if (!block_items.empty()) {
-		for (const auto& statement : block_items) {
-			statement->makeTac(body);
-		}
-		
-		std::stringstream ss;
-		for (const auto& instruction : body.instructions) {
-			instruction->makeAssembly(ss, body);
-		}
-		context.out << ss.str();
-		std::cout << body << std::endl;
-	}
+    FunctionBody body(identifier);
+	TacVisitor visitor(body);
+	accept(visitor);
+    if (!block_items.empty()) {
+        for (const auto& statement : block_items) {
+            statement->accept(visitor);
+        }
+
+        std::stringstream ss;
+        for (const auto& instruction : body.instructions) {
+            instruction->makeAssembly(ss, body);
+        }
+        context.out << ss.str();
+        std::cout << body << std::endl;
+    }
 }
 
-std::ostream& DeclarationNode::print(std::ostream& os, int indent) const {
-	os << std::string(indent, ' ') << "DECLARATION NODE: " << identifier << '\n';
-	if (expression) {
-		expression->print(os, indent + 1);
-	}
-	return os;
+PrintVisitor::PrintVisitor(std::ostream& os, int indent)
+    : os(os), indent(indent) {
 }
 
-std::ostream& VariableNode::print(std::ostream& os, int indent) const {
-	return os << std::string(indent, ' ') << "VARIABLE NODE: " << identifier << '\n';
+void PrintVisitor::increaseIndent() {
+    indent++;
+}
+
+void PrintVisitor::decreaseIndent() {
+    if (indent > 0) indent--;
+}
+
+std::string PrintVisitor::getIndent() const {
+    return std::string(indent, ' ');
+}
+
+void PrintVisitor::visitProgram(const ProgramNode& node) {
+    os << "PROGRAM NODE\n";
+    increaseIndent();
+    if (node.function_declaration) {
+        node.function_declaration->accept(*this);
+    }
+    decreaseIndent();
+}
+
+void PrintVisitor::visitFunctionDefinition(const FunctionDefinitionNode& node) {
+    os << getIndent() << "FUNCTION DECLARATION NODE: " << node.identifier << '\n';
+    increaseIndent();
+    for (const auto& statement : node.block_items) {
+        statement->accept(*this);
+    }
+    decreaseIndent();
+}
+
+void PrintVisitor::visitDeclaration(const DeclarationNode& node) {
+    os << getIndent() << "DECLARATION NODE: " << node.identifier << '\n';
+    if (node.expression) {
+        increaseIndent();
+        node.expression->accept(*this);
+        decreaseIndent();
+    }
+}
+
+void PrintVisitor::visitAssignment(const AssignmentNode& node) {
+    os << getIndent() << "ASSIGNMENT NODE:\n";
+    increaseIndent();
+    node.left->accept(*this);
+    node.right->accept(*this);
+    decreaseIndent();
+}
+
+void PrintVisitor::visitReturn(const ReturnNode& node) {
+    os << getIndent() << "RETURN NODE\n";
+    if (node.expression) {
+        increaseIndent();
+        node.expression->accept(*this);
+        decreaseIndent();
+    }
+}
+
+void PrintVisitor::visitUnary(const UnaryNode& node) {
+    os << getIndent() << "UNARY NODE: ";
+    switch (node.op) {
+    case UnaryOperator::NEGATION:
+        os << "MINUS\n";
+        break;
+    case UnaryOperator::BITWISE_NOT:
+        os << "BITWISE NOT\n";
+        break;
+    case UnaryOperator::LOGICAL_NOT:
+        os << "LOGICAL NOT\n";
+        break;
+    }
+    increaseIndent();
+    node.expression->accept(*this);
+    decreaseIndent();
+}
+
+void PrintVisitor::visitBinary(const BinaryNode& node) {
+    os << getIndent();
+    switch (node.op) {
+    case BinaryOperator::ADD:
+        os << "ADD\n";
+        break;
+    case BinaryOperator::SUBTRACT:
+        os << "SUBTRACT\n";
+        break;
+    case BinaryOperator::MULTIPLY:
+        os << "MULTIPLY\n";
+        break;
+    case BinaryOperator::DIVIDE:
+        os << "DIVIDE\n";
+        break;
+        // Add other operators as needed
+    }
+    increaseIndent();
+    node.left->accept(*this);
+    node.right->accept(*this);
+    decreaseIndent();
+}
+
+void PrintVisitor::visitConst(const ConstNode& node) {
+    os << getIndent() << "CONST NODE: " << node.value << '\n';
+}
+
+void PrintVisitor::visitVariable(const VariableNode& node) {
+    os << getIndent() << "VARIABLE NODE: " << node.identifier << '\n';
+}
+
+TacVisitor::TacVisitor(FunctionBody& body)
+    : body(body), result(nullptr) {
+}
+
+Operand TacVisitor::getResult() const {
+    return result;
+}
+
+void TacVisitor::visitProgram(const ProgramNode& node) {
+    if (node.function_declaration) {
+        node.function_declaration->accept(*this);
+    }
+}
+
+void TacVisitor::visitFunctionDefinition(const FunctionDefinitionNode& node) {
+    body.emplaceInstruction<FunctionInstruction>(body.name);
+    body.emplaceInstruction<AllocateStackInstruction>();
+
+    for (const auto& statement : node.block_items) {
+        statement->accept(*this);
+    }
+}
+
+void TacVisitor::visitDeclaration(const DeclarationNode& node) {
+    // TODO: Implement declaration TAC generation
+    result = nullptr;
+}
+
+void TacVisitor::visitAssignment(const AssignmentNode& node) {
+    // TODO: Implement assignment TAC generation
+    result = nullptr;
+}
+
+void TacVisitor::visitReturn(const ReturnNode& node) {
+    Operand dest = nullptr;
+    if (node.expression) {
+        node.expression->accept(*this);
+        dest = result;
+    }
+    body.emplaceInstruction<ReturnInstruction>(dest);
+    result = nullptr;
+}
+
+void TacVisitor::visitUnary(const UnaryNode& node) {
+    node.expression->accept(*this);
+    Operand src = result;
+
+    PseudoRegister dest = body.emplaceInstruction<UnaryOpInstruction>(node.op, src);
+    body.variableCount++;
+    result = dest;
+}
+
+void TacVisitor::visitBinary(const BinaryNode& node) {
+    if (node.op == BinaryOperator::LOGICAL_AND) {
+        std::string falseLabel = std::format(".{}{}_false", body.name, ++body.labelCount);
+        std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
+
+        // Short-circuiting
+        node.left->accept(*this);
+        Operand leftOperand = result;
+        body.emplaceInstruction<JumpIfZero>(leftOperand, falseLabel); // goto false label
+
+        node.right->accept(*this);
+        Operand rightOperand = result;
+        body.emplaceInstruction<JumpIfZero>(rightOperand, falseLabel);
+
+        PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(1));
+        body.emplaceInstruction<Jump>(endLabel); // goto end
+
+        body.emplaceInstruction<Label>(falseLabel); // false label
+        dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(0));
+
+        body.emplaceInstruction<Label>(endLabel); // end
+        body.variableCount++;
+        result = dest;
+        return;
+    }
+
+    if (node.op == BinaryOperator::LOGICAL_OR) {
+        std::string trueLabel = std::format(".{}{}_true", body.name, ++body.labelCount);
+        std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
+
+        // Short-circuiting
+        node.left->accept(*this);
+        Operand leftOperand = result;
+        body.emplaceInstruction<JumpIfNotZero>(leftOperand, trueLabel); // goto true label
+
+        node.right->accept(*this);
+        Operand rightOperand = result;
+        body.emplaceInstruction<JumpIfNotZero>(rightOperand, trueLabel);
+
+        PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(0));
+        body.emplaceInstruction<Jump>(endLabel); // goto end
+
+        body.emplaceInstruction<Label>(trueLabel); // true label
+        dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(1));
+
+        body.emplaceInstruction<Label>(endLabel); // end
+        body.variableCount++;
+        result = dest;
+        return;
+    }
+
+    node.left->accept(*this);
+    Operand leftOperand = result;
+
+    node.right->accept(*this);
+    Operand rightOperand = result;
+
+    PseudoRegister dest = body.emplaceInstruction<BinaryOpInstruction>(node.op, leftOperand, rightOperand);
+    body.variableCount++;
+    result = dest;
+}
+
+void TacVisitor::visitConst(const ConstNode& node) {
+    result = node.value;
+}
+
+void TacVisitor::visitVariable(const VariableNode& node) {
+    // TODO: Implement variable reference TAC generation
+    result = nullptr;
 }

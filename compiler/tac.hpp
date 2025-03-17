@@ -57,7 +57,7 @@ struct OperandPrinter {
 	std::ostream& os;
 
 	template<typename Any>
-	void operator()(const Any s) const {
+	void operator()(const Any& s) const {
 		os << s;
 	}
 };
