@@ -34,7 +34,7 @@ TEST_F(CompilerTest, TestMissingClosingBrace) {
 int main() {
 return 0;
 )";
-	EXPECT_THROW(compile(source, ss), compiler_error);
+	EXPECT_THROW(compile(source, ss), syntax_error);
 }
 
 TEST_F(CompilerTest, TestMissingOpeningBrace) {
@@ -42,7 +42,7 @@ TEST_F(CompilerTest, TestMissingOpeningBrace) {
 int main()
 return 0;
 })";
-	EXPECT_THROW(compile(source, ss), compiler_error);
+	EXPECT_THROW(compile(source, ss), syntax_error);
 }
 
 TEST_F(CompilerTest, TestMissingMainFunction) {
@@ -50,7 +50,7 @@ TEST_F(CompilerTest, TestMissingMainFunction) {
 int () {
 return 0;
 })";
-	EXPECT_THROW(compile(source, ss), compiler_error);
+	EXPECT_THROW(compile(source, ss), syntax_error);
 }
 
 //TEST_F(CompilerTest, TestMissingReturnStatement) {
@@ -58,7 +58,7 @@ return 0;
 //int main() {
 //	0;
 //})";
-//	EXPECT_THROW(compile(source, ss), compiler_error);
+//	EXPECT_THROW(compile(source, ss), syntax_error);
 //}
 
 TEST_F(CompilerTest, TestInvalidReturnStatement) {
@@ -66,7 +66,7 @@ TEST_F(CompilerTest, TestInvalidReturnStatement) {
 int main() {
 	return ;
 })";
-	EXPECT_THROW(compile(source, ss), compiler_error);
+	EXPECT_THROW(compile(source, ss), syntax_error);
 }
 
 TEST_F(CompilerTest, TestMissingSemicolon) {
@@ -74,7 +74,7 @@ TEST_F(CompilerTest, TestMissingSemicolon) {
 int main() {
 	return 0
 })";
-	EXPECT_THROW(compile(source, ss), compiler_error);
+	EXPECT_THROW(compile(source, ss), syntax_error);
 }
 
 TEST_F(CompilerTest, TestMissingSpace) {
@@ -82,7 +82,7 @@ TEST_F(CompilerTest, TestMissingSpace) {
 int main() {
 	return0;
 })";
-	EXPECT_THROW(compile(source, ss), compiler_error);
+	EXPECT_THROW(compile(source, ss), syntax_error);
 }
 
 int main(int argc, char** argv) {

@@ -27,7 +27,7 @@ TEST_F(CompilerTest, TestMissingConst) {
 int main() {
 	return ~;
 })";
-	EXPECT_THROW(compile(source, ss), compiler_error);
+	EXPECT_THROW(compile(source, ss), syntax_error);
 }
 
 TEST_F(CompilerTest, TestMissingSemicolon2) {
@@ -35,7 +35,7 @@ TEST_F(CompilerTest, TestMissingSemicolon2) {
 int main() {
 	return ~12
 })";
-	EXPECT_THROW(compile(source, ss), compiler_error);
+	EXPECT_THROW(compile(source, ss), syntax_error);
 }
 
 TEST_F(CompilerTest, TestWrongOrder) {
@@ -43,5 +43,5 @@ TEST_F(CompilerTest, TestWrongOrder) {
 int main() {
 	return 12~;
 })";
-	EXPECT_THROW(compile(source, ss), compiler_error);
+	EXPECT_THROW(compile(source, ss), syntax_error);
 }

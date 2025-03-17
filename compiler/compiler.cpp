@@ -19,5 +19,5 @@ void compile(const std::string& source, std::ostream& os) {
 		std::cout << *programNode << std::endl;
 	}
 	CodeContext context{ os };
-	programNode->generate(context);
+	dynamic_cast<ProgramNode*>(programNode.get())->generate(context);
 }

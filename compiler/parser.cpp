@@ -2,7 +2,7 @@
 
 Token Parser::peekToken() {
 	if (tokens.empty()) {
-		throw compiler_error("Unexpected EOF");
+		throw syntax_error("Unexpected EOF");
 	}
 	return tokens.front();
 }
@@ -11,7 +11,7 @@ Parser::Parser(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens
 
 Token Parser::getTokenAndAdvance() {
 	if (tokens.empty()) {
-		throw compiler_error("Unexpected EOF");
+		throw syntax_error("Unexpected EOF");
 	}
 	return std::visit(GetTokenAndAdvance{ tokens }, tokens.front());
 }
@@ -121,7 +121,7 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
 	if (std::holds_alternative<std::string>(token)) { // variable
 		return parseDeclaration();
 	}
-	throw compiler_error("Unexpected token");
+	throw syntax_error("Unexpected token");
 }
 
 std::unique_ptr<ASTNode> Parser::parseUnaryOrPrimary() {

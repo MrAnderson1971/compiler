@@ -21,7 +21,7 @@ std::string OperandToAsm::operator()(const PseudoRegister& reg) const {
 }
 
 std::string OperandToAsm::operator()(const std::nullptr_t) const {
-	throw compiler_error("nullptr operand");
+	throw syntax_error("nullptr operand");
 }
 
 std::string UnaryOpInstruction::print() const {
