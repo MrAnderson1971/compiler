@@ -2,119 +2,92 @@
 #include <regex>
 #include <cctype>
 
+TokenPrinter tokenPrinter;
+
 Lexer::Lexer(std::string source) : source(std::move(source)) {}
 
-void TokenPrinter::operator()(Symbol s) const {
+std::string TokenPrinter::operator()(const Symbol s) const {
 	switch (s) {
 	case Symbol::OPEN_BRACE:
-		os << "{";
-		break;
+		return "{";
 	case Symbol::CLOSED_BRACE:
-		os << "}";
-		break;
+		return "}";
 	case Symbol::OPEN_PAREN:
-		os << "(";
-		break;
+		return "(";
 	case Symbol::CLOSED_PAREN:
-		os << ")";
-		break;
+		return ")";
 	case Symbol::SEMICOLON:
-		os << ";";
-		break;
+		return ";";
 	case Symbol::MINUS:
-		os << "-";
-		break;
+		return "-";
 	case Symbol::TILDE:
-		os << "~";
-		break;
+		return "~";
 	case Symbol::EXCLAMATION_MARK:
-		os << "!";
-		break;
+		return "!";
 	case Symbol::PLUS:
-		os << "+";
-		break;
+		return "+";
 	case Symbol::ASTERISK:
-		os << "*";
-		break;
+		return "*";
 	case Symbol::FORWARD_SLASH:
-		os << "/";
-		break;
+		return "/";
 	case Symbol::DOUBLE_MINUS:
-		os << "--";
-		break;
+		return "--";
 	case Symbol::PERCENTAGE:
-		os << "%";
-		break;
+		return "%";
 	case Symbol::PIPE:
-		os << "|";
-		break;
+		return "|";
 	case Symbol::AMPERSAND:
-		os << "&";
-		break;
+		return "&";
 	case Symbol::CARET:
-		os << "^";
-		break;
+		return "^";
 	case Symbol::DOUBLE_LESS_THAN:
-		os << "<<";
-		break;
+		return "<<";
 	case Symbol::DOUBLE_GREATER_THAN:
-		os << ">>";
-		break;
+		return ">>";
 	case Symbol::DOUBLE_AMPERSAND:
-		os << "&&";
-		break;
+		return "&&";
 	case Symbol::DOUBLE_PIPE:
-		os << "||";
-		break;
+		return "||";
 	case Symbol::DOUBLE_EQUALS:
-		os << "==";
-		break;
+		return "==";
 	case Symbol::NOT_EQUALS:
-		os << "!=";
-		break;
+		return "!=";
 	case Symbol::LESS_THAN_OR_EQUAL:
-		os << "<=";
-		break;
+		return "<=";
 	case Symbol::GREATER_THAN_OR_EQUAL:
-		os << ">=";
-		break;
+		return ">=";
 	case Symbol::LESS_THAN:
-		os << "<";
-		break;
+		return "<";
 	case Symbol::GREATER_THAN:
-		os << ">";
-		break;
+		return ">";
 	case Symbol::EQUALS:
-		os << "=";
-		break;
+		return "=";
 	default:
-		os << "UNKNOWN SYMBOL";
+		return "UNKNOWN SYMBOL";
 	}
 }
 
-void TokenPrinter::operator()(Keyword k) const {
+std::string TokenPrinter::operator()(const Keyword k) const {
 	switch (k) {
 	case Keyword::RETURN:
-		os << "RETURN";
-		break;
+		return "RETURN";
 	case Keyword::INT:
-		os << "INT";
-		break;
+		return "INT";
 	default:
-		os << "UNKNOWN KEYWORD";
+		return "UNKNOWN KEYWORD";
 	}
 }
 
-void TokenPrinter::operator()(UnknownToken) const {
-	os << "UNKNOWN";
+std::string TokenPrinter::operator()(const UnknownToken) const {
+	return "UNKNOWN";
 }
 
-void TokenPrinter::operator()(Number i) const {
-	os << i;
+std::string TokenPrinter::operator()(const Number i) const {
+	return std::to_string(i);
 }
 
-void TokenPrinter::operator()(const std::string& s) const {
-	os << s;
+std::string TokenPrinter::operator()(const std::string& s) const {
+	return s;
 }
 
 void Lexer::lex() {
@@ -261,10 +234,12 @@ void Lexer::lex() {
 
 std::ostream& operator<<(std::ostream& os, const Lexer& lexer) {
 	os << "[";
-	for (const auto& token : lexer.tokens) {
-		std::visit(TokenPrinter{ os }, token);
-		os << ", ";
+	for (size_t i = 0; i < lexer.tokens.size(); i++) {
+		os << std::visit(tokenPrinter, lexer.tokens[i]);
+		if (i + 1 < lexer.tokens.size()) {
+			os << ", ";
+		}
 	}
-	os << "]" << std::endl;
+	os << "]\n";
 	return os;
 }

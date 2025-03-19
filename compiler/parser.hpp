@@ -39,10 +39,7 @@ class Parser {
 			throw syntax_error("Unexpected EOF");
 		}
 		if (!std::holds_alternative<T>(tokens.front())) {
-			std::stringstream ss;
-			ss << "Unexpected token ";
-			std::visit(TokenPrinter{ ss }, tokens.front());
-			throw syntax_error(ss.str());
+			throw syntax_error(std::format("Unexpected token {} at line {}", tokens.front(), lineNumber));
 		}
 		auto t = std::get<T>(tokens.front());
 		tokens.pop_front();
@@ -52,21 +49,11 @@ class Parser {
 	template<typename T>
 	T getTokenAndAdvance(T expected) {
 		if (!std::holds_alternative<T>(peekToken())) {
-			std::stringstream ss;
-			ss << "Expected ";
-			TokenPrinter{ ss }(expected);
-			ss << " but got ";
-			std::visit(TokenPrinter{ ss }, peekToken());
-			throw syntax_error(ss.str());
+			throw syntax_error(std::format("Expected {} but got {} at line {}", tokenPrinter(expected), peekToken(), lineNumber));
 		}
 		auto t = std::get<T>(getTokenAndAdvance());
 		if (t != expected) {
-			std::stringstream ss;
-			ss << "Expected ";
-			TokenPrinter{ ss }(expected);
-			ss<< " but got ";
-			TokenPrinter{ ss }(t);
-			throw syntax_error(ss.str());
+			throw syntax_error(std::format("Expected {} but got {} at line {}", tokenPrinter(expected), tokenPrinter(t), lineNumber));
 		}
 		return t;
 	}
@@ -76,4 +63,5 @@ class Parser {
 public:
 	Parser(const std::vector<Token>& tokens);
 	std::unique_ptr<ASTNode> parse();
+	int lineNumber;
 };

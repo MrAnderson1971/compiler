@@ -87,12 +87,20 @@ bool operator==(const T& s, const Token& t) {
 }
 
 struct TokenPrinter {
-	std::ostream& os;
-	void operator()(Symbol s) const;
-	void operator()(Keyword k) const;
-	void operator()(Number i) const;
-	void operator()(const std::string& s) const;
-	void operator()(UnknownToken) const;
+	std::string operator()(const Symbol s) const;
+	std::string operator()(const Keyword k) const;
+	std::string operator()(const Number i) const;
+	std::string operator()(const std::string& s) const;
+	std::string operator()(const UnknownToken) const;
+};
+
+extern TokenPrinter tokenPrinter;
+
+template<>
+struct std::formatter<Token> : std::formatter<std::string> {
+	auto format(const Token& token, std::format_context& ctx) const {
+		return std::formatter<std::string>::format(std::visit(tokenPrinter, token), ctx);
+	}
 };
 
 class Lexer {

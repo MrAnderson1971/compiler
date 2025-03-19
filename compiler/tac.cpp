@@ -70,7 +70,7 @@ std::string BinaryOpInstruction::print() const {
 	ss << dest << " = ";
 	std::visit(OperandPrinter{ ss }, left);
 	ss << " ";
-	TokenPrinter{ ss }(static_cast<Symbol>(op));
+	ss << tokenPrinter(static_cast<Symbol>(op));
 	ss << " ";
 	std::visit(OperandPrinter{ ss }, right);
 	return ss.str();

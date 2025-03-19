@@ -45,7 +45,7 @@ enum class BinaryOperator {
 struct TACInstruction {
 	virtual ~TACInstruction() = default;
 	virtual std::string print() const = 0;
-	virtual void makeAssembly(std::stringstream& ss, FunctionBody& body) const {};
+	virtual void makeAssembly(std::stringstream& ss, FunctionBody& body) const {}
 };
 
 struct has_dest : public TACInstruction {

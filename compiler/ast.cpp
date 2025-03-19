@@ -185,7 +185,7 @@ void TacVisitor::visitAssignment(AssignmentNode* const node) {
         Operand src = result;
         body.emplaceInstruction<StoreValueInstruction>(variable, src);
 	} catch (std::bad_variant_access&) {
-		throw semantic_error("Invalid lvalue!");
+        throw semantic_error(std::format("Invalid lvalue {}", result));
 	}
 }
 
@@ -332,7 +332,7 @@ void VariableResolutionVisitor::visitDeclaration(DeclarationNode* const node) {
  */
 void VariableResolutionVisitor::visitAssignment(AssignmentNode* const node) {
 	if (!dynamic_cast<VariableNode*>(node->left.get())) {
-		throw semantic_error("Invalid lvalue!");
+		throw semantic_error("Invalid lvalue");
 	}
 	node->left->accept(*this);
 	node->right->accept(*this);

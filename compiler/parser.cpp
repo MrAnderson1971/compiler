@@ -7,7 +7,7 @@ Token Parser::peekToken() {
 	return tokens.front();
 }
 
-Parser::Parser(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()) {}
+Parser::Parser(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()), lineNumber(1) {}
 
 Token Parser::getTokenAndAdvance() {
 	if (tokens.empty()) {
@@ -68,7 +68,8 @@ std::unique_ptr<ASTNode> Parser::parseBlockItem() {
 	} else {
 		blockItem = parseExpression();
 	}
-	getTokenAndAdvance(Symbol::SEMICOLON); 
+	getTokenAndAdvance(Symbol::SEMICOLON);
+	lineNumber++;
 	return blockItem;
 }
 
@@ -116,7 +117,7 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
 	if (std::holds_alternative<std::string>(token)) { // variable
 		return std::make_unique<VariableNode>(getTokenAndAdvance<std::string>());
 	}
-	throw syntax_error("Unexpected token");
+	throw syntax_error(std::format("Unexpected token {} at line {}", peekToken(), lineNumber));
 }
 
 std::unique_ptr<ASTNode> Parser::parseUnaryOrPrimary() {
@@ -162,10 +163,7 @@ std::unique_ptr<ASTNode> Parser::parseBinaryOp(int minPrecedence) {
 		}
 		return left;
 	} catch (std::bad_variant_access&) {
-		std::stringstream ss;
-		ss << "Unexpected token ";
-		std::visit(TokenPrinter{ ss }, peekToken());
-		throw syntax_error(ss.str());
+		throw syntax_error(std::format("Unexpected token {} at line {}", peekToken(), lineNumber));
 	}
 }
 
