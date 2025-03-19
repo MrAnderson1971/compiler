@@ -37,7 +37,9 @@ void Simulator::loadProgram(const std::string& asmCode) {
     }
 
     // For debugging - print what we're compiling
+#ifdef _DEBUG
     std::cout << "Compiling assembly code:\n" << asmCode << std::endl;
+#endif
 
     // Write the assembly code directly, renaming main to _runAsm for Windows
     std::string modifiedCode = asmCode;
@@ -95,10 +97,14 @@ int Simulator::execute() {
         }
     }
 
+#ifdef _DEBUG
     // Execute the function
     std::cout << "Executing assembly function..." << std::endl;
+#endif
     int64_t result = runAsm();
+#ifdef _DEBUG
     std::cout << "Assembly function returned: " << result << std::endl;
+#endif
 
     // Cleanup
     FreeLibrary(dllHandle);

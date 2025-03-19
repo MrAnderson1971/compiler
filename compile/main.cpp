@@ -3,26 +3,34 @@
 
 #include <iostream>
 #include <filesystem>
+#include <fstream>
 #include "compiler.hpp"
 
-// https://norasandler.com/2017/11/29/Write-a-Compiler.html
-
-constexpr bool FILE_TESTS = false;
-
-int main()
-{
-	std::string source = R"(
-int main()
-	{
-		return 1 + 2 * 3;
-	})";
-	try
-	{
-		compile(source, std::cout);
+int main(int argc, char* argv[]) {
+	if (argc < 2) {
+		std::cerr << "Usage: " << argv[0] << " <input file>\n";
+		return 1;
 	}
-	catch (const compiler_error& e)
+
+	std::filesystem::path inputFile = argv[1];
+	if (!exists(inputFile)) {
+		std::cerr << "File not found: " << inputFile << "\n";
+		return 1;
+	}
+
+	std::string source;
 	{
-		std::cerr << e.what() << std::endl;
+		std::ifstream istream(inputFile);
+		source = std::string(std::istreambuf_iterator<char>(istream), std::istreambuf_iterator<char>());
+	}
+	try {
+		std::filesystem::path outputFile = inputFile;
+		outputFile.replace_extension(".asm");
+		std::ofstream ostream(outputFile);
+		compile(source, ostream);
+	}
+	catch (const compiler_error& e) {
+		std::cerr << e.what() << "\n";
 	}
 
     return 0;

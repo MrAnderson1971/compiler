@@ -2,6 +2,12 @@
 #include <iostream>
 #include <sstream>
 
+#ifdef _DEBUG
+constexpr bool debug = true;
+#else
+constexpr bool debug = false;
+#endif
+
 void ProgramNode::generate(const CodeContext& context) const {
     if (function_declaration) {
         if (auto* funcDef = dynamic_cast<FunctionDefinitionNode*>(function_declaration.get())) {
@@ -27,7 +33,9 @@ void FunctionDefinitionNode::generate(const CodeContext& context) {
         instruction->makeAssembly(ss, body);
     }
     context.out << ss.str();
-    std::cout << body << std::endl;
+    if constexpr (debug) {
+        std::cout << body << std::endl;
+    }
 }
 
 PrintVisitor::PrintVisitor(std::ostream& os, int indent)
