@@ -14,7 +14,7 @@ public:
     Simulator();
     ~Simulator();
 
-    void loadProgram(const std::string& asmCode);
+    void loadProgram(const std::string& asmCode) const;
     int execute();
 };
 

@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <string>
 #include <iostream>
+#include "type.hpp"
 
 Simulator::Simulator() {
     // Create unique filenames using process ID
@@ -29,25 +30,40 @@ Simulator::~Simulator() {
     }
 }
 
-void Simulator::loadProgram(const std::string& asmCode) {
-    // Write the original assembly code to a file
+void Simulator::loadProgram(const std::string& asmCode) const {
+    std::string cleanedCode;
+
+    if constexpr (DEBUG) {
+        std::istringstream stream(asmCode);
+        std::string line;
+
+        while (std::getline(stream, line)) {
+            // Skip blank lines or comments
+            if (line.empty() || line.find_first_not_of(" \t") == std::string::npos || line.find(';') != std::string::npos) {
+                continue;
+            }
+
+            cleanedCode += line + "\n";
+        }
+	} else {
+		cleanedCode = asmCode;
+	}
+
     std::ofstream asmFile(tempAsmFile);
     if (!asmFile) {
         throw std::runtime_error("Failed to create assembly file");
     }
 
-    // For debugging - print what we're compiling
 #ifdef _DEBUG
-    std::cout << "Compiling assembly code:\n" << asmCode << std::endl;
+    std::cout << "Compiling assembly code:\n" << cleanedCode << std::endl;
 #endif
 
     // Write the assembly code directly, renaming main to _runAsm for Windows
-    std::string modifiedCode = asmCode;
+    std::string modifiedCode = cleanedCode;
     size_t pos = modifiedCode.find(".global main");
     if (pos != std::string::npos) {
         modifiedCode.replace(pos, 12, ".global _runAsm");
     }
-
     pos = modifiedCode.find("main:");
     if (pos != std::string::npos) {
         modifiedCode.replace(pos, 5, "_runAsm:");

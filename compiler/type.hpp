@@ -5,6 +5,12 @@
 #include <ostream>
 #include <format>
 
+#ifdef _DEBUG
+constexpr bool DEBUG = true;
+#else
+constexpr bool DEBUG = false;
+#endif
+
 template<typename T>
 bool isOneOf(T) {
 	return false;

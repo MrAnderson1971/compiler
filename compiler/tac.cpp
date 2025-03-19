@@ -43,6 +43,9 @@ std::string UnaryOpInstruction::print() const {
 }
 
 void UnaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
+	if constexpr (DEBUG) {
+		ss << std::format("; {}\n", print());
+	}
 	ss << std::format("movl {}, %r10d\n", std::visit(operandToAsm, arg));
 	ss << std::format("movl %r10d, {}\n", dest);
 	switch (op) {
@@ -56,6 +59,9 @@ void UnaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body)
 		ss << std::format("cmpl $0, {}\n", dest);
 		ss << std::format("sete {}\n", dest);
 		break;
+	}
+	if constexpr (DEBUG) {
+		ss << "\n";
 	}
 }
 
@@ -71,15 +77,23 @@ std::string BinaryOpInstruction::print() const {
 }
 
 void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
+	if constexpr (DEBUG) {
+		ss << std::format("; {}\n", print());
+	}
 	std::string src1 = std::visit(operandToAsm, left);
 	std::string src2 = std::visit(operandToAsm, right);
 	std::string d = operandToAsm(dest);
 
+	bool src1IsImmediate = src1.find('$') != std::string::npos;
 	bool src2IsImmediate = src2.find('$') != std::string::npos;
 
 	if (isOneOf(op, BinaryOperator::ADD, BinaryOperator::SUBTRACT, BinaryOperator::BITWISE_AND, BinaryOperator::BITWISE_OR, BinaryOperator::BITWISE_XOR, BinaryOperator::SHIFT_LEFT, BinaryOperator::SHIFT_RIGHT)) {
-		ss << std::format("movl {}, %r10d\n", src1);
-		ss << std::format("movl %r10d, {}\n", d);
+		if (src1IsImmediate) {
+			ss << std::format("movl {}, {}\n", src1, d);
+		} else {
+			ss << std::format("movl {}, %r10d\n", src1);
+			ss << std::format("movl %r10d, {}\n", d);
+		}
 
 		// For add/subtract, we need to handle memory-to-memory operations
 		std::string opcode;
@@ -115,8 +129,12 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 		}
 	}
 	else if (op == BinaryOperator::MULTIPLY) {
-		ss << std::format("movl {}, %r10d\n", src1);
-		ss << std::format("movl %r10d, {}\n", d);
+		if (src1IsImmediate) {
+			ss << std::format("movl {}, {}\n", src1, d);
+		} else {
+			ss << std::format("movl {}, %r10d\n", src1);
+			ss << std::format("movl %r10d, {}\n", d);
+		}
 
 		ss << std::format("movl {}, %r11d\n", d);
 
@@ -177,6 +195,9 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 		}
 		//ss << std::format("movl %al, {}\n", dest);
 	}
+	if constexpr (DEBUG) {
+		ss << "\n";
+	}
 }
 
 std::string JumpIfZero::print() const {
@@ -188,10 +209,16 @@ std::string JumpIfZero::print() const {
 }
 
 void JumpIfZero::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
+	if constexpr (DEBUG) {
+		ss << std::format("; {}\n", print());
+	}
 	std::string src = std::visit(operandToAsm, op);
 	ss << std::format("movl {}, %edx\n", src);
 	ss << "cmpl $0, %edx\n";
 	ss << std::format("je {}\n", label);
+	if constexpr (DEBUG) {
+		ss << "\n";
+	}
 }
 
 std::string JumpIfNotZero::print() const {
@@ -203,10 +230,16 @@ std::string JumpIfNotZero::print() const {
 }
 
 void JumpIfNotZero::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
+	if constexpr (DEBUG) {
+		ss << std::format("; {}\n", print());
+	}
 	std::string src = std::visit(operandToAsm, op);
 	ss << std::format("movl {}, %edx\n", src);
 	ss << "cmpl $0, %edx\n";
 	ss << std::format("jne {}\n", label);
+	if constexpr (DEBUG) {
+		ss << "\n";
+	}
 }
 
 std::string Jump::print() const {
@@ -233,11 +266,17 @@ std::string StoreValueInstruction::print() const {
 }
 
 void StoreValueInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
+	if constexpr (DEBUG) {
+		ss << std::format("; {}\n", print());
+	}
 	if (std::holds_alternative<PseudoRegister>(val)) {
 		ss << std::format("movl {}, %r10d\n", val);
 		ss << std::format("movl %r10d, {}\n", dest);
 	} else {
 		ss << std::format("movl {}, {}\n", val, dest);
+	}
+	if constexpr (DEBUG) {
+		ss << "\n";
 	}
 }
 
