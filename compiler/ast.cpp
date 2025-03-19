@@ -14,10 +14,13 @@ void FunctionDefinitionNode::generate(const CodeContext& context) {
 	VariableResolutionVisitor resolver;
 	accept(resolver);
 
-    FunctionBody body(identifier);
+    FunctionBody body{ identifier };
 
     TacVisitor visitor(body);
     accept(visitor);
+    if (!dynamic_cast<ReturnInstruction*>(body.instructions.back().get()) && body.name == "main") { // Default return statement in main method
+        body.emplaceInstruction<ReturnInstruction>(static_cast<unsigned int>(0));
+    }
 
     std::stringstream ss;
     for (const auto& instruction : body.instructions) {
@@ -162,20 +165,26 @@ void TacVisitor::visitFunctionDefinition(FunctionDefinitionNode* const node) {
 }
 
 void TacVisitor::visitDeclaration(DeclarationNode* const node) {
-	PseudoRegister pseudoRegister;
+	PseudoRegister pseudoRegister{body.name, body.variableCount};
+    body.variableToPseudoregister[node->identifier] = pseudoRegister;
     if (node->expression) {
         node->expression->accept(*this);
-        pseudoRegister = body.emplaceInstruction<StoreValueInstruction>(result);
-		body.variableToPseudoregister[node->identifier] = pseudoRegister;
-        body.variableCount++;
+        body.emplaceInstruction<StoreValueInstruction>(result);
     }
 	body.variableCount++;
-	result = pseudoRegister;
 }
 
 void TacVisitor::visitAssignment(AssignmentNode* const node) {
-    // TODO: Implement assignment TAC generation
-    result = nullptr;
+	node->right->accept(*this);
+    try {
+        node->left->accept(*this);
+        PseudoRegister variable = std::get<PseudoRegister>(result);
+        node->right->accept(*this);
+        Operand src = result;
+        body.emplaceInstruction<StoreValueInstruction>(variable, src);
+	} catch (std::bad_variant_access&) {
+		throw semantic_error("Invalid lvalue!");
+	}
 }
 
 void TacVisitor::visitReturn(ReturnNode* const node) {

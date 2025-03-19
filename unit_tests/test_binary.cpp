@@ -117,3 +117,12 @@ TEST_F(CompilerTest, TestDivideByZero) {
 	simulator.loadProgram(ss.str());
 	EXPECT_DEATH(simulator.execute(), "");
 }
+
+TEST_F(CompilerTest, TestModByZero) {
+	std::string source = R"(int main() {
+	return 1 % 0;
+})";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_DEATH(simulator.execute(), "");
+}

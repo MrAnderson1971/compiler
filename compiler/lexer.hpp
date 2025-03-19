@@ -37,6 +37,7 @@ enum class Symbol {
 	GREATER_THAN_OR_EQUAL,
 	LESS_THAN,
 	GREATER_THAN,
+	EQUALS,
 
 	_MISC_BEGIN = 299,
 	// misc
@@ -45,7 +46,6 @@ enum class Symbol {
 	OPEN_PAREN,
 	CLOSED_PAREN,
 	SEMICOLON,
-	EQUALS,
 };
 
 inline bool isUnaryOp(Symbol s) {

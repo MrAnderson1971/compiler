@@ -148,18 +148,25 @@ std::unique_ptr<ASTNode> Parser::parseUnaryOrPrimary() {
  */
 std::unique_ptr<ASTNode> Parser::parseBinaryOp(int minPrecedence) {
 	auto left = parseUnaryOrPrimary();
-	for (Symbol token = std::get<Symbol>(peekToken()); isBinaryOp(token) && getPrecedence(token) >= minPrecedence;
-		token = std::get<Symbol>(peekToken())) {
-		Symbol symbol = getTokenAndAdvance<Symbol>();
-		if (symbol == Symbol::EQUALS) {
-			auto right = parseBinaryOp(getPrecedence(symbol));
-			left = std::make_unique<AssignmentNode>(left, right);
-		} else {
-			auto right = parseBinaryOp(getPrecedence(symbol) + 1);
-			left = std::make_unique<BinaryNode>(static_cast<BinaryOperator>(symbol), left, right);
+	try {
+		for (Symbol token = std::get<Symbol>(peekToken()); isBinaryOp(token) && getPrecedence(token) >= minPrecedence;
+			token = std::get<Symbol>(peekToken())) {
+			Symbol symbol = getTokenAndAdvance<Symbol>();
+			if (symbol == Symbol::EQUALS) {
+				auto right = parseBinaryOp(getPrecedence(symbol));
+				left = std::make_unique<AssignmentNode>(left, right);
+			} else {
+				auto right = parseBinaryOp(getPrecedence(symbol) + 1);
+				left = std::make_unique<BinaryNode>(static_cast<BinaryOperator>(symbol), left, right);
+			}
 		}
+		return left;
+	} catch (std::bad_variant_access&) {
+		std::stringstream ss;
+		ss << "Unexpected token ";
+		std::visit(TokenPrinter{ ss }, peekToken());
+		throw syntax_error(ss.str());
 	}
-	return left;
 }
 
 std::unique_ptr<ASTNode> Parser::parseExpression() {

@@ -163,13 +163,21 @@ struct FunctionBody {
 	std::vector<std::unique_ptr<TACInstruction>> instructions;
 	std::unordered_map<std::string, PseudoRegister> variableToPseudoregister;
 
+	// auto-generated destination
 	template<typename Instruction, typename... Args>
-	PseudoRegister emplaceInstruction(Args... args) 
 		requires std::is_base_of_v<has_dest, Instruction>
-	{
+	PseudoRegister emplaceInstruction(Args... args) {
 		PseudoRegister destination{ name, variableCount };
 		instructions.push_back(std::make_unique<Instruction>(destination, std::forward<Args>(args)...));
 		return destination;
+	}
+
+	// custom destination
+	template <typename Instruction, typename... Args>
+		requires std::is_base_of_v<has_dest, Instruction>
+	PseudoRegister emplaceInstruction(const PseudoRegister& customDest, Args&&... args) {
+		instructions.push_back(std::make_unique<Instruction>(customDest, std::forward<Args>(args)...));
+		return customDest;
 	}
 
 	template<typename Instruction, typename... Args>

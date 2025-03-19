@@ -233,7 +233,12 @@ std::string StoreValueInstruction::print() const {
 }
 
 void StoreValueInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
-	ss << std::format("movl {}, {}\n", val, dest);
+	if (std::holds_alternative<PseudoRegister>(val)) {
+		ss << std::format("movl {}, %r10d\n", val);
+		ss << std::format("movl %r10d, {}\n", dest);
+	} else {
+		ss << std::format("movl {}, {}\n", val, dest);
+	}
 }
 
 std::string ReturnInstruction::print() const {
