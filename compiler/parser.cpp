@@ -7,7 +7,7 @@ Token Parser::peekToken() {
 	return tokens.front();
 }
 
-Parser::Parser(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()), lineNumber(1) {}
+Parser::Parser(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()) {}
 
 Token Parser::getTokenAndAdvance() {
 	if (tokens.empty()) {
@@ -17,15 +17,16 @@ Token Parser::getTokenAndAdvance() {
 }
 
 std::unique_ptr<ASTNode> Parser::parseProgram() {
-	auto program = std::make_unique<ProgramNode>();
+	auto program = make_node<ProgramNode>();
 	program->function_declaration = parseFunctionDeclaration();
 	return program;
 }
 
 std::unique_ptr<ASTNode> Parser::parseFunctionDeclaration() {
 	getTokenAndAdvance(Keyword::INT);
-	auto function_declaration = std::make_unique<FunctionDefinitionNode>();
+	auto function_declaration = make_node<FunctionDefinitionNode>();
 	function_declaration->identifier = getTokenAndAdvance<std::string>();
+	lineNumber = {1, function_declaration->identifier}; // reset line number at new function
 	getTokenAndAdvance(Symbol::OPEN_PAREN);
 	getTokenAndAdvance(Symbol::CLOSED_PAREN);
 	getTokenAndAdvance(Symbol::OPEN_BRACE);
@@ -40,7 +41,7 @@ std::unique_ptr<ASTNode> Parser::parseFunctionDeclaration() {
 }
 
 std::unique_ptr<ASTNode> Parser::parseDeclaration() {
-	auto declarationNode = std::make_unique<DeclarationNode>();
+	auto declarationNode = make_node<DeclarationNode>();
 	declarationNode->identifier = getTokenAndAdvance<std::string>();
 	if (peekToken() == Symbol::EQUALS) {
 		getTokenAndAdvance(Symbol::EQUALS);
@@ -55,7 +56,7 @@ std::unique_ptr<ASTNode> Parser::parseBlockItem() {
 	if (std::holds_alternative<Keyword>(token)) {
 		switch (getTokenAndAdvance<Keyword>()) {
 			case Keyword::RETURN: {
-				auto returnNode = std::make_unique<ReturnNode>();
+				auto returnNode = make_node<ReturnNode>();
 				returnNode->expression = parseExpression();
 				blockItem = std::move(returnNode);
 				break;
@@ -69,7 +70,7 @@ std::unique_ptr<ASTNode> Parser::parseBlockItem() {
 		blockItem = parseExpression();
 	}
 	getTokenAndAdvance(Symbol::SEMICOLON);
-	lineNumber++;
+	lineNumber.first++;
 	return blockItem;
 }
 
@@ -106,7 +107,7 @@ static int getPrecedence(Symbol op) {
 std::unique_ptr<ASTNode> Parser::parsePrimary() {
 	Token token = peekToken();
 	if (std::holds_alternative<Number>(token)) {
-		return std::make_unique<ConstNode>(getTokenAndAdvance<Number>());
+		return make_node<ConstNode>(getTokenAndAdvance<Number>());
 	}
 	if (std::holds_alternative<Symbol>(token)) {
 		getTokenAndAdvance(Symbol::OPEN_PAREN);
@@ -115,9 +116,9 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
 		return expression;
 	}
 	if (std::holds_alternative<std::string>(token)) { // variable
-		return std::make_unique<VariableNode>(getTokenAndAdvance<std::string>());
+		return make_node<VariableNode>(getTokenAndAdvance<std::string>());
 	}
-	throw syntax_error(std::format("Unexpected token {} at line {}", peekToken(), lineNumber));
+	throw syntax_error(std::format("Unexpected token {} at {}", peekToken(), lineNumber));
 }
 
 std::unique_ptr<ASTNode> Parser::parseUnaryOrPrimary() {
@@ -125,7 +126,7 @@ std::unique_ptr<ASTNode> Parser::parseUnaryOrPrimary() {
 	if (std::holds_alternative<Symbol>(token) && isUnaryOp(std::get<Symbol>(token))) {
 		auto op = static_cast<UnaryOperator>(getTokenAndAdvance<Symbol>());
 		auto expression = parseUnaryOrPrimary();
-		auto unaryNode = std::make_unique<UnaryNode>(op, expression);
+		auto unaryNode = make_node<UnaryNode>(op, expression);
 		return unaryNode;
 	}
 	return parsePrimary();
@@ -155,15 +156,15 @@ std::unique_ptr<ASTNode> Parser::parseBinaryOp(int minPrecedence) {
 			Symbol symbol = getTokenAndAdvance<Symbol>();
 			if (symbol == Symbol::EQUALS) {
 				auto right = parseBinaryOp(getPrecedence(symbol));
-				left = std::make_unique<AssignmentNode>(left, right);
+				left = make_node<AssignmentNode>(left, right);
 			} else {
 				auto right = parseBinaryOp(getPrecedence(symbol) + 1);
-				left = std::make_unique<BinaryNode>(static_cast<BinaryOperator>(symbol), left, right);
+				left = make_node<BinaryNode>(static_cast<BinaryOperator>(symbol), left, right);
 			}
 		}
 		return left;
 	} catch (std::bad_variant_access&) {
-		throw syntax_error(std::format("Unexpected token {} at line {}", peekToken(), lineNumber));
+		throw syntax_error(std::format("Unexpected token {} at {}", peekToken(), lineNumber));
 	}
 }
 

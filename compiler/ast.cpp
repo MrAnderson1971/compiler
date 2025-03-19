@@ -19,7 +19,7 @@ void FunctionDefinitionNode::generate(const CodeContext& context) {
     TacVisitor visitor(body);
     accept(visitor);
     if (!dynamic_cast<ReturnInstruction*>(body.instructions.back().get()) && body.name == "main") { // Default return statement in main method
-        body.emplaceInstruction<ReturnInstruction>(static_cast<unsigned int>(0));
+        body.emplaceInstruction<ReturnInstruction>(lineNumber, static_cast<unsigned int>(0));
     }
 
     std::stringstream ss;
@@ -158,8 +158,8 @@ void TacVisitor::visitProgram(ProgramNode* const node) {
 }
 
 void TacVisitor::visitFunctionDefinition(FunctionDefinitionNode* const node) {
-    body.emplaceInstruction<FunctionInstruction>(body.name);
-    body.emplaceInstruction<AllocateStackInstruction>();
+    body.emplaceInstruction<FunctionInstruction>(node->lineNumber, body.name);
+    body.emplaceInstruction<AllocateStackInstruction>(node->lineNumber);
 
     for (const auto& statement : node->block_items) {
         statement->accept(*this);
@@ -171,7 +171,7 @@ void TacVisitor::visitDeclaration(DeclarationNode* const node) {
     body.variableToPseudoregister[node->identifier] = pseudoRegister;
     if (node->expression) {
         node->expression->accept(*this);
-        body.emplaceInstruction<StoreValueInstruction>(result);
+        body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, result);
     }
 	body.variableCount++;
 }
@@ -183,9 +183,9 @@ void TacVisitor::visitAssignment(AssignmentNode* const node) {
         PseudoRegister variable = std::get<PseudoRegister>(result);
         node->right->accept(*this);
         Operand src = result;
-        body.emplaceInstruction<StoreValueInstruction>(variable, src);
+        body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, variable, src);
 	} catch (std::bad_variant_access&) {
-        throw semantic_error(std::format("Invalid lvalue {}", result));
+        throw semantic_error(std::format("Invalid lvalue {} at {}", result, node->lineNumber));
 	}
 }
 
@@ -195,7 +195,7 @@ void TacVisitor::visitReturn(ReturnNode* const node) {
         node->expression->accept(*this);
         dest = result;
     }
-    body.emplaceInstruction<ReturnInstruction>(dest);
+    body.emplaceInstruction<ReturnInstruction>(node->lineNumber, dest);
     result = nullptr;
 }
 
@@ -203,7 +203,7 @@ void TacVisitor::visitUnary(UnaryNode* const node) {
     node->expression->accept(*this);
     Operand src = result;
 
-    PseudoRegister dest = body.emplaceInstruction<UnaryOpInstruction>(node->op, src);
+    PseudoRegister dest = body.emplaceInstruction<UnaryOpInstruction>(node->lineNumber, node->op, src);
     body.variableCount++;
     result = dest;
 }
@@ -216,19 +216,19 @@ void TacVisitor::visitBinary(BinaryNode* const node) {
         // Short-circuiting
         node->left->accept(*this);
         Operand leftOperand = result;
-        body.emplaceInstruction<JumpIfZero>(leftOperand, falseLabel); // goto false label
+        body.emplaceInstruction<JumpIfZero>(node->lineNumber, leftOperand, falseLabel); // goto false label
 
         node->right->accept(*this);
         Operand rightOperand = result;
-        body.emplaceInstruction<JumpIfZero>(rightOperand, falseLabel);
+        body.emplaceInstruction<JumpIfZero>(node->lineNumber, rightOperand, falseLabel);
 
-        PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(1));
-        body.emplaceInstruction<Jump>(endLabel); // goto end
+        PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, static_cast<Number>(1));
+        body.emplaceInstruction<Jump>(node->lineNumber, endLabel); // goto end
 
-        body.emplaceInstruction<Label>(falseLabel); // false label
-        dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(0));
+        body.emplaceInstruction<Label>(node->lineNumber, falseLabel); // false label
+        dest = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, static_cast<Number>(0));
 
-        body.emplaceInstruction<Label>(endLabel); // end
+        body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
         body.variableCount++;
         result = dest;
         return;
@@ -241,19 +241,19 @@ void TacVisitor::visitBinary(BinaryNode* const node) {
         // Short-circuiting
         node->left->accept(*this);
         Operand leftOperand = result;
-        body.emplaceInstruction<JumpIfNotZero>(leftOperand, trueLabel); // goto true label
+        body.emplaceInstruction<JumpIfNotZero>(node->lineNumber, leftOperand, trueLabel); // goto true label
 
         node->right->accept(*this);
         Operand rightOperand = result;
-        body.emplaceInstruction<JumpIfNotZero>(rightOperand, trueLabel);
+        body.emplaceInstruction<JumpIfNotZero>(node->lineNumber, rightOperand, trueLabel);
 
-        PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(0));
-        body.emplaceInstruction<Jump>(endLabel); // goto end
+        PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, static_cast<Number>(0));
+        body.emplaceInstruction<Jump>(node->lineNumber, endLabel); // goto end
 
-        body.emplaceInstruction<Label>(trueLabel); // true label
-        dest = body.emplaceInstruction<StoreValueInstruction>(static_cast<Number>(1));
+        body.emplaceInstruction<Label>(node->lineNumber, trueLabel); // true label
+        dest = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, static_cast<Number>(1));
 
-        body.emplaceInstruction<Label>(endLabel); // end
+        body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
         body.variableCount++;
         result = dest;
         return;
@@ -265,7 +265,7 @@ void TacVisitor::visitBinary(BinaryNode* const node) {
     node->right->accept(*this);
     Operand rightOperand = result;
 
-    PseudoRegister dest = body.emplaceInstruction<BinaryOpInstruction>(node->op, leftOperand, rightOperand);
+    PseudoRegister dest = body.emplaceInstruction<BinaryOpInstruction>(node->lineNumber, node->op, leftOperand, rightOperand);
     body.variableCount++;
     result = dest;
 }
@@ -276,7 +276,7 @@ void TacVisitor::visitConst(ConstNode* const node) {
 
 void TacVisitor::visitVariable(VariableNode* const node) {
 	if (!body.variableToPseudoregister.contains(node->identifier)) {
-		throw semantic_error(std::format("Undeclared variable {}", node->identifier));
+		throw semantic_error(std::format("Undeclared variable {} at {}", node->identifier, node->lineNumber));
 	}
     result = body.variableToPseudoregister[node->identifier];
 }
@@ -305,7 +305,7 @@ void VariableResolutionVisitor::visitFunctionDefinition(FunctionDefinitionNode* 
  */
 void VariableResolutionVisitor::visitDeclaration(DeclarationNode* const node) {
     if (variableMap.contains(node->identifier)) {
-        throw semantic_error(std::format("Duplicate variable declaration {}", node->identifier));
+        throw semantic_error(std::format("Duplicate variable declaration {} at {}", node->identifier, node->lineNumber));
     }
     std::string newName = makeTemporary(node->identifier);
     variableMap[node->identifier] = newName;
@@ -332,7 +332,7 @@ void VariableResolutionVisitor::visitDeclaration(DeclarationNode* const node) {
  */
 void VariableResolutionVisitor::visitAssignment(AssignmentNode* const node) {
 	if (!dynamic_cast<VariableNode*>(node->left.get())) {
-		throw semantic_error("Invalid lvalue");
+		throw semantic_error(std::format("Invalid lvalue at {}", node->lineNumber));
 	}
 	node->left->accept(*this);
 	node->right->accept(*this);
@@ -354,5 +354,8 @@ void VariableResolutionVisitor::visitBinary(BinaryNode* const node) {
 }
 
 void VariableResolutionVisitor::visitVariable(VariableNode* const node) {
+	if (!variableMap.contains(node->identifier)) {
+		throw semantic_error(std::format("Undeclared variable {} at {}", node->identifier, node->lineNumber));
+	}
 	node->identifier = variableMap[node->identifier];
 }

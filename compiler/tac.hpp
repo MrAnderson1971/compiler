@@ -43,6 +43,7 @@ enum class BinaryOperator {
 
 // three address code
 struct TACInstruction {
+	Position lineNumber;
 	virtual ~TACInstruction() = default;
 	virtual std::string print() const = 0;
 	virtual void makeAssembly(std::stringstream& ss, FunctionBody& body) const {}
@@ -166,24 +167,27 @@ struct FunctionBody {
 	// auto-generated destination
 	template<typename Instruction, typename... Args>
 		requires std::is_base_of_v<has_dest, Instruction>
-	PseudoRegister emplaceInstruction(Args... args) {
+	PseudoRegister emplaceInstruction(const Position& lineNumber, Args... args) {
 		PseudoRegister destination{ name, variableCount };
 		instructions.push_back(std::make_unique<Instruction>(destination, std::forward<Args>(args)...));
+		instructions.back()->lineNumber = lineNumber;
 		return destination;
 	}
 
 	// custom destination
 	template <typename Instruction, typename... Args>
 		requires std::is_base_of_v<has_dest, Instruction>
-	PseudoRegister emplaceInstruction(const PseudoRegister& customDest, Args&&... args) {
+	PseudoRegister emplaceInstruction(const Position& lineNumber, const PseudoRegister& customDest, Args&&... args) {
 		instructions.push_back(std::make_unique<Instruction>(customDest, std::forward<Args>(args)...));
+		instructions.back()->lineNumber = lineNumber;
 		return customDest;
 	}
 
 	template<typename Instruction, typename... Args>
 		requires (!std::is_base_of_v<has_dest, Instruction>)
-	void emplaceInstruction(Args... args) {
+	void emplaceInstruction(const Position& lineNumber, Args... args) {
 		instructions.push_back(std::make_unique<Instruction>(std::forward<Args>(args)...));
+		instructions.back()->lineNumber = lineNumber;
 	}
 };
 

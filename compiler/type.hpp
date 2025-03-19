@@ -70,3 +70,11 @@ using Operand = std::variant<PseudoRegister,
 enum class Types {
 	INT
 };
+
+using Position = std::pair<int, std::string>; // function name and line number, for error messages
+template<>
+struct std::formatter<Position> : std::formatter<std::string> {
+	auto format(const Position& pos, std::format_context& ctx) const {
+		return std::formatter<std::string>::format(std::format("line {} in {}", pos.first, pos.second), ctx);
+	}
+};

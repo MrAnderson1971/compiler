@@ -42,6 +42,7 @@ struct CodeContext {
 
 // Base node class
 struct ASTNode {
+    Position lineNumber;
     virtual ~ASTNode() = default;
 
     // Single visitor pattern method
