@@ -54,3 +54,36 @@ struct std::formatter<Position> : std::formatter<std::string> {
 		return std::formatter<std::string>::format(std::format("line {} in {}", pos.first, pos.second), ctx);
 	}
 };
+
+
+/*
+ Turns all unique_ptr to rvalues. Everything else, does perfect forwarding.
+ */
+namespace forward {
+	template<typename T>
+	struct is_unique_ptr : std::false_type {};
+
+	template<typename T, typename D>
+	struct is_unique_ptr<std::unique_ptr<T, D>> : std::true_type {};
+
+	template<typename T>
+	inline constexpr bool is_unique_ptr_v = is_unique_ptr<std::remove_cvref_t<T>>::value;
+
+	// Separate overloads for lvalues and rvalues
+	template<typename T>
+	decltype(auto) forward(std::remove_reference_t<T>& arg) {
+		if constexpr (is_unique_ptr_v<T>) {
+			return std::move(arg); // Always move unique_ptrs
+		} else {
+			return std::forward<T>(arg); // Standard forwarding
+		}
+	}
+
+	// For rvalues
+	template<typename T>
+	decltype(auto) forward(std::remove_reference_t<T>&& arg) {
+		static_assert(!std::is_lvalue_reference_v<T>,
+			"Cannot forward an rvalue as an lvalue");
+		return std::move(arg);
+	}
+}

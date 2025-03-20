@@ -148,3 +148,41 @@ TEST_F(CompilerTest, TestDuplicateDeclaration) {
 	std::string source = "int main() { int a = 1; int a = 2; return a; }";
 	EXPECT_THROW(compile(source, ss), semantic_error);
 }
+
+TEST_F(CompilerTest, TestPrefixIncrement) {
+	std::string source = "int main() { int a = 0; return ++a; }";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_EQ(simulator.execute(), 1);
+}
+
+TEST_F(CompilerTest, TestPrefixDecrement) {
+	std::string source = "int main() { int a = 0; return --a; }";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_EQ(simulator.execute(), -1);
+}
+
+TEST_F(CompilerTest, TestAssignmentInReturn) {
+	std::string source = "int main() { int a = 0; return a = (a + 5); }";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_EQ(simulator.execute(), 5);
+}
+
+TEST_F(CompilerTest, TestComplexPrefixIncrementDecrementAndAssigns) {
+	std::string source = "int main() { int a = 0; return a = ++a + a + a + --a; }";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_EQ(simulator.execute(), 3);
+}
+
+TEST_F(CompilerTest, TestInvalidPrefixIncrement) {
+	std::string source = "int main() { int a = 0; return ++0; }";
+	EXPECT_THROW(compile(source, ss), syntax_error);
+}
+
+TEST_F(CompilerTest, TestInvalidPrefixDecrement) {
+	std::string source = "int main() { int a = 0; return --0; }";
+	EXPECT_THROW(compile(source, ss), syntax_error);
+}

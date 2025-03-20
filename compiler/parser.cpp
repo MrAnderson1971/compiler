@@ -74,7 +74,7 @@ T Parser::Impl::getTokenAndAdvance(T expected) {
 
 template <typename T, typename ... Args>
 std::unique_ptr<T> Parser::Impl::make_node(Args&&... args) {
-	auto node = std::make_unique<T>(std::forward<Args>(args)...);
+	auto node = std::make_unique<T>(forward::forward<Args>(args)...);
 	node->lineNumber = lineNumber;
 	return node;
 }
@@ -202,11 +202,28 @@ std::unique_ptr<ASTNode> Parser::Impl::parsePrimary() {
 
 std::unique_ptr<ASTNode> Parser::Impl::parseUnaryOrPrimary() {
 	Token token = peekToken();
-	if (std::holds_alternative<Symbol>(token) && isUnaryOp(std::get<Symbol>(token))) {
-		auto op = static_cast<UnaryOperator>(getTokenAndAdvance<Symbol>());
-		auto expression = parseUnaryOrPrimary();
-		auto unaryNode = make_node<UnaryNode>(op, expression);
-		return unaryNode;
+	if (std::holds_alternative<Symbol>(token)) {
+		const Symbol symbol = std::get<Symbol>(token);
+		if (symbol == Symbol::DOUBLE_PLUS || symbol == Symbol::DOUBLE_MINUS) {
+			getTokenAndAdvance();
+			auto expression = parsePrimary();
+			if (auto* var = dynamic_cast<VariableNode*>(expression.get())) {
+				auto variable = std::move(make_node<VariableNode>(var->identifier));
+				if (symbol == Symbol::DOUBLE_PLUS) {
+					auto increment = make_node<BinaryNode>(BinaryOperator::ADD, expression, make_node<ConstNode>(1));
+					return make_node<AssignmentNode>(variable, increment);
+				} 
+				auto increment = make_node<BinaryNode>(BinaryOperator::SUBTRACT, expression, make_node<ConstNode>(1));
+				return make_node<AssignmentNode>(variable, increment);
+			}
+			throw syntax_error(std::format("Expected lvalue at {}", expression->lineNumber));
+		}
+		if (isUnaryOp(std::get<Symbol>(token))) {
+			auto op = static_cast<UnaryOperator>(getTokenAndAdvance<Symbol>());
+			auto expression = parseUnaryOrPrimary();
+			auto unaryNode = make_node<UnaryNode>(op, expression);
+			return unaryNode;
+		}
 	}
 	return parsePrimary();
 }

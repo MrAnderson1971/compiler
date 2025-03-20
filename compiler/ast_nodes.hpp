@@ -54,7 +54,7 @@ struct AssignmentNode : public ASTNode {
     std::unique_ptr<ASTNode> left;
     std::unique_ptr<ASTNode> right;
 
-    AssignmentNode(std::unique_ptr<ASTNode>& left, std::unique_ptr<ASTNode>& right)
+    AssignmentNode(std::unique_ptr<ASTNode>&& left, std::unique_ptr<ASTNode>&& right)
         : left(std::move(left)), right(std::move(right)) {
     }
 
@@ -77,7 +77,7 @@ struct UnaryNode : public ASTNode {
     UnaryOperator op;
     std::unique_ptr<ASTNode> expression;
 
-    UnaryNode(UnaryOperator op, std::unique_ptr<ASTNode>& expression) : op(op), expression(std::move(expression)) {}
+    UnaryNode(UnaryOperator op, std::unique_ptr<ASTNode>&& expression) : op(op), expression(std::move(expression)) {}
 
     void accept(Visitor& visitor) override {
         static_cast<FullVisitor&>(visitor).visitUnary(this);
@@ -90,7 +90,7 @@ struct BinaryNode : public ASTNode {
     std::unique_ptr<ASTNode> left;
     std::unique_ptr<ASTNode> right;
 
-    BinaryNode(BinaryOperator op, std::unique_ptr<ASTNode>& left, std::unique_ptr<ASTNode>& right)
+    BinaryNode(BinaryOperator op, std::unique_ptr<ASTNode>&& left, std::unique_ptr<ASTNode>&& right)
         : op(op), left(std::move(left)), right(std::move(right)) {
     }
 

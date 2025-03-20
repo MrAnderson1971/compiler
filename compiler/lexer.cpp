@@ -30,8 +30,6 @@ std::string TokenPrinter::operator()(const Symbol s) const {
 		return "*";
 	case Symbol::FORWARD_SLASH:
 		return "/";
-	case Symbol::DOUBLE_MINUS:
-		return "--";
 	case Symbol::PERCENTAGE:
 		return "%";
 	case Symbol::PIPE:
@@ -62,6 +60,10 @@ std::string TokenPrinter::operator()(const Symbol s) const {
 		return ">";
 	case Symbol::EQUALS:
 		return "=";
+	case Symbol::DOUBLE_PLUS:
+		return "++";
+	case Symbol::DOUBLE_MINUS:
+		return "--";
 	default:
 		return "UNKNOWN SYMBOL";
 	}
