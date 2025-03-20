@@ -87,6 +87,16 @@ int main() {
 	EXPECT_THROW(compile(source, ss), semantic_error);
 }
 
+TEST_F(CompilerTest, TestNoEntryPoint) {
+	std::string source = R"(
+int foo() {
+		return 0;
+		})";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_THROW(simulator.execute(), std::runtime_error);
+}
+
 int main(int argc, char** argv) {
 	testing::InitGoogleTest(&argc, argv);
 	return RUN_ALL_TESTS();

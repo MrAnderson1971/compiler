@@ -1,28 +1,101 @@
 #include "parser.hpp"
+#include <deque>
 
-Token Parser::peekToken() {
+class Parser::Impl {
+public:
+	struct GetTokenAndAdvance {
+		std::deque<Token>& tokens;
+
+		template<typename T>
+		Token operator()(const T&) const {
+			auto t = std::get<T>(tokens.front());
+			tokens.pop_front();
+			return t;
+		}
+
+		Token operator()(UnknownToken unknown) const {
+			throw syntax_error("Unknown token at position " + std::to_string(unknown.position));
+		}
+	};
+	std::deque<Token> tokens;
+	Position lineNumber;
+
+	std::unique_ptr<ASTNode> parseProgram();
+	std::unique_ptr<ASTNode> parseFunctionDeclaration();
+	std::unique_ptr<ASTNode> parseBlockItem();
+	std::unique_ptr<ASTNode> parsePrimary();
+	std::unique_ptr<ASTNode> parseUnaryOrPrimary();
+	std::unique_ptr<ASTNode> parseBinaryOp(int minPrecedence);
+	std::unique_ptr<ASTNode> parseExpression();
+	std::unique_ptr<ASTNode> parseDeclaration();
+
+	Token getTokenAndAdvance();
+
+	template<typename T>
+	T getTokenAndAdvance();
+
+	template<typename T>
+	T getTokenAndAdvance(T expected);
+
+	template<typename T, typename... Args>
+	std::unique_ptr<T> make_node(Args&&... args) {
+		auto node = std::make_unique<T>(std::forward<Args>(args)...);
+		node->lineNumber = lineNumber;
+		return node;
+	}
+
+	Token peekToken();
+	Impl(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()), lineNumber({ 1, "" }) {}
+};
+
+template <typename T>
+T Parser::Impl::getTokenAndAdvance() {
+	if (tokens.empty()) {
+		throw syntax_error("Unexpected EOF");
+	}
+	if (!std::holds_alternative<T>(tokens.front())) {
+		throw syntax_error(std::format("Unexpected token {} at {}", tokens.front(), lineNumber));
+	}
+	auto t = std::get<T>(tokens.front());
+	tokens.pop_front();
+	return t;
+}
+
+template <typename T>
+T Parser::Impl::getTokenAndAdvance(T expected) {
+	if (!std::holds_alternative<T>(peekToken())) {
+		throw syntax_error(std::format("Expected {} but got {} at {}", tokenPrinter(expected), peekToken(), lineNumber));
+	}
+	auto t = std::get<T>(getTokenAndAdvance());
+	if (t != expected) {
+		throw syntax_error(std::format("Expected {} but got {} at {}", tokenPrinter(expected), tokenPrinter(t), lineNumber));
+	}
+	return t;
+}
+
+Token Parser::Impl::peekToken() {
 	if (tokens.empty()) {
 		throw syntax_error("Unexpected EOF");
 	}
 	return tokens.front();
 }
 
-Parser::Parser(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()) {}
+Parser::Parser(const std::vector<Token>& tokens) : impl(std::make_unique<Impl>(tokens)) {}
 
-Token Parser::getTokenAndAdvance() {
+Token Parser::Impl::getTokenAndAdvance() {
 	if (tokens.empty()) {
 		throw syntax_error("Unexpected EOF");
 	}
 	return std::visit(GetTokenAndAdvance{ tokens }, tokens.front());
 }
 
-std::unique_ptr<ASTNode> Parser::parseProgram() {
+std::unique_ptr<ASTNode> Parser::Impl::parseProgram() {
 	auto program = make_node<ProgramNode>();
 	program->function_declaration = parseFunctionDeclaration();
 	return program;
 }
 
-std::unique_ptr<ASTNode> Parser::parseFunctionDeclaration() {
+std::unique_ptr<ASTNode> Parser::Impl::parseFunctionDeclaration() {
 	getTokenAndAdvance(Keyword::INT);
 	auto function_declaration = make_node<FunctionDefinitionNode>();
 	function_declaration->identifier = getTokenAndAdvance<std::string>();
@@ -40,7 +113,7 @@ std::unique_ptr<ASTNode> Parser::parseFunctionDeclaration() {
 	return function_declaration;
 }
 
-std::unique_ptr<ASTNode> Parser::parseDeclaration() {
+std::unique_ptr<ASTNode> Parser::Impl::parseDeclaration() {
 	auto declarationNode = make_node<DeclarationNode>();
 	declarationNode->identifier = getTokenAndAdvance<std::string>();
 	if (peekToken() == Symbol::EQUALS) {
@@ -50,7 +123,7 @@ std::unique_ptr<ASTNode> Parser::parseDeclaration() {
 	return declarationNode;
 }
 
-std::unique_ptr<ASTNode> Parser::parseBlockItem() {
+std::unique_ptr<ASTNode> Parser::Impl::parseBlockItem() {
 	std::unique_ptr<ASTNode> blockItem = nullptr;
 	Token token = peekToken();
 	if (std::holds_alternative<Keyword>(token)) {
@@ -104,7 +177,7 @@ static int getPrecedence(Symbol op) {
 	}
 }
 
-std::unique_ptr<ASTNode> Parser::parsePrimary() {
+std::unique_ptr<ASTNode> Parser::Impl::parsePrimary() {
 	Token token = peekToken();
 	if (std::holds_alternative<Number>(token)) {
 		return make_node<ConstNode>(getTokenAndAdvance<Number>());
@@ -121,7 +194,7 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
 	throw syntax_error(std::format("Unexpected token {} at {}", peekToken(), lineNumber));
 }
 
-std::unique_ptr<ASTNode> Parser::parseUnaryOrPrimary() {
+std::unique_ptr<ASTNode> Parser::Impl::parseUnaryOrPrimary() {
 	Token token = peekToken();
 	if (std::holds_alternative<Symbol>(token) && isUnaryOp(std::get<Symbol>(token))) {
 		auto op = static_cast<UnaryOperator>(getTokenAndAdvance<Symbol>());
@@ -148,7 +221,7 @@ std::unique_ptr<ASTNode> Parser::parseUnaryOrPrimary() {
  next_token = peek(tokens)
  return left
  */
-std::unique_ptr<ASTNode> Parser::parseBinaryOp(int minPrecedence) {
+std::unique_ptr<ASTNode> Parser::Impl::parseBinaryOp(int minPrecedence) {
 	auto left = parseUnaryOrPrimary();
 	try {
 		for (Symbol token = std::get<Symbol>(peekToken()); isBinaryOp(token) && getPrecedence(token) >= minPrecedence;
@@ -168,11 +241,13 @@ std::unique_ptr<ASTNode> Parser::parseBinaryOp(int minPrecedence) {
 	}
 }
 
-std::unique_ptr<ASTNode> Parser::parseExpression() {
+std::unique_ptr<ASTNode> Parser::Impl::parseExpression() {
 	return parseBinaryOp(0);
 }
 
 
-std::unique_ptr<ASTNode> Parser::parse() {
-	return parseProgram();
+std::unique_ptr<ASTNode> Parser::parse() const {
+	return impl->parseProgram();
 }
+
+Parser::~Parser() = default;
