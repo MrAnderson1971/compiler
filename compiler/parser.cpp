@@ -2,6 +2,7 @@
 #include <deque>
 #include "ast_nodes.hpp"
 #include "tac.hpp"
+#include "exceptions.hpp"
 
 class Parser::Impl {
 public:
@@ -40,11 +41,7 @@ public:
 	T getTokenAndAdvance(T expected);
 
 	template<typename T, typename... Args>
-	std::unique_ptr<T> make_node(Args&&... args) {
-		auto node = std::make_unique<T>(std::forward<Args>(args)...);
-		node->lineNumber = lineNumber;
-		return node;
-	}
+	std::unique_ptr<T> make_node(Args&&... args);
 
 	Token peekToken();
 	Impl(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()), lineNumber({ 1, "" }) {}
@@ -73,6 +70,13 @@ T Parser::Impl::getTokenAndAdvance(T expected) {
 		throw syntax_error(std::format("Expected {} but got {} at {}", tokenPrinter(expected), tokenPrinter(t), lineNumber));
 	}
 	return t;
+}
+
+template <typename T, typename ... Args>
+std::unique_ptr<T> Parser::Impl::make_node(Args&&... args) {
+	auto node = std::make_unique<T>(std::forward<Args>(args)...);
+	node->lineNumber = lineNumber;
+	return node;
 }
 
 Token Parser::Impl::peekToken() {

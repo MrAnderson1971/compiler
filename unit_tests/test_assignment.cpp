@@ -1,5 +1,6 @@
 #include "simulator.hpp"
 #include "compiler.hpp"
+#include "exceptions.hpp"
 
 TEST_F(CompilerTest, TestDeclaration) {
 	compile("int main() { int a = 5; return a; }", ss);

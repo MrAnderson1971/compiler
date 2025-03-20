@@ -1,5 +1,6 @@
 #include "simulator.hpp"
 #include "compiler.hpp"
+#include "exceptions.hpp"
 
 TEST_F(CompilerTest, TestSuccess) {
 	std::string source = R"(

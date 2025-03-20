@@ -139,6 +139,7 @@
     <ClInclude Include="ast.hpp" />
     <ClInclude Include="ast_nodes.hpp" />
     <ClInclude Include="compiler.hpp" />
+    <ClInclude Include="exceptions.hpp" />
     <ClInclude Include="lexer.hpp" />
     <ClInclude Include="parser.hpp" />
     <ClInclude Include="tac.hpp" />

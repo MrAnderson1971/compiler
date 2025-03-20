@@ -1,5 +1,6 @@
 #include "simulator.hpp"
 #include "compiler.hpp"
+#include "exceptions.hpp"
 
 TEST_F(CompilerTest, TestAddition) {
 	std::string source = "int main() { return 1 + 2; }";

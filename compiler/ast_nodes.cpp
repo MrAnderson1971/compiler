@@ -1,6 +1,7 @@
 #include "ast_nodes.hpp"
 #include <iostream>
 #include <sstream>
+#include "exceptions.hpp"
 #include "tac.hpp"
 
 // Non-modifying visitor for printing

@@ -1,5 +1,7 @@
 #include "compiler.hpp"
 #include <iostream>
+#include "lexer.hpp"
+#include "parser.hpp"
 
 void compile(const std::string& source, std::ostream& os) {
 	Lexer lexer(source);

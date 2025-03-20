@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include "compiler.hpp"
+#include "exceptions.hpp"
 
 int main(int argc, char* argv[]) {
 	if (argc < 2) {
