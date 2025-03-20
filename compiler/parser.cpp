@@ -1,5 +1,7 @@
 #include "parser.hpp"
 #include <deque>
+#include "ast_nodes.hpp"
+#include "tac.hpp"
 
 class Parser::Impl {
 public:

@@ -1,6 +1,83 @@
-#include "ast.hpp"
+#include "ast_nodes.hpp"
 #include <iostream>
 #include <sstream>
+#include "tac.hpp"
+
+// Non-modifying visitor for printing
+class PrintVisitor : public FullVisitor {
+public:
+    PrintVisitor(std::ostream& os, int indent = 0);
+
+    void visitProgram(ProgramNode* const node) override;
+    void visitFunctionDefinition(FunctionDefinitionNode* const node) override;
+    void visitDeclaration(DeclarationNode* const node) override;
+    void visitAssignment(AssignmentNode* const node) override;
+    void visitReturn(ReturnNode* const node) override;
+    void visitUnary(UnaryNode* const node) override;
+    void visitBinary(BinaryNode* const node) override;
+    void visitConst(ConstNode* const node) override;
+    void visitVariable(VariableNode* const node) override;
+
+private:
+    std::ostream& os;
+    int indent;
+
+    void increaseIndent();
+    void decreaseIndent();
+    std::string getIndent() const;
+};
+
+// TAC generation visitor
+class TacVisitor : public FullVisitor {
+public:
+    TacVisitor(FunctionBody& body);
+
+    void visitProgram(ProgramNode* const node) override;
+    void visitFunctionDefinition(FunctionDefinitionNode* const node) override;
+    void visitDeclaration(DeclarationNode* const node) override;
+    void visitAssignment(AssignmentNode* const node) override;
+    void visitReturn(ReturnNode* const node) override;
+    void visitUnary(UnaryNode* const node) override;
+    void visitBinary(BinaryNode* const node) override;
+    void visitConst(ConstNode* const node) override;
+    void visitVariable(VariableNode* const node) override;
+
+    Operand getResult() const;
+
+private:
+    FunctionBody& body;
+    Operand result;
+};
+
+// Variable resolution visitor
+class VariableResolutionVisitor : public FullVisitor {
+public:
+    VariableResolutionVisitor() : counter(0) {}
+
+    void visitProgram(ProgramNode* const node) override;
+    void visitFunctionDefinition(FunctionDefinitionNode* const node) override;
+    void visitDeclaration(DeclarationNode* const node) override;
+    void visitAssignment(AssignmentNode* const node) override;
+    void visitReturn(ReturnNode* const node) override;
+    void visitUnary(UnaryNode* const node) override;
+    void visitBinary(BinaryNode* const node) override;
+    void visitConst(ConstNode* const node) override {}
+    void visitVariable(VariableNode* const node) override;
+
+private:
+    int counter;
+    std::unordered_map<std::string, std::string> variableMap;
+
+    std::string makeTemporary(const std::string& name) {
+        return std::format("{}.{}", name, counter++);
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, ASTNode& node) {
+    PrintVisitor p(os);
+    node.accept(p);
+    return os;
+}
 
 void ProgramNode::generate(const CodeContext& context) const {
     if (function_declaration) {
@@ -11,8 +88,8 @@ void ProgramNode::generate(const CodeContext& context) const {
 }
 
 void FunctionDefinitionNode::generate(const CodeContext& context) {
-	VariableResolutionVisitor resolver;
-	accept(resolver);
+    VariableResolutionVisitor resolver;
+    accept(resolver);
 
     FunctionBody body{ identifier };
 
@@ -42,7 +119,7 @@ void PrintVisitor::increaseIndent() {
 
 void PrintVisitor::decreaseIndent() {
     if (indent > 0) {
-	    indent--;
+        indent--;
     }
 }
 
@@ -167,26 +244,26 @@ void TacVisitor::visitFunctionDefinition(FunctionDefinitionNode* const node) {
 }
 
 void TacVisitor::visitDeclaration(DeclarationNode* const node) {
-	PseudoRegister pseudoRegister{body.name, body.variableCount};
+    PseudoRegister pseudoRegister{ body.name, body.variableCount };
     body.variableToPseudoregister[node->identifier] = pseudoRegister;
     if (node->expression) {
         node->expression->accept(*this);
         body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, result);
     }
-	body.variableCount++;
+    body.variableCount++;
 }
 
 void TacVisitor::visitAssignment(AssignmentNode* const node) {
-	node->right->accept(*this);
+    node->right->accept(*this);
     try {
         node->left->accept(*this);
         PseudoRegister variable = std::get<PseudoRegister>(result);
         node->right->accept(*this);
         Operand src = result;
         body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, variable, src);
-	} catch (std::bad_variant_access&) {
+    } catch (std::bad_variant_access&) {
         throw semantic_error(std::format("Invalid lvalue {} at {}", result, node->lineNumber));
-	}
+    }
 }
 
 void TacVisitor::visitReturn(ReturnNode* const node) {
@@ -275,9 +352,9 @@ void TacVisitor::visitConst(ConstNode* const node) {
 }
 
 void TacVisitor::visitVariable(VariableNode* const node) {
-	if (!body.variableToPseudoregister.contains(node->identifier)) {
-		throw semantic_error(std::format("Undeclared variable {} at {}", node->identifier, node->lineNumber));
-	}
+    if (!body.variableToPseudoregister.contains(node->identifier)) {
+        throw semantic_error(std::format("Undeclared variable {} at {}", node->identifier, node->lineNumber));
+    }
     result = body.variableToPseudoregister[node->identifier];
 }
 
@@ -309,7 +386,7 @@ void VariableResolutionVisitor::visitDeclaration(DeclarationNode* const node) {
     }
     std::string newName = makeTemporary(node->identifier);
     variableMap[node->identifier] = newName;
-	node->identifier = newName;
+    node->identifier = newName;
 
     if (node->expression) {
         node->expression->accept(*this);
@@ -331,31 +408,32 @@ void VariableResolutionVisitor::visitDeclaration(DeclarationNode* const node) {
  | --snip--
  */
 void VariableResolutionVisitor::visitAssignment(AssignmentNode* const node) {
-	if (!dynamic_cast<VariableNode*>(node->left.get())) {
-		throw semantic_error(std::format("Invalid lvalue at {}", node->lineNumber));
-	}
-	node->left->accept(*this);
-	node->right->accept(*this);
+    if (!dynamic_cast<VariableNode*>(node->left.get())) {
+        throw semantic_error(std::format("Invalid lvalue at {}", node->lineNumber));
+    }
+    node->left->accept(*this);
+    node->right->accept(*this);
 }
 
 void VariableResolutionVisitor::visitReturn(ReturnNode* const node) {
-	if (node->expression) {
-		node->expression->accept(*this);
-	}
+    if (node->expression) {
+        node->expression->accept(*this);
+    }
 }
 
 void VariableResolutionVisitor::visitUnary(UnaryNode* const node) {
-	node->expression->accept(*this);
+    node->expression->accept(*this);
 }
 
 void VariableResolutionVisitor::visitBinary(BinaryNode* const node) {
-	node->left->accept(*this);
-	node->right->accept(*this);
+    node->left->accept(*this);
+    node->right->accept(*this);
 }
 
 void VariableResolutionVisitor::visitVariable(VariableNode* const node) {
-	if (!variableMap.contains(node->identifier)) {
-		throw semantic_error(std::format("Undeclared variable {} at {}", node->identifier, node->lineNumber));
-	}
-	node->identifier = variableMap[node->identifier];
+    if (!variableMap.contains(node->identifier)) {
+        throw semantic_error(std::format("Undeclared variable {} at {}", node->identifier, node->lineNumber));
+    }
+    node->identifier = variableMap[node->identifier];
 }
+
