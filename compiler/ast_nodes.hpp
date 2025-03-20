@@ -33,7 +33,7 @@ struct FunctionDefinitionNode : public ASTNode {
     std::vector<std::unique_ptr<ASTNode>> block_items;
 
     void accept(Visitor& visitor) override {
-		dynamic_cast<FullVisitor&>(visitor).visitFunctionDefinition(this);
+		static_cast<FullVisitor&>(visitor).visitFunctionDefinition(this); // static_cast failure is impossible
     }
 
     void generate(const CodeContext& context);
@@ -45,7 +45,7 @@ struct DeclarationNode : public ASTNode {
     std::unique_ptr<ASTNode> expression;
 
     void accept(Visitor& visitor) override {
-        dynamic_cast<FullVisitor&>(visitor).visitDeclaration(this);
+        static_cast<FullVisitor&>(visitor).visitDeclaration(this);
     }
 };
 
@@ -59,7 +59,7 @@ struct AssignmentNode : public ASTNode {
     }
 
     void accept(Visitor& visitor) override {
-        dynamic_cast<FullVisitor&>(visitor).visitAssignment(this);
+        static_cast<FullVisitor&>(visitor).visitAssignment(this);
     }
 };
 
@@ -68,7 +68,7 @@ struct ReturnNode : public ASTNode {
     std::unique_ptr<ASTNode> expression;
 
     void accept(Visitor& visitor) override {
-        dynamic_cast<FullVisitor&>(visitor).visitReturn(this);
+        static_cast<FullVisitor&>(visitor).visitReturn(this);
     }
 };
 
@@ -80,7 +80,7 @@ struct UnaryNode : public ASTNode {
     UnaryNode(UnaryOperator op, std::unique_ptr<ASTNode>& expression) : op(op), expression(std::move(expression)) {}
 
     void accept(Visitor& visitor) override {
-        dynamic_cast<FullVisitor&>(visitor).visitUnary(this);
+        static_cast<FullVisitor&>(visitor).visitUnary(this);
     }
 };
 
@@ -95,7 +95,7 @@ struct BinaryNode : public ASTNode {
     }
 
     void accept(Visitor& visitor) override {
-        dynamic_cast<FullVisitor&>(visitor).visitBinary(this);
+        static_cast<FullVisitor&>(visitor).visitBinary(this);
     }
 };
 
@@ -106,7 +106,7 @@ struct ConstNode : public ASTNode {
     explicit ConstNode(Number value) : value(value) {}
 
     void accept(Visitor& visitor) override {
-        dynamic_cast<FullVisitor&>(visitor).visitConst(this);
+        static_cast<FullVisitor&>(visitor).visitConst(this);
     }
 };
 
@@ -117,6 +117,6 @@ struct VariableNode : public ASTNode {
     explicit VariableNode(const std::string& identifier) : identifier(identifier) {}
 
     void accept(Visitor& visitor) override {
-        dynamic_cast<FullVisitor&>(visitor).visitVariable(this);
+        static_cast<FullVisitor&>(visitor).visitVariable(this);
     }
 };
