@@ -8,10 +8,12 @@ class Parser::Impl {
 public:
 	struct GetTokenAndAdvance {
 		std::deque<Token>& tokens;
+		Token& previous;
 
 		template<typename T>
 		Token operator()(const T&) const {
 			auto t = std::get<T>(tokens.front());
+			previous = t;
 			tokens.pop_front();
 			return t;
 		}
@@ -22,6 +24,7 @@ public:
 	};
 	std::deque<Token> tokens;
 	Position lineNumber;
+	Token previous;
 
 	std::unique_ptr<ASTNode> parseProgram();
 	std::unique_ptr<ASTNode> parseFunctionDeclaration();
@@ -31,6 +34,7 @@ public:
 	std::unique_ptr<ASTNode> parseBinaryOp(int minPrecedence);
 	std::unique_ptr<ASTNode> parseExpression();
 	std::unique_ptr<ASTNode> parseDeclaration();
+	std::unique_ptr<ASTNode> parseIncrementDecrement(std::unique_ptr<ASTNode>& expression, Symbol symbol);
 
 	Token getTokenAndAdvance();
 
@@ -55,8 +59,7 @@ T Parser::Impl::getTokenAndAdvance() {
 	if (!std::holds_alternative<T>(tokens.front())) {
 		throw syntax_error(std::format("Unexpected token {} at {}", tokens.front(), lineNumber));
 	}
-	auto t = std::get<T>(tokens.front());
-	tokens.pop_front();
+	auto t = std::get<T>(getTokenAndAdvance());
 	return t;
 }
 
@@ -92,7 +95,7 @@ Token Parser::Impl::getTokenAndAdvance() {
 	if (tokens.empty()) {
 		throw syntax_error("Unexpected EOF");
 	}
-	return std::visit(GetTokenAndAdvance{ tokens }, tokens.front());
+	return std::visit(GetTokenAndAdvance{ tokens, previous }, tokens.front());
 }
 
 std::unique_ptr<ASTNode> Parser::Impl::parseProgram() {
@@ -200,32 +203,44 @@ std::unique_ptr<ASTNode> Parser::Impl::parsePrimary() {
 	throw syntax_error(std::format("Unexpected token {} at {}", peekToken(), lineNumber));
 }
 
+std::unique_ptr<ASTNode> Parser::Impl::parseIncrementDecrement(std::unique_ptr<ASTNode>& expression, Symbol symbol) {
+	if (auto* var = dynamic_cast<VariableNode*>(expression.get())) {
+		auto variable = make_node<VariableNode>(var->identifier);
+		auto increment = make_node<BinaryNode>(symbol == Symbol::DOUBLE_PLUS ? BinaryOperator::ADD : BinaryOperator::SUBTRACT, 
+			expression, make_node<ConstNode>(1));
+		return make_node<AssignmentNode>(variable, increment);
+	}
+	throw semantic_error(std::format("Expected lvalue at {}", expression->lineNumber));
+}
+
 std::unique_ptr<ASTNode> Parser::Impl::parseUnaryOrPrimary() {
 	Token token = peekToken();
 	if (std::holds_alternative<Symbol>(token)) {
 		const Symbol symbol = std::get<Symbol>(token);
+
+		// prefix increment/decrement
 		if (symbol == Symbol::DOUBLE_PLUS || symbol == Symbol::DOUBLE_MINUS) {
 			getTokenAndAdvance();
 			auto expression = parsePrimary();
-			if (auto* var = dynamic_cast<VariableNode*>(expression.get())) {
-				auto variable = std::move(make_node<VariableNode>(var->identifier));
-				if (symbol == Symbol::DOUBLE_PLUS) {
-					auto increment = make_node<BinaryNode>(BinaryOperator::ADD, expression, make_node<ConstNode>(1));
-					return make_node<AssignmentNode>(variable, increment);
-				} 
-				auto increment = make_node<BinaryNode>(BinaryOperator::SUBTRACT, expression, make_node<ConstNode>(1));
-				return make_node<AssignmentNode>(variable, increment);
-			}
-			throw syntax_error(std::format("Expected lvalue at {}", expression->lineNumber));
+
+			return parseIncrementDecrement(expression, symbol);
 		}
-		if (isUnaryOp(std::get<Symbol>(token))) {
+		if (isUnaryOp(symbol)) {
 			auto op = static_cast<UnaryOperator>(getTokenAndAdvance<Symbol>());
 			auto expression = parseUnaryOrPrimary();
 			auto unaryNode = make_node<UnaryNode>(op, expression);
 			return unaryNode;
 		}
 	}
-	return parsePrimary();
+	auto primary = parsePrimary();
+
+	// try postfix increment/decrement
+	token = peekToken();
+	if (token == Symbol::DOUBLE_PLUS || token == Symbol::DOUBLE_MINUS) {
+		getTokenAndAdvance();
+		return make_node<PostfixNode>(primary, token == Symbol::DOUBLE_PLUS ? BinaryOperator::ADD : BinaryOperator::SUBTRACT);
+	}
+	return primary;
 }
 
 /*
@@ -233,15 +248,15 @@ std::unique_ptr<ASTNode> Parser::Impl::parseUnaryOrPrimary() {
  left = parse_factor(tokens)
  next_token = peek(tokens)
  while next_token is a binary operator and precedence(next_token) >= min_prec:
- if next_token is "=":
- take_token(tokens) // remove "=" from list of tokens
- right = parse_exp(tokens, precedence(next_token))
- left = Assignment(left, right)
- else:
- operator = parse_binop(tokens)
- right = parse_exp(tokens, precedence(next_token) + 1)
- left = Binary(operator, left, right)
- next_token = peek(tokens)
+	 if next_token is "=":
+		 take_token(tokens) // remove "=" from list of tokens
+		 right = parse_exp(tokens, precedence(next_token))
+		 left = Assignment(left, right)
+	 else:
+		 operator = parse_binop(tokens)
+		 right = parse_exp(tokens, precedence(next_token) + 1)
+		 left = Binary(operator, left, right)
+	 next_token = peek(tokens)
  return left
  */
 std::unique_ptr<ASTNode> Parser::Impl::parseBinaryOp(int minPrecedence) {

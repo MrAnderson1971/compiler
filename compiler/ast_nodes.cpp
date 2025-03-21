@@ -18,6 +18,7 @@ public:
     void visitBinary(BinaryNode* const node) override;
     void visitConst(ConstNode* const node) override;
     void visitVariable(VariableNode* const node) override;
+	void visitPostfix(PostfixNode* const node) override;
 
 private:
     std::ostream& os;
@@ -42,6 +43,7 @@ public:
     void visitBinary(BinaryNode* const node) override;
     void visitConst(ConstNode* const node) override;
     void visitVariable(VariableNode* const node) override;
+	void visitPostfix(PostfixNode* const node) override;
 
     Operand getResult() const;
 
@@ -64,6 +66,7 @@ public:
     void visitBinary(BinaryNode* const node) override;
     void visitConst(ConstNode* const node) override {}
     void visitVariable(VariableNode* const node) override;
+	void visitPostfix(PostfixNode* const node) override;
 
 private:
     int counter;
@@ -221,6 +224,14 @@ void PrintVisitor::visitVariable(VariableNode* const node) {
     os << getIndent() << "VARIABLE NODE: " << node->identifier << '\n';
 }
 
+void PrintVisitor::visitPostfix(PostfixNode* const node) {
+	os << getIndent() << "POSTFIX NODE";
+	os << (node->op == BinaryOperator::ADD ? "++" : "--") << "\n";
+	increaseIndent();
+	node->variable->accept(*this);
+	decreaseIndent();
+}
+
 TacVisitor::TacVisitor(FunctionBody& body)
     : body(body), result(nullptr) {
 }
@@ -256,11 +267,12 @@ void TacVisitor::visitDeclaration(DeclarationNode* const node) {
 
 void TacVisitor::visitAssignment(AssignmentNode* const node) {
     node->right->accept(*this);
+	Operand src = result;
     try {
         node->left->accept(*this);
         PseudoRegister variable = std::get<PseudoRegister>(result);
-        node->right->accept(*this);
-        Operand src = result;
+        //node->right->accept(*this);
+        //Operand src = result;
         body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, variable, src);
     } catch (std::bad_variant_access&) {
         throw semantic_error(std::format("Invalid lvalue {} at {}", result, node->lineNumber));
@@ -359,6 +371,21 @@ void TacVisitor::visitVariable(VariableNode* const node) {
     result = body.variableToPseudoregister[node->identifier];
 }
 
+void TacVisitor::visitPostfix(PostfixNode* const node) {
+	if (!dynamic_cast<VariableNode*>(node->variable.get())) {
+		throw semantic_error(std::format("Invalid lvalue at {}", node->lineNumber));
+	}
+	node->variable->accept(*this); // get variable
+	PseudoRegister variable = std::get<PseudoRegister>(result); // save variable
+	PseudoRegister temp1 = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, result); // temp1 = a
+    body.variableCount++;
+	PseudoRegister temp2 = body.emplaceInstruction<BinaryOpInstruction>(node->lineNumber, node->op, 
+        variable, static_cast<unsigned int>(1)); // t2 = a + 1
+	++body.variableCount;
+    body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, variable, temp2); // a = t2
+	result = temp1;
+}
+
 void VariableResolutionVisitor::visitProgram(ProgramNode* const node) {
     if (node->function_declaration) {
         node->function_declaration->accept(*this);
@@ -438,3 +465,6 @@ void VariableResolutionVisitor::visitVariable(VariableNode* const node) {
     node->identifier = variableMap[node->identifier];
 }
 
+void VariableResolutionVisitor::visitPostfix(PostfixNode* const node) {
+	node->variable->accept(*this);
+}

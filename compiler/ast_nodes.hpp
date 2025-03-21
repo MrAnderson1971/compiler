@@ -6,6 +6,7 @@
 #include "ast.hpp"
 #include "tac.hpp"
 
+struct PostfixNode;
 struct FunctionDefinitionNode;
 struct DeclarationNode;
 struct AssignmentNode;
@@ -25,6 +26,7 @@ public:
     virtual void visitBinary(BinaryNode* const node) = 0;
     virtual void visitConst(ConstNode* const node) = 0;
     virtual void visitVariable(VariableNode* const node) = 0;
+	virtual void visitPostfix(PostfixNode* const node) = 0;
 };
 
 // Function definition node
@@ -119,4 +121,15 @@ struct VariableNode : public ASTNode {
     void accept(Visitor& visitor) override {
         static_cast<FullVisitor&>(visitor).visitVariable(this);
     }
+};
+
+
+// postfix inc / dec (harder than prefix)
+struct PostfixNode : public ASTNode {
+	std::unique_ptr<ASTNode> variable;
+	BinaryOperator op;
+	PostfixNode(std::unique_ptr<ASTNode>&& expression, BinaryOperator op) : variable(std::move(expression)), op(op) {}
+	void accept(Visitor& visitor) override {
+		static_cast<FullVisitor&>(visitor).visitPostfix(this);
+	}
 };

@@ -99,7 +99,7 @@ struct BinaryOpInstruction : public has_dest {
 	Operand left;
 	Operand right;
 
-	BinaryOpInstruction(PseudoRegister dest, BinaryOperator op, Operand left, Operand right) :
+	BinaryOpInstruction(const PseudoRegister& dest, BinaryOperator op, Operand left, Operand right) :
 	has_dest(dest), op(op), left(std::move(left)), right(std::move(right)) {}
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;

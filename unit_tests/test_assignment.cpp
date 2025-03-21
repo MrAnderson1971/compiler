@@ -179,10 +179,53 @@ TEST_F(CompilerTest, TestComplexPrefixIncrementDecrementAndAssigns) {
 
 TEST_F(CompilerTest, TestInvalidPrefixIncrement) {
 	std::string source = "int main() { int a = 0; return ++0; }";
-	EXPECT_THROW(compile(source, ss), syntax_error);
+	EXPECT_THROW(compile(source, ss), semantic_error);
 }
 
 TEST_F(CompilerTest, TestInvalidPrefixDecrement) {
 	std::string source = "int main() { int a = 0; return --0; }";
-	EXPECT_THROW(compile(source, ss), syntax_error);
+	EXPECT_THROW(compile(source, ss), semantic_error);
+}
+
+TEST_F(CompilerTest, TestPostfixIncrement) {
+	std::string source = "int main() { int a = 0; return a++; }";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_EQ(simulator.execute(), 0);
+}
+
+TEST_F(CompilerTest, TestGetValueOfPostfixIncrement) {
+	std::string source = "int main() { int a = 0; a++; return a; }";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_EQ(simulator.execute(), 1);
+}
+
+TEST_F(CompilerTest, TestPostfixDecrement) {
+	std::string source = "int main() { int a = 0; return a--; }";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_EQ(simulator.execute(), 0);
+}
+
+TEST_F(CompilerTest, TestGetValueOfPostfixDecrement) {
+	std::string source = "int main() { int a = 0; a--; return a; }";
+	compile(source, ss);
+	simulator.loadProgram(ss.str());
+	EXPECT_EQ(simulator.execute(), -1);
+}
+
+TEST_F(CompilerTest, TestInvalidPostfixIncrement) {
+	std::string source = "int main() { return 0++; }";
+	EXPECT_THROW(compile(source, ss), semantic_error);
+}
+
+TEST_F(CompilerTest, TestInvalidPostfixDecrement) {
+	std::string source = "int main() { return 0--; }";
+	EXPECT_THROW(compile(source, ss), semantic_error);
+}
+
+TEST_F(CompilerTest, TestInvalidAssign) {
+	std::string source = "int main() { int a; 1 + (0 = 5); return 0; }";
+	EXPECT_THROW(compile(source, ss), semantic_error);
 }
