@@ -30,6 +30,12 @@
     <ClCompile Include="ast_nodes.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="tac_visitor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="variable_resolution.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="lexer.hpp">
@@ -54,6 +60,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="exceptions.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="tac_visitor.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="variable_resolution.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

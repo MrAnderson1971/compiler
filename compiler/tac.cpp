@@ -46,9 +46,6 @@ std::string UnaryOpInstruction::print() const {
 }
 
 void UnaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
-	if (op == UnaryOperator::UNARY_ADD) { // do nothing
-		return;
-	}
 	if constexpr (DEBUG) {
 		ss << std::format("; {}\n", print());
 	}
