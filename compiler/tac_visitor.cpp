@@ -11,9 +11,7 @@ Operand TacVisitor::getResult() const {
 }
 
 void TacVisitor::visitProgram(ProgramNode* const node) {
-    if (node->function_declaration) {
-        node->function_declaration->accept(*this);
-    }
+	throw std::logic_error("ProgramNode should not be visited by TacVisitor");
 }
 
 void TacVisitor::visitFunctionDefinition(FunctionDefinitionNode* const node) {
@@ -30,7 +28,7 @@ void TacVisitor::visitDeclaration(DeclarationNode* const node) {
     body.variableToPseudoregister[node->identifier] = pseudoRegister;
     if (node->expression) {
         node->expression->accept(*this);
-        body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, pseudoRegister, result);
+        body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, pseudoRegister, result);
     }
     body.variableCount++;
 }
@@ -43,7 +41,7 @@ void TacVisitor::visitAssignment(AssignmentNode* const node) {
         PseudoRegister variable = std::get<PseudoRegister>(result);
         //node->right->accept(*this);
         //Operand src = result;
-        body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, variable, src);
+        body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, variable, src);
     } catch (std::bad_variant_access&) {
         throw semantic_error(std::format("Invalid lvalue {} at {}", result, node->lineNumber));
     }
@@ -151,13 +149,13 @@ void TacVisitor::visitPostfix(PostfixNode* const node) {
     PseudoRegister temp2 = body.emplaceInstruction<BinaryOpInstruction>(node->lineNumber, node->op,
         variable, static_cast<unsigned int>(1)); // t2 = a + 1
     ++body.variableCount;
-    body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, variable, temp2); // a = t2
+    body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, variable, temp2); // a = t2
     result = temp1;
 }
 
 void TacVisitor::visitPrefix(PrefixNode* const node) {
     node->variable->accept(*this);
     PseudoRegister variable = std::get<PseudoRegister>(result);
-    body.emplaceInstruction<BinaryOpInstruction>(node->lineNumber, variable, node->op, variable, static_cast<unsigned int>(1));
+    body.emplaceInstructionWithDestination<BinaryOpInstruction>(node->lineNumber, variable, node->op, variable, static_cast<unsigned int>(1));
     body.variableCount++;
 }

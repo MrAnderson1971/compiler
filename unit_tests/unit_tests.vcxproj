@@ -139,11 +139,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\compiler\simulator.cpp" />
-    <ClCompile Include="..\compiler\test_compiler.cpp" />
-    <ClCompile Include="..\compiler\test_unary.cpp" />
     <ClCompile Include="test_assignment.cpp" />
     <ClCompile Include="test_binary.cpp" />
     <ClCompile Include="test_booleans.cpp" />
+    <ClCompile Include="test_compiler.cpp" />
+    <ClCompile Include="test_unary.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\compiler\simulator.hpp" />

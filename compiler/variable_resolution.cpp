@@ -3,9 +3,7 @@
 #include "exceptions.hpp"
 
 void VariableResolutionVisitor::visitProgram(ProgramNode* const node) {
-    if (node->function_declaration) {
-        node->function_declaration->accept(*this);
-    }
+	throw std::logic_error("ProgramNode should not be visited by VariableResolutionVisitor");
 }
 
 void VariableResolutionVisitor::visitFunctionDefinition(FunctionDefinitionNode* const node) {

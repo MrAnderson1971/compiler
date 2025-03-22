@@ -16,10 +16,6 @@ public:
 			tokens.pop_front();
 			return t;
 		}
-
-		Token operator()(std::nullptr_t) const {
-			throw syntax_error(std::format("Unknown token at {}", lineNumber));
-		}
 	};
 	std::deque<Token> tokens;
 	Position lineNumber;
