@@ -19,6 +19,7 @@ public:
     void visitConst(ConstNode* const node) override;
     void visitVariable(VariableNode* const node) override;
 	void visitPostfix(PostfixNode* const node) override;
+	void visitPrefix(PrefixNode* const node) override;
 
 private:
     std::ostream& os;
@@ -44,6 +45,7 @@ public:
     void visitConst(ConstNode* const node) override;
     void visitVariable(VariableNode* const node) override;
 	void visitPostfix(PostfixNode* const node) override;
+    void visitPrefix(PrefixNode* const node) override;
 
     Operand getResult() const;
 
@@ -67,6 +69,7 @@ public:
     void visitConst(ConstNode* const node) override {}
     void visitVariable(VariableNode* const node) override;
 	void visitPostfix(PostfixNode* const node) override;
+	void visitPrefix(PrefixNode* const node) override;
 
 private:
     int counter;
@@ -181,6 +184,9 @@ void PrintVisitor::visitUnary(UnaryNode* const node) {
     case UnaryOperator::NEGATION:
         os << "MINUS\n";
         break;
+    case UnaryOperator::UNARY_ADD:
+        os << "PLUS\n";
+    	break;
     case UnaryOperator::BITWISE_NOT:
         os << "BITWISE NOT\n";
         break;
@@ -232,6 +238,14 @@ void PrintVisitor::visitPostfix(PostfixNode* const node) {
 	decreaseIndent();
 }
 
+void PrintVisitor::visitPrefix(PrefixNode* const node) {
+	os << getIndent() << "PREFIX NODE";
+	os << (node->op == BinaryOperator::ADD ? "++" : "--") << "\n";
+	increaseIndent();
+	node->variable->accept(*this);
+	decreaseIndent();
+}
+
 TacVisitor::TacVisitor(FunctionBody& body)
     : body(body), result(nullptr) {
 }
@@ -260,7 +274,7 @@ void TacVisitor::visitDeclaration(DeclarationNode* const node) {
     body.variableToPseudoregister[node->identifier] = pseudoRegister;
     if (node->expression) {
         node->expression->accept(*this);
-        body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, result);
+        body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, pseudoRegister, result);
     }
     body.variableCount++;
 }
@@ -372,9 +386,6 @@ void TacVisitor::visitVariable(VariableNode* const node) {
 }
 
 void TacVisitor::visitPostfix(PostfixNode* const node) {
-	if (!dynamic_cast<VariableNode*>(node->variable.get())) {
-		throw semantic_error(std::format("Invalid lvalue at {}", node->lineNumber));
-	}
 	node->variable->accept(*this); // get variable
 	PseudoRegister variable = std::get<PseudoRegister>(result); // save variable
 	PseudoRegister temp1 = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, result); // temp1 = a
@@ -384,6 +395,13 @@ void TacVisitor::visitPostfix(PostfixNode* const node) {
 	++body.variableCount;
     body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, variable, temp2); // a = t2
 	result = temp1;
+}
+
+void TacVisitor::visitPrefix(PrefixNode* const node) {
+	node->variable->accept(*this);
+	PseudoRegister variable = std::get<PseudoRegister>(result);
+    body.emplaceInstruction<BinaryOpInstruction>(node->lineNumber, variable, node->op, variable, static_cast<unsigned int>(1));
+	body.variableCount++;
 }
 
 void VariableResolutionVisitor::visitProgram(ProgramNode* const node) {
@@ -436,9 +454,6 @@ void VariableResolutionVisitor::visitDeclaration(DeclarationNode* const node) {
  | --snip--
  */
 void VariableResolutionVisitor::visitAssignment(AssignmentNode* const node) {
-    if (!dynamic_cast<VariableNode*>(node->left.get())) {
-        throw semantic_error(std::format("Invalid lvalue at {}", node->lineNumber));
-    }
     node->left->accept(*this);
     node->right->accept(*this);
 }
@@ -466,5 +481,9 @@ void VariableResolutionVisitor::visitVariable(VariableNode* const node) {
 }
 
 void VariableResolutionVisitor::visitPostfix(PostfixNode* const node) {
+	node->variable->accept(*this);
+}
+
+void VariableResolutionVisitor::visitPrefix(PrefixNode* const node) {
 	node->variable->accept(*this);
 }

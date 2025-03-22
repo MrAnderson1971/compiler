@@ -6,6 +6,7 @@
 #include "ast.hpp"
 #include "tac.hpp"
 
+struct PrefixNode;
 struct PostfixNode;
 struct FunctionDefinitionNode;
 struct DeclarationNode;
@@ -27,6 +28,7 @@ public:
     virtual void visitConst(ConstNode* const node) = 0;
     virtual void visitVariable(VariableNode* const node) = 0;
 	virtual void visitPostfix(PostfixNode* const node) = 0;
+	virtual void visitPrefix(PrefixNode* const node) = 0;
 };
 
 // Function definition node
@@ -51,20 +53,6 @@ struct DeclarationNode : public ASTNode {
     }
 };
 
-// Assignment node
-struct AssignmentNode : public ASTNode {
-    std::unique_ptr<ASTNode> left;
-    std::unique_ptr<ASTNode> right;
-
-    AssignmentNode(std::unique_ptr<ASTNode>&& left, std::unique_ptr<ASTNode>&& right)
-        : left(std::move(left)), right(std::move(right)) {
-    }
-
-    void accept(Visitor& visitor) override {
-        static_cast<FullVisitor&>(visitor).visitAssignment(this);
-    }
-};
-
 // Return statement node
 struct ReturnNode : public ASTNode {
     std::unique_ptr<ASTNode> expression;
@@ -79,7 +67,7 @@ struct UnaryNode : public ASTNode {
     UnaryOperator op;
     std::unique_ptr<ASTNode> expression;
 
-    UnaryNode(UnaryOperator op, std::unique_ptr<ASTNode>&& expression) : op(op), expression(std::move(expression)) {}
+    UnaryNode(UnaryOperator op, std::unique_ptr<ASTNode> expression) : op(op), expression(std::move(expression)) {}
 
     void accept(Visitor& visitor) override {
         static_cast<FullVisitor&>(visitor).visitUnary(this);
@@ -92,7 +80,7 @@ struct BinaryNode : public ASTNode {
     std::unique_ptr<ASTNode> left;
     std::unique_ptr<ASTNode> right;
 
-    BinaryNode(BinaryOperator op, std::unique_ptr<ASTNode>&& left, std::unique_ptr<ASTNode>&& right)
+    BinaryNode(BinaryOperator op, std::unique_ptr<ASTNode> left, std::unique_ptr<ASTNode> right)
         : op(op), left(std::move(left)), right(std::move(right)) {
     }
 
@@ -112,8 +100,13 @@ struct ConstNode : public ASTNode {
     }
 };
 
+// permanent location in memory
+struct LvalueNode : public ASTNode {
+	virtual std::unique_ptr<LvalueNode> clone() const = 0;
+};
+
 // Variable reference node
-struct VariableNode : public ASTNode {
+struct VariableNode : public LvalueNode {
     std::string identifier;
 
     explicit VariableNode(const std::string& identifier) : identifier(identifier) {}
@@ -121,15 +114,45 @@ struct VariableNode : public ASTNode {
     void accept(Visitor& visitor) override {
         static_cast<FullVisitor&>(visitor).visitVariable(this);
     }
+
+	std::unique_ptr<LvalueNode> clone() const override {
+		return std::make_unique<VariableNode>(identifier);
+	}
 };
 
+struct PrefixNode : public LvalueNode {
+	std::unique_ptr<LvalueNode> variable;
+	BinaryOperator op;
+	PrefixNode(std::unique_ptr<LvalueNode> expression, BinaryOperator op) : variable(std::move(expression)), op(op) {}
+	void accept(Visitor& visitor) override {
+		static_cast<FullVisitor&>(visitor).visitPrefix(this);
+	}
+
+	std::unique_ptr<LvalueNode> clone() const override {
+		return std::make_unique<PrefixNode>(variable->clone(), op);
+	}
+};
 
 // postfix inc / dec (harder than prefix)
 struct PostfixNode : public ASTNode {
-	std::unique_ptr<ASTNode> variable;
+	std::unique_ptr<LvalueNode> variable;
 	BinaryOperator op;
-	PostfixNode(std::unique_ptr<ASTNode>&& expression, BinaryOperator op) : variable(std::move(expression)), op(op) {}
+	PostfixNode(std::unique_ptr<LvalueNode> expression, BinaryOperator op) : variable(std::move(expression)), op(op) {}
 	void accept(Visitor& visitor) override {
 		static_cast<FullVisitor&>(visitor).visitPostfix(this);
 	}
+};
+
+// Assignment node
+struct AssignmentNode : public ASTNode {
+    std::unique_ptr<LvalueNode> left;
+    std::unique_ptr<ASTNode> right;
+
+    AssignmentNode(std::unique_ptr<LvalueNode> left, std::unique_ptr<ASTNode> right)
+        : left(std::move(left)), right(std::move(right)) {
+    }
+
+    void accept(Visitor& visitor) override {
+        static_cast<FullVisitor&>(visitor).visitAssignment(this);
+    }
 };

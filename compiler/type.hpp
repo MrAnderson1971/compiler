@@ -4,6 +4,7 @@
 #include <string>
 #include <ostream>
 #include <format>
+#include <functional>
 
 #ifdef _DEBUG
 constexpr bool DEBUG = true;
@@ -12,12 +13,12 @@ constexpr bool DEBUG = false;
 #endif
 
 template<typename T>
-bool isOneOf(T) {
+bool isOneOf(const T&) {
 	return false;
 }
 
-template<typename T, typename... Args>
-bool isOneOf(T first, T second, Args... rest) {
+template<typename T, typename U, typename... Args>
+bool isOneOf(const T& first, const U& second, const Args&... rest) {
 	return first == second || isOneOf(first, rest...);
 }
 
@@ -82,8 +83,7 @@ namespace forward {
 	// For rvalues
 	template<typename T>
 	decltype(auto) forward(std::remove_reference_t<T>&& arg) {
-		static_assert(!std::is_lvalue_reference_v<T>,
-			"Cannot forward an rvalue as an lvalue");
+		static_assert(!std::is_lvalue_reference_v<T>, "Cannot forward an rvalue as an lvalue");
 		return std::move(arg);
 	}
 }

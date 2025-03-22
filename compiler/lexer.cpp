@@ -80,7 +80,7 @@ std::string TokenPrinter::operator()(const Keyword k) const {
 	}
 }
 
-std::string TokenPrinter::operator()(const UnknownToken) const {
+std::string TokenPrinter::operator()(const std::nullptr_t) const {
 	return "UNKNOWN";
 }
 
@@ -228,7 +228,7 @@ void Lexer::lex() {
 				tokens.emplace_back(intToken);
 			}
 			else {
-				tokens.emplace_back(UnknownToken{i}); // unknown
+				tokens.emplace_back(nullptr); // unknown
 			}
 		}
 	}

@@ -8,6 +8,7 @@
 enum class Symbol {
 	// unary or binary op
 	MINUS,
+	PLUS, // unary plus exists
 
 	_UNARY_BEGIN = 99,
 	// unary op
@@ -18,7 +19,6 @@ enum class Symbol {
 
 	_BINARY_BEGIN = 199,
 	// binary op
-	PLUS,
 	ASTERISK,
 	FORWARD_SLASH,
 	PERCENTAGE,
@@ -49,13 +49,13 @@ enum class Symbol {
 };
 
 inline bool isUnaryOp(Symbol s) {
-	return s == Symbol::MINUS ||
+	return static_cast<int>(s) < static_cast<int>(Symbol::_UNARY_BEGIN) ||
 	static_cast<int>(s) > static_cast<int>(Symbol::_UNARY_BEGIN) &&
 		static_cast<int>(s) < static_cast<int>(Symbol::_BINARY_BEGIN);
 }
 
 inline bool isBinaryOp(Symbol s) {
-	return s == Symbol::MINUS ||
+	return static_cast<int>(s) < static_cast<int>(Symbol::_UNARY_BEGIN) ||
 	static_cast<int>(s) > static_cast<int>(Symbol::_BINARY_BEGIN) &&
 		static_cast<int>(s) < static_cast<int>(Symbol::_MISC_BEGIN);
 }
@@ -65,15 +65,11 @@ enum class Keyword {
 	INT
 };
 
-struct UnknownToken {
-	size_t position;
-};
-
 using Token = std::variant<Symbol, // tokens
 	Keyword,
 	Number,  // int literal
 	std::string, // identifiers
-	UnknownToken // unknown
+	std::nullptr_t // unknown
 >;
 
 template<typename T>
@@ -91,7 +87,7 @@ struct TokenPrinter {
 	std::string operator()(const Keyword k) const;
 	std::string operator()(const Number i) const;
 	std::string operator()(const std::string& s) const;
-	std::string operator()(const UnknownToken) const;
+	std::string operator()(const std::nullptr_t) const;
 };
 
 extern TokenPrinter tokenPrinter;

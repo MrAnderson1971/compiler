@@ -10,6 +10,7 @@ struct FunctionBody;
 
 enum class UnaryOperator {
 	NEGATION,
+	UNARY_ADD,
 
 	_BEGIN = static_cast<int>(Symbol::_UNARY_BEGIN),
 	BITWISE_NOT,
@@ -18,9 +19,9 @@ enum class UnaryOperator {
 
 enum class BinaryOperator {
 	SUBTRACT,
+	ADD,
 
 	_BEGIN = static_cast<int>(Symbol::_BINARY_BEGIN),
-	ADD,
 	MULTIPLY,
 	DIVIDE,
 	MODULO,
