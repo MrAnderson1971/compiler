@@ -27,9 +27,7 @@ enum class Symbol {
 	PIPE,
 	DOUBLE_LESS_THAN,
 	DOUBLE_GREATER_THAN,
-	QUESTION_MARK, // ternary
 
-	// bools (still binary)
 	DOUBLE_AMPERSAND,
 	DOUBLE_PIPE,
 	DOUBLE_EQUALS,
@@ -38,6 +36,8 @@ enum class Symbol {
 	GREATER_THAN_OR_EQUAL,
 	LESS_THAN,
 	GREATER_THAN,
+
+	QUESTION_MARK, // ternary
 	EQUALS,
 
 	_MISC_BEGIN = 299,
