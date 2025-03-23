@@ -17,6 +17,7 @@ public:
     void visitVariable(VariableNode* const node) override;
     void visitPostfix(PostfixNode* const node) override;
     void visitPrefix(PrefixNode* const node) override;
+	void visitCondition(ConditionNode* const node) override;
 
 private:
     int counter;

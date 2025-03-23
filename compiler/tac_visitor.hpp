@@ -16,8 +16,7 @@ public:
     void visitVariable(VariableNode* const node) override;
     void visitPostfix(PostfixNode* const node) override;
     void visitPrefix(PrefixNode* const node) override;
-
-    Operand getResult() const;
+    void visitCondition(ConditionNode* const node) override;
 
 private:
     FunctionBody& body;

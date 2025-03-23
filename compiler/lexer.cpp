@@ -4,6 +4,13 @@
 
 TokenPrinter tokenPrinter;
 
+const std::unordered_map<std::string, Keyword> keywordMap = {
+	{"return", Keyword::RETURN },
+	{ "int", Keyword::INT },
+	{ "if", Keyword::IF },
+	{ "else", Keyword::ELSE},
+};
+
 Lexer::Lexer(std::string source) : source(std::move(source)) {}
 
 std::string TokenPrinter::operator()(const Symbol s) const {
@@ -64,6 +71,10 @@ std::string TokenPrinter::operator()(const Symbol s) const {
 		return "++";
 	case Symbol::DOUBLE_MINUS:
 		return "--";
+	case Symbol::QUESTION_MARK:
+		return "?";
+	case Symbol::COLON:
+		return ":";
 	default:
 		return "UNKNOWN SYMBOL";
 	}
@@ -75,6 +86,10 @@ std::string TokenPrinter::operator()(const Keyword k) const {
 		return "RETURN";
 	case Keyword::INT:
 		return "INT";
+	case Keyword::IF:
+		return "IF";
+	case Keyword::ELSE:
+		return "ELSE";
 	default:
 		return "UNKNOWN KEYWORD";
 	}
@@ -197,6 +212,12 @@ void Lexer::lex() {
 				tokens.emplace_back(Symbol::EQUALS);
 			}
 			break;
+		case '?':
+			tokens.emplace_back(Symbol::QUESTION_MARK);
+			break;
+		case ':':
+			tokens.emplace_back(Symbol::COLON);
+			break;
 		case ' ': // whitespace, do nothing
 		case '\n':
 		case '\r':
@@ -204,22 +225,18 @@ void Lexer::lex() {
 			break;
 		default:
 			if (std::isalpha(source[i]) || source[i] == '_') { // identifiers 
-				std::string identifier = "";
+				std::string identifier;
 				while (i < source.size() && (std::isalnum(source[i]) || source[i] == '_')) {
 					identifier += source[i++];
 				}
 				i--;
-				if (identifier == "return") {
-					tokens.emplace_back(Keyword::RETURN);
-				}
-				else if (identifier == "int") {
-					tokens.emplace_back(Keyword::INT);
-				}
-				else {
+				if (keywordMap.contains(identifier)) {
+					tokens.emplace_back(keywordMap.at(identifier));
+				}  else {
 					tokens.emplace_back(identifier);
 				}
 			}
-			else if (std::isdigit(source[i])) { // int literal
+			else if (std::isdigit(source[i])) { // unsigned int literal
 				Number intToken = 0;
 				while (i < source.size() && std::isdigit(source[i])) {
 					intToken = intToken * 10 + (source[i++] - '0');

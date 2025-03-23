@@ -27,6 +27,7 @@ enum class Symbol {
 	PIPE,
 	DOUBLE_LESS_THAN,
 	DOUBLE_GREATER_THAN,
+	QUESTION_MARK, // ternary
 
 	// bools (still binary)
 	DOUBLE_AMPERSAND,
@@ -46,6 +47,7 @@ enum class Symbol {
 	OPEN_PAREN,
 	CLOSED_PAREN,
 	SEMICOLON,
+	COLON,
 };
 
 inline bool isUnaryOp(Symbol s) {
@@ -62,7 +64,9 @@ inline bool isBinaryOp(Symbol s) {
 
 enum class Keyword {
 	RETURN,
-	INT
+	INT,
+	IF,
+	ELSE,
 };
 
 using Token = std::variant<Symbol, // tokens
