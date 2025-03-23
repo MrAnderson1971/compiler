@@ -21,6 +21,7 @@ public:
     void visitVariable(VariableNode* const node) override;
 	void visitPostfix(PostfixNode* const node) override;
 	void visitPrefix(PrefixNode* const node) override;
+    void visitCondition(ConditionNode* const node) override;
 
 private:
     std::ostream& os;
@@ -30,6 +31,24 @@ private:
     void decreaseIndent();
     std::string getIndent() const;
 };
+
+void PrintVisitor::visitCondition(ConditionNode* const node) {
+	os << getIndent() << "CONDITION NODE\n";
+	increaseIndent();
+	os << getIndent() << "IF\n";
+	node->condition->accept(*this);
+	decreaseIndent();
+	os << getIndent() << "THEN\n";
+	increaseIndent();
+	node->ifTrue->accept(*this);
+	decreaseIndent();
+	if (node->ifFalse) {
+		os << getIndent() << "ELSE\n";
+		increaseIndent();
+		node->ifFalse->accept(*this);
+		decreaseIndent();
+	}
+}
 
 
 std::ostream& operator<<(std::ostream& os, ASTNode& node) {
@@ -166,7 +185,9 @@ void PrintVisitor::visitBinary(BinaryNode* const node) {
     case BinaryOperator::DIVIDE:
         os << "DIVIDE\n";
         break;
-        // Add other operators as needed
+	default:
+		os << "UNKNOWN\n";
+		break;
     }
     increaseIndent();
     node->left->accept(*this);

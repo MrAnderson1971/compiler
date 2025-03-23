@@ -6,6 +6,7 @@
 #include "ast.hpp"
 #include "tac.hpp"
 
+struct ConditionNode;
 struct PrefixNode;
 struct PostfixNode;
 struct FunctionDefinitionNode;
@@ -29,6 +30,7 @@ public:
     virtual void visitVariable(VariableNode* const node) = 0;
 	virtual void visitPostfix(PostfixNode* const node) = 0;
 	virtual void visitPrefix(PrefixNode* const node) = 0;
+	virtual void visitCondition(ConditionNode* const node) = 0; // TODO
 };
 
 // Function definition node
@@ -155,4 +157,16 @@ struct AssignmentNode : public ASTNode {
     void accept(Visitor& visitor) override {
         static_cast<FullVisitor&>(visitor).visitAssignment(this);
     }
+};
+
+struct ConditionNode : public ASTNode {
+	std::unique_ptr<ASTNode> condition;
+	std::unique_ptr<ASTNode> ifTrue;
+	std::unique_ptr<ASTNode> ifFalse;
+	ConditionNode(std::unique_ptr<ASTNode> condition, std::unique_ptr<ASTNode> ifTrue, std::unique_ptr<ASTNode> ifFalse)
+		: condition(std::move(condition)), ifTrue(std::move(ifTrue)), ifFalse(std::move(ifFalse)) {
+	}
+	void accept(Visitor& visitor) override {
+		static_cast<FullVisitor&>(visitor).visitCondition(this);
+	}
 };

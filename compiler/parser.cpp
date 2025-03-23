@@ -7,18 +7,18 @@
 class Parser::Impl {
 public:
 	struct GetTokenAndAdvance {
-		std::deque<Token>& tokens;
-		Position& lineNumber;
+		std::deque<Token>* tokens;
 
 		template<typename T>
 		Token operator()(const T&) const {
-			auto t = std::get<T>(tokens.front());
-			tokens.pop_front();
+			auto t = std::get<T>(tokens->front());
+			tokens->pop_front();
 			return t;
 		}
 	};
 	std::deque<Token> tokens;
 	Position lineNumber;
+	GetTokenAndAdvance getTokenAndAdvanceVisitor;
 
 	std::unique_ptr<ASTNode> parseProgram();
 	std::unique_ptr<ASTNode> parseFunctionDeclaration();
@@ -29,6 +29,7 @@ public:
 	std::unique_ptr<ASTNode> parseExpression();
 	std::unique_ptr<ASTNode> parseDeclaration();
 	std::unique_ptr<ASTNode> parseIncrementDecrement(std::unique_ptr<ASTNode>& expression, Symbol symbol);
+	std::unique_ptr<ASTNode> parseCondition();
 
 	Token getTokenAndAdvance();
 
@@ -42,7 +43,9 @@ public:
 	std::unique_ptr<T> make_node(Args&&... args);
 
 	Token peekToken();
-	Impl(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()), lineNumber({ 1, "" }) {}
+	Impl(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()), lineNumber({ 1, "" }) {
+		getTokenAndAdvanceVisitor.tokens = &this->tokens;
+	}
 };
 
 template <typename T>
@@ -89,7 +92,7 @@ Token Parser::Impl::getTokenAndAdvance() {
 	if (tokens.empty()) {
 		throw syntax_error("Unexpected EOF");
 	}
-	return std::visit(GetTokenAndAdvance{ tokens, lineNumber }, tokens.front());
+	return std::visit(getTokenAndAdvanceVisitor, tokens.front());
 }
 
 std::unique_ptr<ASTNode> Parser::Impl::parseProgram() {
@@ -173,6 +176,8 @@ static int getPrecedence(Symbol op) {
 		return 10;
 	case Symbol::DOUBLE_PIPE:
 		return 5;
+	case Symbol::QUESTION_MARK:
+		return 3;
 	case Symbol::EQUALS:
 		return 1;
 	default:
@@ -198,7 +203,7 @@ std::unique_ptr<ASTNode> Parser::Impl::parsePrimary() {
 }
 
 std::unique_ptr<ASTNode> Parser::Impl::parseIncrementDecrement(std::unique_ptr<ASTNode>& expression, Symbol symbol) {
-	if (auto* var = dynamic_cast<LvalueNode*>(expression.get())) {
+	if (dynamic_cast<LvalueNode*>(expression.get())) {
 		return make_node<PrefixNode>(std::unique_ptr<LvalueNode>(static_cast<LvalueNode*>(expression.release())),
 			symbol == Symbol::DOUBLE_PLUS ? BinaryOperator::ADD : BinaryOperator::SUBTRACT);
 	}
@@ -240,6 +245,15 @@ std::unique_ptr<ASTNode> Parser::Impl::parseUnaryOrPrimary() {
 }
 
 /*
+ Parse the middle term of a ternary statement, keeps going until it hits a colon
+ */
+std::unique_ptr<ASTNode> Parser::Impl::parseCondition() {
+	auto middle = parseBinaryOp(0);
+	getTokenAndAdvance(Symbol::COLON);
+	return middle;
+}
+
+/*
  *parse_exp(tokens, min_prec):
  left = parse_factor(tokens)
  next_token = peek(tokens)
@@ -248,6 +262,10 @@ std::unique_ptr<ASTNode> Parser::Impl::parseUnaryOrPrimary() {
 		 take_token(tokens) // remove "=" from list of tokens
 		 right = parse_exp(tokens, precedence(next_token))
 		 left = Assignment(left, right)
+	 else if next_token is "?":
+		 middle = parse_conditional_middle(tokens)
+		 right = parse_exp(tokens, precedence(next_token))
+		 left = Conditional(left, middle, right)
 	 else:
 		 operator = parse_binop(tokens)
 		 right = parse_exp(tokens, precedence(next_token) + 1)
@@ -280,6 +298,10 @@ std::unique_ptr<ASTNode> Parser::Impl::parseBinaryOp(int minPrecedence) {
 				} else {
 					throw semantic_error(std::format("Expected lvalue at {}", left->lineNumber));
 				}
+			} else if (symbol == Symbol::QUESTION_MARK) { // ternary
+				auto middle = parseCondition();
+				auto right = parseBinaryOp(getPrecedence(symbol));
+				left = make_node<ConditionNode>(left, middle, right);
 			} else {
 				auto right = parseBinaryOp(getPrecedence(symbol) + 1);
 				left = make_node<BinaryNode>(static_cast<BinaryOperator>(symbol), left, right);

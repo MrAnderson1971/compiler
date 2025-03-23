@@ -33,6 +33,10 @@ Simulator::~Simulator() {
 void Simulator::loadProgram(const std::string& asmCode) const {
     std::string cleanedCode;
 
+#ifdef _DEBUG
+    std::cout << "Compiling assembly code:\n" << asmCode << std::endl;
+#endif
+
     if constexpr (DEBUG) {
         std::istringstream stream(asmCode);
         std::string line;
@@ -53,10 +57,6 @@ void Simulator::loadProgram(const std::string& asmCode) const {
     if (!asmFile) {
         throw std::runtime_error("Failed to create assembly file");
     }
-
-#ifdef _DEBUG
-    std::cout << "Compiling assembly code:\n" << cleanedCode << std::endl;
-#endif
 
     // Write the assembly code directly, renaming main to _runAsm for Windows
     std::string modifiedCode = cleanedCode;

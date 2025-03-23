@@ -6,10 +6,6 @@ TacVisitor::TacVisitor(FunctionBody& body)
     : body(body), result(nullptr) {
 }
 
-Operand TacVisitor::getResult() const {
-    return result;
-}
-
 void TacVisitor::visitProgram(ProgramNode* const node) {
 	throw std::logic_error("ProgramNode should not be visited by TacVisitor");
 }
@@ -158,4 +154,28 @@ void TacVisitor::visitPrefix(PrefixNode* const node) {
     PseudoRegister variable = std::get<PseudoRegister>(result);
     body.emplaceInstructionWithDestination<BinaryOpInstruction>(node->lineNumber, variable, node->op, variable, static_cast<unsigned int>(1));
     body.variableCount++;
+}
+
+/*
+ <instructions for condition>
+c = <result of condition>
+JumpIfZero(c, end)
+<instructions for statement>
+Label(end)
+*/
+void TacVisitor::visitCondition(ConditionNode* const node) {
+	node->condition->accept(*this);
+	Operand condition = result;
+	std::string elseLabel = std::format(".{}{}_else", body.name, ++body.labelCount);
+	std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
+	PseudoRegister dest = { body.name, body.variableCount++ };
+	body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, elseLabel); // if false goto else
+	node->ifTrue->accept(*this);
+	body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, dest, result);
+	body.emplaceInstruction<Jump>(node->lineNumber, endLabel); // goto end
+	body.emplaceInstruction<Label>(node->lineNumber, elseLabel); // else
+	node->ifFalse->accept(*this);
+	body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, dest, result);
+	body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
+	result = dest;
 }

@@ -83,3 +83,11 @@ void VariableResolutionVisitor::visitPostfix(PostfixNode* const node) {
 void VariableResolutionVisitor::visitPrefix(PrefixNode* const node) {
     node->variable->accept(*this);
 }
+
+void VariableResolutionVisitor::visitCondition(ConditionNode* const node) {
+	node->condition->accept(*this);
+	node->ifTrue->accept(*this);
+	if (node->ifFalse) {
+		node->ifFalse->accept(*this);
+	}
+}

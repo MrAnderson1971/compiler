@@ -83,14 +83,14 @@ struct FunctionInstruction : public TACInstruction {
 	std::string name;
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
-	FunctionInstruction(std::string name) : name(std::move(name)) {}
+	FunctionInstruction(const std::string& name) : name(name) {}
 };
 
 struct UnaryOpInstruction : public has_dest {
 	UnaryOperator op;
 	Operand arg;
 
-	UnaryOpInstruction(const PseudoRegister& dest, UnaryOperator op, Operand arg) : has_dest(dest), op(op), arg(std::move(arg)) {}
+	UnaryOpInstruction(const PseudoRegister& dest, UnaryOperator op, const Operand& arg) : has_dest(dest), op(op), arg(arg) {}
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
@@ -110,7 +110,7 @@ struct JumpIfZero : public TACInstruction {
 	std::string label;
 	Operand op;
 
-	JumpIfZero(Operand operand, std::string label) : op(std::move(operand)), label(std::move(label)) {}
+	JumpIfZero(const Operand& operand, const std::string& label) : label(label), op(operand) {}
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
@@ -118,7 +118,7 @@ struct JumpIfZero : public TACInstruction {
 struct JumpIfNotZero : public TACInstruction {
 	std::string label;
 	Operand op;
-	JumpIfNotZero(Operand operand, std::string label) : label(std::move(label)), op(std::move(operand)) {}
+	JumpIfNotZero(const Operand& operand, const std::string& label) : label(label), op(operand) {}
 	std::string print() const override;
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
 };
@@ -139,7 +139,7 @@ struct Label : public TACInstruction {
 
 struct StoreValueInstruction : public has_dest {
 	Operand val;
-	StoreValueInstruction(const PseudoRegister& dest, Operand val) : has_dest(dest), val(std::move(val)) {}
+	StoreValueInstruction(const PseudoRegister& dest, const Operand& val) : has_dest(dest), val(val) {}
 	std::string print() const override;
 
 	void makeAssembly(std::stringstream& ss, FunctionBody& body) const override;
