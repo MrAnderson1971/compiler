@@ -164,18 +164,40 @@ JumpIfZero(c, end)
 Label(end)
 */
 void TacVisitor::visitCondition(ConditionNode* const node) {
-	node->condition->accept(*this);
-	Operand condition = result;
-	std::string elseLabel = std::format(".{}{}_else", body.name, ++body.labelCount);
-	std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
-	PseudoRegister dest = { body.name, body.variableCount++ };
-	body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, elseLabel); // if false goto else
-	node->ifTrue->accept(*this);
-	body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, dest, result);
-	body.emplaceInstruction<Jump>(node->lineNumber, endLabel); // goto end
-	body.emplaceInstruction<Label>(node->lineNumber, elseLabel); // else
-	node->ifFalse->accept(*this);
-	body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, dest, result);
-	body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
-	result = dest;
+    if (node->isTernary) {
+        node->condition->accept(*this);
+        Operand condition = result;
+        std::string elseLabel = std::format(".{}{}_else", body.name, ++body.labelCount);
+        std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
+        PseudoRegister dest = { body.name, body.variableCount++ };
+        body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, elseLabel); // if false goto else
+        node->ifTrue->accept(*this);
+        body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, dest, result);
+        body.emplaceInstruction<Jump>(node->lineNumber, endLabel); // goto end
+        body.emplaceInstruction<Label>(node->lineNumber, elseLabel); // else
+        node->ifFalse->accept(*this);
+        body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, dest, result);
+        body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
+        result = dest;
+    } else if (node->ifFalse == nullptr) {
+		node->condition->accept(*this);
+		Operand condition = result;
+		std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
+		body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, endLabel); // if false goto end
+		node->ifTrue->accept(*this);
+		body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
+        result = nullptr;
+    } else {
+		node->condition->accept(*this);
+		Operand condition = result;
+		std::string elseLabel = std::format(".{}{}_else", body.name, ++body.labelCount);
+		std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
+		body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, elseLabel); // if false goto else
+		node->ifTrue->accept(*this);
+		body.emplaceInstruction<Jump>(node->lineNumber, endLabel); // goto end
+		body.emplaceInstruction<Label>(node->lineNumber, elseLabel); // else
+		node->ifFalse->accept(*this);
+		body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
+        result = nullptr;
+    }
 }
