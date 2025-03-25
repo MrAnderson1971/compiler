@@ -80,6 +80,9 @@ void VariableResolutionVisitor::visitVariable(VariableNode* const node) {
     if (!variableMap.contains(node->identifier)) {
         throw semantic_error(std::format("Undeclared variable {} at {}", node->identifier, node->lineNumber));
     }
+	if (variableMap[node->identifier].empty()) {
+		throw semantic_error(std::format("Variable {} at {} out of scope", node->identifier, node->lineNumber));
+	}
 	auto& variable = variableMap[node->identifier].top();
 	node->identifier = variable.function + "::" + variable.name + "::" + std::to_string(variable.layer);
 }

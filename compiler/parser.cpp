@@ -127,6 +127,9 @@ std::unique_ptr<ASTNode> Parser::Impl::parseFunctionDeclaration() {
 		}
 	}
 	getTokenAndAdvance(Symbol::CLOSED_BRACE);
+	if (!tokens.empty()) {
+		throw syntax_error(std::format("Unexpected token {} at {}", tokens.front(), lineNumber));
+	}
 	return function_declaration;
 }
 
