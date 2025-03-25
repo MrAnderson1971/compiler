@@ -141,6 +141,7 @@
     <ClCompile Include="..\compiler\simulator.cpp" />
     <ClCompile Include="test_assignment.cpp" />
     <ClCompile Include="test_binary.cpp" />
+    <ClCompile Include="test_block.cpp" />
     <ClCompile Include="test_booleans.cpp" />
     <ClCompile Include="test_compiler.cpp" />
     <ClCompile Include="test_condition.cpp" />

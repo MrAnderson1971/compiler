@@ -1,9 +1,7 @@
 #include "tac_visitor.hpp"
-
 #include "exceptions.hpp"
 
-TacVisitor::TacVisitor(FunctionBody& body)
-    : body(body), result(nullptr) {
+TacVisitor::TacVisitor(FunctionBody& body) : body(body), result(nullptr) {
 }
 
 void TacVisitor::visitProgram(ProgramNode* const node) {
@@ -14,8 +12,8 @@ void TacVisitor::visitFunctionDefinition(FunctionDefinitionNode* const node) {
     body.emplaceInstruction<FunctionInstruction>(node->lineNumber, body.name);
     body.emplaceInstruction<AllocateStackInstruction>(node->lineNumber);
 
-    for (const auto& statement : node->block_items) {
-        statement->accept(*this);
+    if (node->body) {
+    	node->body->accept(*this);
     }
 }
 
@@ -200,4 +198,10 @@ void TacVisitor::visitCondition(ConditionNode* const node) {
 		body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
         result = nullptr;
     }
+}
+
+void TacVisitor::visitBlock(BlockNode* const node) {
+	for (auto& item : node->block_items) {
+		item->accept(*this);
+	}
 }

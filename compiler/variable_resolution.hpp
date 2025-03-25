@@ -1,10 +1,21 @@
 #pragma once
 #include "ast_nodes.hpp"
+#include <stack>
+
+struct Variable {
+    std::string function;
+    std::string name;
+    int layer;
+};
+
+inline std::ostream& operator<<(std::ostream& os, const Variable& variable) {
+	return os << variable.name << "::" << variable.layer;
+}
 
 // Variable resolution visitor
 class VariableResolutionVisitor : public FullVisitor {
 public:
-    VariableResolutionVisitor() : counter(0) {}
+    VariableResolutionVisitor(const std::string& function) : counter(0), layer(0), function(function) {}
 
     void visitProgram(ProgramNode* const node) override;
     void visitFunctionDefinition(FunctionDefinitionNode* const node) override;
@@ -18,12 +29,11 @@ public:
     void visitPostfix(PostfixNode* const node) override;
     void visitPrefix(PrefixNode* const node) override;
 	void visitCondition(ConditionNode* const node) override;
+	void visitBlock(BlockNode* const node) override;
 
 private:
     int counter;
-    std::unordered_map<std::string, std::string> variableMap;
-
-    std::string makeTemporary(const std::string& name) {
-        return std::format("{}.{}", name, counter++);
-    }
+    int layer;
+    std::string function;
+    std::unordered_map<std::string, std::stack<Variable>> variableMap;
 };

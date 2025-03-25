@@ -17,6 +17,7 @@ public:
     void visitPostfix(PostfixNode* const node) override;
     void visitPrefix(PrefixNode* const node) override;
     void visitCondition(ConditionNode* const node) override;
+    void visitBlock(BlockNode* const node) override;
 
 private:
     FunctionBody& body;

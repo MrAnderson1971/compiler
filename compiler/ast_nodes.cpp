@@ -22,6 +22,7 @@ public:
 	void visitPostfix(PostfixNode* const node) override;
 	void visitPrefix(PrefixNode* const node) override;
     void visitCondition(ConditionNode* const node) override;
+	void visitBlock(BlockNode* const node) override;
 
 private:
     std::ostream& os;
@@ -50,6 +51,14 @@ void PrintVisitor::visitCondition(ConditionNode* const node) {
 	}
 }
 
+void PrintVisitor::visitBlock(BlockNode* const node) {
+	os << getIndent() << "BLOCK NODE\n";
+	increaseIndent();
+	for (auto& item : node->block_items) {
+		item->accept(*this);
+	}
+	decreaseIndent();
+}
 
 std::ostream& operator<<(std::ostream& os, ASTNode& node) {
     PrintVisitor p(os);
@@ -66,8 +75,13 @@ void ProgramNode::generate(const CodeContext& context) const {
 }
 
 void FunctionDefinitionNode::generate(const CodeContext& context) {
-    VariableResolutionVisitor resolver;
+    VariableResolutionVisitor resolver{identifier};
     accept(resolver);
+
+    if constexpr(DEBUG) {
+		PrintVisitor p(std::cout);
+		accept(p);
+    }
 
     FunctionBody body{ identifier };
 
@@ -117,8 +131,8 @@ void PrintVisitor::visitProgram(ProgramNode* const node) {
 void PrintVisitor::visitFunctionDefinition(FunctionDefinitionNode* const node) {
     os << getIndent() << "FUNCTION DECLARATION NODE: " << node->identifier << '\n';
     increaseIndent();
-    for (const auto& statement : node->block_items) {
-        statement->accept(*this);
+    if (node->body) {
+		node->body->accept(*this);
     }
     decreaseIndent();
 }
@@ -172,23 +186,8 @@ void PrintVisitor::visitUnary(UnaryNode* const node) {
 
 void PrintVisitor::visitBinary(BinaryNode* const node) {
     os << getIndent();
-    switch (node->op) {
-    case BinaryOperator::ADD:
-        os << "ADD\n";
-        break;
-    case BinaryOperator::SUBTRACT:
-        os << "SUBTRACT\n";
-        break;
-    case BinaryOperator::MULTIPLY:
-        os << "MULTIPLY\n";
-        break;
-    case BinaryOperator::DIVIDE:
-        os << "DIVIDE\n";
-        break;
-	default:
-		os << "UNKNOWN\n";
-		break;
-    }
+	os << "BINARY NODE: ";
+	os << tokenPrinter(static_cast<Symbol>(node->op)) << '\n';
     increaseIndent();
     node->left->accept(*this);
     node->right->accept(*this);

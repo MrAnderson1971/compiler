@@ -158,7 +158,14 @@ void Lexer::lex() {
 			tokens.emplace_back(Symbol::ASTERISK);
 			break;
 		case '/':
-			tokens.emplace_back(Symbol::FORWARD_SLASH);
+			if (i + 1 < source.size() && source[i + 1] == '/') { // single line comment
+				while (i < source.size() && source[i] != '\n') {
+					i++;
+				}
+				i--;
+			} else {
+				tokens.emplace_back(Symbol::FORWARD_SLASH);
+			}
 			break;
 		case '%':
 			tokens.emplace_back(Symbol::PERCENTAGE);

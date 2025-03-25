@@ -17,6 +17,7 @@ struct UnaryNode;
 struct BinaryNode;
 struct ConstNode;
 struct VariableNode;
+struct BlockNode;
 
 class FullVisitor : public Visitor {
 public:
@@ -31,18 +32,30 @@ public:
 	virtual void visitPostfix(PostfixNode* const node) = 0;
 	virtual void visitPrefix(PrefixNode* const node) = 0;
 	virtual void visitCondition(ConditionNode* const node) = 0;
+	virtual void visitBlock(BlockNode* const node) = 0;
 };
 
 // Function definition node
 struct FunctionDefinitionNode : public ASTNode {
     std::string identifier;
-    std::vector<std::unique_ptr<ASTNode>> block_items;
+    std::unique_ptr<BlockNode> body;
+
+	FunctionDefinitionNode(const std::string& identifier, std::unique_ptr<BlockNode> body)
+		: identifier(identifier), body(std::move(body)) {
+	}
 
     void accept(Visitor& visitor) override {
 		static_cast<FullVisitor&>(visitor).visitFunctionDefinition(this); // static_cast failure is impossible
     }
 
     void generate(const CodeContext& context);
+};
+
+struct BlockNode : public ASTNode {
+	std::vector<std::unique_ptr<ASTNode>> block_items;
+	void accept(Visitor& visitor) override {
+		static_cast<FullVisitor&>(visitor).visitBlock(this);
+	}
 };
 
 // Variable declaration node

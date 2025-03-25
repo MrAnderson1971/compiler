@@ -1,14 +1,14 @@
 #include "variable_resolution.hpp"
-
 #include "exceptions.hpp"
+#include <ranges>
 
 void VariableResolutionVisitor::visitProgram(ProgramNode* const node) {
 	throw std::logic_error("ProgramNode should not be visited by VariableResolutionVisitor");
 }
 
 void VariableResolutionVisitor::visitFunctionDefinition(FunctionDefinitionNode* const node) {
-    for (const auto& statement : node->block_items) {
-        statement->accept(*this);
+    if (node->body) {
+		node->body->accept(*this);
     }
 }
 
@@ -23,16 +23,23 @@ void VariableResolutionVisitor::visitFunctionDefinition(FunctionDefinitionNode* 
  4 return Declaration(unique_name, init)
  */
 void VariableResolutionVisitor::visitDeclaration(DeclarationNode* const node) {
-    if (variableMap.contains(node->identifier)) {
-        throw semantic_error(std::format("Duplicate variable declaration {} at {}", node->identifier, node->lineNumber));
-    }
-    std::string newName = makeTemporary(node->identifier);
-    variableMap[node->identifier] = newName;
-    node->identifier = newName;
+    if (!variableMap.contains(node->identifier)) {
+		std::stack<Variable> stack;
+        stack.emplace(function, node->identifier, layer);
+		variableMap[node->identifier] = std::move(stack);
+	} else {
+		auto& stack = variableMap[node->identifier];
 
-    if (node->expression) {
-        node->expression->accept(*this);
-    }
+		if (!stack.empty() && stack.top().layer == layer) {
+			throw semantic_error(std::format("Duplicate variable declaration {} at {}", node->identifier, node->lineNumber));
+		}
+
+		stack.emplace(function, node->identifier, layer);
+	}
+	node->identifier = function + "::" + node->identifier + "::" + std::to_string(layer);
+	if (node->expression) {
+		node->expression->accept(*this);
+	}
 }
 
 /*
@@ -73,7 +80,8 @@ void VariableResolutionVisitor::visitVariable(VariableNode* const node) {
     if (!variableMap.contains(node->identifier)) {
         throw semantic_error(std::format("Undeclared variable {} at {}", node->identifier, node->lineNumber));
     }
-    node->identifier = variableMap[node->identifier];
+	auto& variable = variableMap[node->identifier].top();
+	node->identifier = variable.function + "::" + variable.name + "::" + std::to_string(variable.layer);
 }
 
 void VariableResolutionVisitor::visitPostfix(PostfixNode* const node) {
@@ -90,4 +98,18 @@ void VariableResolutionVisitor::visitCondition(ConditionNode* const node) {
 	if (node->ifFalse) {
 		node->ifFalse->accept(*this);
 	}
+}
+
+void VariableResolutionVisitor::visitBlock(BlockNode* const node) {
+    layer++;
+	for (auto& statement : node->block_items) {
+		statement->accept(*this);
+	}
+
+	for (auto& stack : variableMap | std::views::values) {
+		if (!stack.empty() && stack.top().layer == layer) {
+			stack.pop();
+		}
+	}
+	layer--;
 }

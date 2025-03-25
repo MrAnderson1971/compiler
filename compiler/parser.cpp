@@ -113,8 +113,9 @@ std::unique_ptr<ASTNode> Parser::Impl::parseProgram() {
 
 std::unique_ptr<ASTNode> Parser::Impl::parseFunctionDeclaration() {
 	getTokenAndAdvance(Keyword::INT);
-	auto function_declaration = make_node<FunctionDefinitionNode>();
-	function_declaration->identifier = getTokenAndAdvance<std::string>();
+	std::string functionName = getTokenAndAdvance<std::string>();
+	auto function_declaration = make_node<FunctionDefinitionNode>(functionName, make_node<BlockNode>());
+	auto& body = function_declaration->body;
 	lineNumber = {1, function_declaration->identifier}; // reset line number at new function
 	getTokenAndAdvance(Symbol::OPEN_PAREN);
 	getTokenAndAdvance(Symbol::CLOSED_PAREN);
@@ -122,7 +123,7 @@ std::unique_ptr<ASTNode> Parser::Impl::parseFunctionDeclaration() {
 
 	for (Token nextToken = peekToken(); nextToken != Symbol::CLOSED_BRACE; nextToken = peekToken()) {
 		if (std::unique_ptr<ASTNode> blockItem = parseBlockItem()) {
-			function_declaration->block_items.emplace_back(std::move(blockItem));
+			body->block_items.emplace_back(std::move(blockItem));
 		}
 	}
 	getTokenAndAdvance(Symbol::CLOSED_BRACE);
@@ -192,6 +193,16 @@ std::unique_ptr<ASTNode> Parser::Impl::parseStatement() {
 		default:
 			throw syntax_error(std::format("Unexpected keyword {} at {}", token, lineNumber));
 		}
+	} else if (token == Symbol::OPEN_BRACE) {
+		auto block = make_node<BlockNode>();
+		getTokenAndAdvance();
+		for (Token nextToken = peekToken(); nextToken != Symbol::CLOSED_BRACE; nextToken = peekToken()) {
+			if (std::unique_ptr<ASTNode> blockItem = parseBlockItem()) {
+				block->block_items.emplace_back(std::move(blockItem));
+			}
+		}
+		getTokenAndAdvance(Symbol::CLOSED_BRACE);
+		statement = std::move(block);
 	} else {
 		statement = parseExpression();
 		endLine();
