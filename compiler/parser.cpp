@@ -23,7 +23,7 @@ public:
 
 	std::unique_ptr<ASTNode> parseProgram();
 	std::unique_ptr<ASTNode> parseFunctionDeclaration();
-	std::unique_ptr<ASTNode> parseBlockItem();
+	std::unique_ptr<ASTNode> parseStatement();
 	std::unique_ptr<ASTNode> parsePrimary();
 	std::unique_ptr<ASTNode> parseUnaryOrPrimary();
 	std::unique_ptr<ASTNode> parseBinaryOp(int minPrecedence);
@@ -31,6 +31,7 @@ public:
 	std::unique_ptr<ASTNode> parseDeclaration();
 	std::unique_ptr<ASTNode> parseIncrementDecrement(std::unique_ptr<ASTNode>& expression, Symbol symbol);
 	std::unique_ptr<ASTNode> parseCondition();
+	std::unique_ptr<ASTNode> parseBlockItem();
 
 	Token getTokenAndAdvance();
 
@@ -44,6 +45,10 @@ public:
 	std::unique_ptr<T> make_node(Args&&... args);
 
 	Token peekToken();
+	void endLine() {
+		getTokenAndAdvance(Symbol::SEMICOLON);
+		lineNumber.first++;
+	}
 
 	Impl(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()), lineNumber({1, ""}) {
 		getTokenAndAdvanceVisitor.tokens = &this->tokens;
@@ -135,8 +140,26 @@ std::unique_ptr<ASTNode> Parser::Impl::parseDeclaration() {
 }
 
 std::unique_ptr<ASTNode> Parser::Impl::parseBlockItem() {
-	bool expectSemicolon = true;
+	Token token = peekToken();
 	std::unique_ptr<ASTNode> blockItem = nullptr;
+	if (std::holds_alternative<Keyword>(token)) {
+		switch (std::get<Keyword>(token)) {
+		case Keyword::INT:
+			getTokenAndAdvance();
+			blockItem = parseDeclaration();
+			endLine();
+			break;
+		default:
+			blockItem = parseStatement();
+		}
+	} else {
+		blockItem = parseStatement();
+	}
+	return blockItem;
+}
+
+std::unique_ptr<ASTNode> Parser::Impl::parseStatement() {
+	std::unique_ptr<ASTNode> statement = nullptr;
 	Token token = peekToken();
 	if (std::holds_alternative<Keyword>(token)) {
 		switch (getTokenAndAdvance<Keyword>()) {
@@ -144,12 +167,8 @@ std::unique_ptr<ASTNode> Parser::Impl::parseBlockItem() {
 			{
 				auto returnNode = make_node<ReturnNode>();
 				returnNode->expression = parseExpression();
-				blockItem = std::move(returnNode);
-				break;
-			}
-		case Keyword::INT:
-			{
-				blockItem = parseDeclaration();
+				statement = std::move(returnNode);
+				endLine();
 				break;
 			}
 		case Keyword::IF:
@@ -157,30 +176,27 @@ std::unique_ptr<ASTNode> Parser::Impl::parseBlockItem() {
 				getTokenAndAdvance(Symbol::OPEN_PAREN);
 				auto expression = parseExpression();
 				getTokenAndAdvance(Symbol::CLOSED_PAREN);
-				auto body = parseBlockItem();
+				auto body = parseStatement();
 				if (peekToken() == Keyword::ELSE) {
 					getTokenAndAdvance();
-					auto elseBody = parseBlockItem();
-					blockItem = make_node<ConditionNode>(expression, body, elseBody, false);
+					auto elseBody = parseStatement();
+					statement = make_node<ConditionNode>(expression, body, elseBody, false);
 				}
 				else {
-					blockItem = make_node<ConditionNode>(expression, body, nullptr, false);
+					statement = make_node<ConditionNode>(expression, body, nullptr, false);
 				}
-				expectSemicolon = false;
 				break;
 			}
 		case Keyword::ELSE: // else without if
 			throw syntax_error(std::format("Unexpected else at {}", lineNumber));
+		default:
+			throw syntax_error(std::format("Unexpected keyword {} at {}", token, lineNumber));
 		}
+	} else {
+		statement = parseExpression();
+		endLine();
 	}
-	else {
-		blockItem = parseExpression();
-	}
-	if (expectSemicolon) {
-		getTokenAndAdvance(Symbol::SEMICOLON);
-	}
-	lineNumber.first++;
-	return blockItem;
+	return statement;
 }
 
 static int getPrecedence(Symbol op) {

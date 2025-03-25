@@ -148,4 +148,198 @@ int main() {
 		simulator.loadProgram(ss.str());
 		EXPECT_EQ(simulator.execute(), 2);
 	}
+
+    TEST_F(CompilerTest, TestNestedIf) {
+        std::string source = R"(
+int main() {
+    int a = 1;
+    int b = 2;
+    if (a < b)
+        if (a > 0) return 10;
+        else return 20;
+    return 30;
+})";
+        compile(source, ss);
+        simulator.loadProgram(ss.str());
+        EXPECT_EQ(simulator.execute(), 10);
+    }
+
+    TEST_F(CompilerTest, TestNestedIfElse) {
+        std::string source = R"(
+int main() {
+    int a = 1;
+    int b = 2;
+    if (a > b)
+        return 10;
+    else
+        if (a > 0) return 20;
+        else return 30;
+})";
+        compile(source, ss);
+        simulator.loadProgram(ss.str());
+        EXPECT_EQ(simulator.execute(), 20);
+    }
+
+    TEST_F(CompilerTest, TestIfElseIfNoFinalElse) {
+        std::string source = R"(
+int main() {
+    int a = 1;
+    if (a > 2) return 10;
+    else if (a > 0) return 20;
+    return 30;
+})";
+        compile(source, ss);
+        simulator.loadProgram(ss.str());
+        EXPECT_EQ(simulator.execute(), 20);
+    }
+
+    TEST_F(CompilerTest, TestLogicalAndInCondition) {
+        std::string source = R"(
+int main() {
+    int a = 1;
+    int b = 2;
+    if (a > 0 && b > 0) return 10;
+    return 20;
+})";
+        compile(source, ss);
+        simulator.loadProgram(ss.str());
+        EXPECT_EQ(simulator.execute(), 10);
+    }
+
+    TEST_F(CompilerTest, TestLogicalOrInCondition) {
+        std::string source = R"(
+int main() {
+    int a = 0;
+    int b = 2;
+    if (a > 0 || b > 0) return 10;
+    return 20;
+})";
+        compile(source, ss);
+        simulator.loadProgram(ss.str());
+        EXPECT_EQ(simulator.execute(), 10);
+    }
+
+    TEST_F(CompilerTest, TestLogicalNotInCondition) {
+        std::string source = R"(
+int main() {
+    int a = 0;
+    if (!a) return 10;
+    return 20;
+})";
+        compile(source, ss);
+        simulator.loadProgram(ss.str());
+        EXPECT_EQ(simulator.execute(), 10);
+    }
+
+    TEST_F(CompilerTest, TestNestedTernary) {
+        std::string source = R"(
+int main() {
+    int a = 1;
+    int b = 2;
+    int c = 3;
+    return a > b ? a : (b > c ? b : c);
+})";
+        compile(source, ss);
+        simulator.loadProgram(ss.str());
+        EXPECT_EQ(simulator.execute(), 3);
+    }
+
+    TEST_F(CompilerTest, TestIfWithAssignment) {
+        std::string source = R"(
+int main() {
+    int a = 0;
+    if (a < 1) a = 10;
+    return a;
+})";
+        compile(source, ss);
+        simulator.loadProgram(ss.str());
+        EXPECT_EQ(simulator.execute(), 10);
+    }
+
+    // Invalid test cases
+
+    TEST_F(CompilerTest, TestMissingParenthesesInIf) {
+        std::string source = R"(
+int main() {
+    if 1 > 0 return 10;
+})";
+        EXPECT_THROW(compile(source, ss), syntax_error);
+    }
+
+    TEST_F(CompilerTest, TestDoubleElse) {
+        std::string source = R"(
+int main() {
+    if (1 > 0) return 10;
+    else return 20;
+    else return 30;
+})";
+        EXPECT_THROW(compile(source, ss), syntax_error);
+    }
+
+    TEST_F(CompilerTest, TestNestedIfWithoutStatement) {
+        std::string source = R"(
+int main() {
+    if (1 > 0)
+        if (1 > 2)
+    return 10;
+})";
+        compile(source, ss);
+		simulator.loadProgram(ss.str());
+		EXPECT_EQ(simulator.execute(), 0);
+    }
+
+    TEST_F(CompilerTest, TestElseIfWithoutCondition) {
+        std::string source = R"(
+int main() {
+    if (1 > 0) return 10;
+    else if return 20;
+})";
+        EXPECT_THROW(compile(source, ss), syntax_error);
+    }
+
+    TEST_F(CompilerTest, TestMissingSemicolonInIf) {
+        std::string source = R"(
+int main() {
+    int a = 0;
+    if (1 > 0) a = 10
+    return a;
+})";
+        EXPECT_THROW(compile(source, ss), syntax_error);
+    }
+
+    TEST_F(CompilerTest, TestIfWithMultipleStatements) {
+        std::string source = R"(
+int main() {
+    if (1 > 0) int a = 10; return a;
+})";
+        EXPECT_THROW(compile(source, ss), syntax_error);
+    }
+
+    TEST_F(CompilerTest, TestTernaryInCondition) {
+        std::string source = R"(
+int main() {
+    int a = 1;
+    int b = 2;
+    if (a < b ? 1 : 0) return 10;
+    return 20;
+})";
+        compile(source, ss);
+        simulator.loadProgram(ss.str());
+        EXPECT_EQ(simulator.execute(), 10);
+    }
+
+    TEST_F(CompilerTest, TestChainedElseIf) {
+        std::string source = R"(
+int main() {
+    int a = 2;
+    if (a > 3) return 10;
+    else if (a > 2) return 20;
+    else if (a > 1) return 30;
+    else if (a > 0) return 40;
+    else return 50;
+})";
+        compile(source, ss);
+        simulator.loadProgram(ss.str());
+        EXPECT_EQ(simulator.execute(), 30);
+    }
 }
