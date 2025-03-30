@@ -23,6 +23,15 @@ public:
 	void visitPrefix(PrefixNode* const node) override;
     void visitCondition(ConditionNode* const node) override;
 	void visitBlock(BlockNode* const node) override;
+	void visitWhile(WhileNode* const node) override {
+		os << getIndent() << "WHILE NODE " << node->label << "\n";
+        increaseIndent();
+		os << getIndent() << "CONDITION\n";
+		node->condition->accept(*this);
+		os << getIndent() << "BODY\n";
+		node->body->accept(*this);
+		decreaseIndent();
+	}
 
 private:
     std::ostream& os;

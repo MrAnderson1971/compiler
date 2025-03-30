@@ -67,6 +67,11 @@ enum class Keyword {
 	INT,
 	IF,
 	ELSE,
+	DO,
+	WHILE,
+	FOR,
+	CONTINUE,
+	BREAK,
 };
 
 using Token = std::variant<Symbol, // tokens

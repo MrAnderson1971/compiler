@@ -6,6 +6,11 @@
 #include "ast.hpp"
 #include "tac.hpp"
 
+struct ForNode;
+struct DoWhileNode;
+struct ContinueNode;
+struct BreakNode;
+struct WhileNode;
 struct ConditionNode;
 struct PrefixNode;
 struct PostfixNode;
@@ -33,6 +38,21 @@ public:
 	virtual void visitPrefix(PrefixNode* const node) = 0;
 	virtual void visitCondition(ConditionNode* const node) = 0;
 	virtual void visitBlock(BlockNode* const node) = 0;
+	virtual void visitWhile(WhileNode* const node) {
+		// TODO
+	}
+	virtual void visitBreak(BreakNode* const node) {
+		// TODO
+	}
+	virtual void visitContinue(ContinueNode* const node) {
+		// TODO
+	}
+	virtual void visitDoWhile(DoWhileNode* const node) {
+		// TODO
+	}
+	virtual void visitFor(ForNode* const node) {
+		// TODO
+	}
 };
 
 // Function definition node
@@ -182,5 +202,48 @@ struct ConditionNode : public ASTNode {
 	}
 	void accept(Visitor& visitor) override {
 		static_cast<FullVisitor&>(visitor).visitCondition(this);
+	}
+};
+
+struct WhileNode : public ASTNode {
+	std::unique_ptr<ASTNode> condition;
+	std::unique_ptr<ASTNode> body;
+    std::string label;
+	bool isDoWhile;
+	WhileNode(std::unique_ptr<ASTNode> condition, std::unique_ptr<ASTNode> block, const std::string& label, bool isDoWhile)
+		: condition(std::move(condition)), body(std::move(block)), label(label), isDoWhile(isDoWhile) {
+	}
+	void accept(Visitor& visitor) override {
+		static_cast<FullVisitor&>(visitor).visitWhile(this);
+	}
+};
+
+struct BreakNode : public ASTNode {
+	std::string label;
+	BreakNode() = default;
+	void accept(Visitor& visitor) override {
+		static_cast<FullVisitor&>(visitor).visitBreak(this);
+	}
+};
+
+struct ContinueNode : public ASTNode {
+	std::string label;
+	ContinueNode() = default;
+	void accept(Visitor& visitor) override {
+		static_cast<FullVisitor&>(visitor).visitContinue(this);
+	}
+};
+
+struct ForNode : public ASTNode {
+	std::unique_ptr<ASTNode> init;
+	std::unique_ptr<ASTNode> condition;
+	std::unique_ptr<ASTNode> increment;
+	std::unique_ptr<ASTNode> block;
+	std::string label;
+	ForNode(std::unique_ptr<ASTNode> init, std::unique_ptr<ASTNode> condition, std::unique_ptr<ASTNode> increment, std::unique_ptr<ASTNode> block, const std::string& label)
+		: init(std::move(init)), condition(std::move(condition)), increment(std::move(increment)), block(std::move(block)), label(label) {
+	}
+	void accept(Visitor& visitor) override {
+		static_cast<FullVisitor&>(visitor).visitFor(this);
 	}
 };

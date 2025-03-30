@@ -116,3 +116,24 @@ void VariableResolutionVisitor::visitBlock(BlockNode* const node) {
 	}
 	layer--;
 }
+
+void VariableResolutionVisitor::visitWhile(WhileNode* const node) {
+	loopLabels.push(node->label);
+	node->condition->accept(*this);
+	node->body->accept(*this);
+	loopLabels.pop();
+}
+
+void VariableResolutionVisitor::visitBreak(BreakNode* const node) {
+	if (loopLabels.empty()) {
+		throw semantic_error(std::format("Break statement at {} outside of loop", node->lineNumber));
+	}
+	node->label = loopLabels.top();
+}
+
+void VariableResolutionVisitor::visitContinue(ContinueNode* const node) {
+	if (loopLabels.empty()) {
+		throw semantic_error(std::format("Continue statement at {} outside of loop", node->lineNumber));
+	}
+	node->label = loopLabels.top();
+}

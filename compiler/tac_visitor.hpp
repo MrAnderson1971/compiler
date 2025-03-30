@@ -18,6 +18,7 @@ public:
     void visitPrefix(PrefixNode* const node) override;
     void visitCondition(ConditionNode* const node) override;
     void visitBlock(BlockNode* const node) override;
+	void visitWhile(WhileNode* const node) override;
 
 private:
     FunctionBody& body;

@@ -30,10 +30,14 @@ public:
     void visitPrefix(PrefixNode* const node) override;
 	void visitCondition(ConditionNode* const node) override;
 	void visitBlock(BlockNode* const node) override;
+	void visitWhile(WhileNode* const node) override;
+    void visitBreak(BreakNode* const node) override;
+	void visitContinue(ContinueNode* const node) override;
 
 private:
     int counter;
     int layer;
     std::string function;
     std::unordered_map<std::string, std::stack<Variable>> variableMap;
+	std::stack<std::string> loopLabels;
 };

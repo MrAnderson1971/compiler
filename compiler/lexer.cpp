@@ -9,6 +9,11 @@ const std::unordered_map<std::string, Keyword> keywordMap = {
 	{ "int", Keyword::INT },
 	{ "if", Keyword::IF },
 	{ "else", Keyword::ELSE},
+	{ "do", Keyword::DO },
+	{ "while", Keyword::WHILE },
+	{ "for", Keyword::FOR },
+	{ "continue", Keyword::CONTINUE },
+	{ "break", Keyword::BREAK }
 };
 
 Lexer::Lexer(std::string source) : source(std::move(source)) {}
@@ -90,6 +95,16 @@ std::string TokenPrinter::operator()(const Keyword k) const {
 		return "IF";
 	case Keyword::ELSE:
 		return "ELSE";
+	case Keyword::DO:
+		return "DO";
+	case Keyword::WHILE:
+		return "WHILE";
+	case Keyword::FOR:
+		return "FOR";
+	case Keyword::CONTINUE:
+		return "CONTINUE";
+	case Keyword::BREAK:
+		return "BREAK";
 	default:
 		return "UNKNOWN KEYWORD";
 	}

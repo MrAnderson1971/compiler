@@ -17,6 +17,7 @@ public:
 		}
 	};
 
+	int loopLabelCount;
 	std::deque<Token> tokens;
 	Position lineNumber;
 	GetTokenAndAdvance getTokenAndAdvanceVisitor;
@@ -193,6 +194,47 @@ std::unique_ptr<ASTNode> Parser::Impl::parseStatement() {
 			}
 		case Keyword::ELSE: // else without if
 			throw syntax_error(std::format("Unexpected else at {}", lineNumber));
+		case Keyword::WHILE:
+		{
+			getTokenAndAdvance(Symbol::OPEN_PAREN);
+			auto expression = parseExpression();
+			getTokenAndAdvance(Symbol::CLOSED_PAREN);
+			auto body = parseStatement();
+			statement = make_node<WhileNode>(expression, body, std::to_string(loopLabelCount++), false);
+			break;
+		}
+		case Keyword::BREAK:
+			statement = make_node<BreakNode>();
+			endLine();
+			break;
+		case Keyword::CONTINUE:
+			statement = make_node<ContinueNode>();
+			endLine();
+			break;
+		case Keyword::DO:
+		{
+			auto body = parseStatement();
+			getTokenAndAdvance(Keyword::WHILE);
+			getTokenAndAdvance(Symbol::OPEN_PAREN);
+			auto expression = parseExpression();
+			getTokenAndAdvance(Symbol::CLOSED_PAREN);
+			statement = make_node<WhileNode>(expression, body, std::to_string(loopLabelCount++), true);
+			endLine();
+			break;
+		}
+		case Keyword::FOR:
+		{
+			getTokenAndAdvance(Symbol::OPEN_PAREN);
+			auto init = parseBlockItem();
+			getTokenAndAdvance(Symbol::SEMICOLON);
+			auto condition = parseExpression();
+			getTokenAndAdvance(Symbol::SEMICOLON);
+			auto increment = parseExpression();
+			getTokenAndAdvance(Symbol::CLOSED_PAREN);
+			auto body = parseStatement();
+			statement = make_node<ForNode>(init, condition, increment, body, std::to_string(loopLabelCount++));
+			break;
+		}
 		default:
 			throw syntax_error(std::format("Unexpected keyword {} at {}", token, lineNumber));
 		}

@@ -205,3 +205,25 @@ void TacVisitor::visitBlock(BlockNode* const node) {
 		item->accept(*this);
 	}
 }
+
+/*
+Label(start)
+<instructions for condition>
+v = <result of condition>
+JumpIfZero(v, end)
+<instructions for body>
+1 Jump(start)
+Label(end)
+ */
+void TacVisitor::visitWhile(WhileNode* const node) {
+	std::string startLabel = std::format(".{}{}_start", body.name, ++body.labelCount);
+	std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
+	body.emplaceInstruction<Label>(node->lineNumber, startLabel); // start
+	node->condition->accept(*this);
+	Operand condition = result;
+	body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, endLabel); // if false goto end
+	node->body->accept(*this);
+	body.emplaceInstruction<Jump>(node->lineNumber, startLabel); // goto start
+	body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
+	result = nullptr;
+}
