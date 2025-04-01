@@ -108,6 +108,17 @@ int main() {
 		EXPECT_THROW(compile(source, ss), syntax_error);
 	}
 
+	TEST_F(CompilerTest, TestManySemicolons) {
+		std::string source = R"(
+int main() {
+			;;;;;
+			return 0;
+			})";
+		compile(source, ss);
+		simulator.loadProgram(ss.str());
+		EXPECT_EQ(simulator.execute(), 0);
+	}
+
 	int main(int argc, char** argv) {
 		testing::InitGoogleTest(&argc, argv);
 		return RUN_ALL_TESTS();

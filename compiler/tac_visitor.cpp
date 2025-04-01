@@ -216,14 +216,24 @@ JumpIfZero(v, end)
 Label(end)
  */
 void TacVisitor::visitWhile(WhileNode* const node) {
-	std::string startLabel = std::format(".{}{}_start", body.name, ++body.labelCount);
-	std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
+	std::string startLabel = std::format(".{}{}_start", body.name, node->label);
+	std::string endLabel = std::format(".{}{}_end", body.name, node->label);
 	body.emplaceInstruction<Label>(node->lineNumber, startLabel); // start
 	node->condition->accept(*this);
 	Operand condition = result;
 	body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, endLabel); // if false goto end
-	node->body->accept(*this);
+    if (node->body) {
+        node->body->accept(*this);
+    }
 	body.emplaceInstruction<Jump>(node->lineNumber, startLabel); // goto start
 	body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
 	result = nullptr;
+}
+
+void TacVisitor::visitBreak(BreakNode* const node) {
+	body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_end", body.name, node->label));
+}
+
+void TacVisitor::visitContinue(ContinueNode* const node) {
+	body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_start", body.name, node->label));
 }

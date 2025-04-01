@@ -120,7 +120,9 @@ void VariableResolutionVisitor::visitBlock(BlockNode* const node) {
 void VariableResolutionVisitor::visitWhile(WhileNode* const node) {
 	loopLabels.push(node->label);
 	node->condition->accept(*this);
-	node->body->accept(*this);
+	if (node->body) {
+		node->body->accept(*this);
+	}
 	loopLabels.pop();
 }
 

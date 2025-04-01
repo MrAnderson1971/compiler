@@ -248,6 +248,8 @@ std::unique_ptr<ASTNode> Parser::Impl::parseStatement() {
 		}
 		getTokenAndAdvance(Symbol::CLOSED_BRACE);
 		statement = std::move(block);
+	} else if (token == Symbol::SEMICOLON) {
+		endLine();
 	} else {
 		statement = parseExpression();
 		endLine();
