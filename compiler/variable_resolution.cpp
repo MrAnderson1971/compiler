@@ -118,7 +118,7 @@ void VariableResolutionVisitor::visitBlock(BlockNode* const node) {
 }
 
 void VariableResolutionVisitor::visitWhile(WhileNode* const node) {
-	loopLabels.push(node->label);
+	loopLabels.emplace(node->label, false);
 	node->condition->accept(*this);
 	if (node->body) {
 		node->body->accept(*this);
@@ -130,12 +130,41 @@ void VariableResolutionVisitor::visitBreak(BreakNode* const node) {
 	if (loopLabels.empty()) {
 		throw semantic_error(std::format("Break statement at {} outside of loop", node->lineNumber));
 	}
-	node->label = loopLabels.top();
+	node->label = loopLabels.top().first;
 }
 
 void VariableResolutionVisitor::visitContinue(ContinueNode* const node) {
 	if (loopLabels.empty()) {
 		throw semantic_error(std::format("Continue statement at {} outside of loop", node->lineNumber));
 	}
-	node->label = loopLabels.top();
+	node->label = loopLabels.top().first;
+	node->isFor = loopLabels.top().second;
+}
+
+void VariableResolutionVisitor::visitFor(ForNode* const node) {
+	if (node->init) { // the init adds a scope
+		layer++;
+	}
+	loopLabels.emplace(node->label, true);
+	if (node->init) {
+		node->init->accept(*this);
+	}
+	if (node->condition) {
+		node->condition->accept(*this);
+	}
+	if (node->increment) {
+		node->increment->accept(*this);
+	}
+	if (node->body) {
+		node->body->accept(*this);
+	}
+	loopLabels.pop();
+	if (node->init) {
+		for (auto& stack : variableMap | std::views::values) {
+			if (!stack.empty() && stack.top().layer == layer) {
+				stack.pop();
+			}
+		}
+		layer--;
+	}
 }

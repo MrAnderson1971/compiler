@@ -7,7 +7,6 @@
 #include "tac.hpp"
 
 struct ForNode;
-struct DoWhileNode;
 struct ContinueNode;
 struct BreakNode;
 struct WhileNode;
@@ -38,21 +37,10 @@ public:
 	virtual void visitPrefix(PrefixNode* const node) = 0;
 	virtual void visitCondition(ConditionNode* const node) = 0;
 	virtual void visitBlock(BlockNode* const node) = 0;
-	virtual void visitWhile(WhileNode* const node) {
-		// TODO
-	}
-	virtual void visitBreak(BreakNode* const node) {
-		// TODO
-	}
-	virtual void visitContinue(ContinueNode* const node) {
-		// TODO
-	}
-	virtual void visitDoWhile(DoWhileNode* const node) {
-		// TODO
-	}
-	virtual void visitFor(ForNode* const node) {
-		// TODO
-	}
+	virtual void visitWhile(WhileNode* const node) = 0;
+	virtual void visitBreak(BreakNode* const node) = 0;
+	virtual void visitContinue(ContinueNode* const node) = 0;
+	virtual void visitFor(ForNode* const node) = 0;
 };
 
 // Function definition node
@@ -228,6 +216,7 @@ struct BreakNode : public ASTNode {
 
 struct ContinueNode : public ASTNode {
 	std::string label;
+	bool isFor;
 	ContinueNode() = default;
 	void accept(Visitor& visitor) override {
 		static_cast<FullVisitor&>(visitor).visitContinue(this);
@@ -238,10 +227,10 @@ struct ForNode : public ASTNode {
 	std::unique_ptr<ASTNode> init;
 	std::unique_ptr<ASTNode> condition;
 	std::unique_ptr<ASTNode> increment;
-	std::unique_ptr<ASTNode> block;
+	std::unique_ptr<ASTNode> body;
 	std::string label;
 	ForNode(std::unique_ptr<ASTNode> init, std::unique_ptr<ASTNode> condition, std::unique_ptr<ASTNode> increment, std::unique_ptr<ASTNode> block, const std::string& label)
-		: init(std::move(init)), condition(std::move(condition)), increment(std::move(increment)), block(std::move(block)), label(label) {
+		: init(std::move(init)), condition(std::move(condition)), increment(std::move(increment)), body(std::move(block)), label(label) {
 	}
 	void accept(Visitor& visitor) override {
 		static_cast<FullVisitor&>(visitor).visitFor(this);

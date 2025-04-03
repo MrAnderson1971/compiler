@@ -235,5 +235,34 @@ void TacVisitor::visitBreak(BreakNode* const node) {
 }
 
 void TacVisitor::visitContinue(ContinueNode* const node) {
-	body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_start", body.name, node->label));
+	if (node->isFor) {
+		body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_increment", body.name, node->label));
+	} else {
+		body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_start", body.name, node->label));
+	}
+}
+
+void TacVisitor::visitFor(ForNode* const node) {
+	std::string startLabel = std::format(".{}{}_start", body.name, node->label);
+	std::string endLabel = std::format(".{}{}_end", body.name, node->label);
+	std::string incrementLabel = std::format(".{}{}_increment", body.name, node->label);
+	if (node->init) {
+		node->init->accept(*this);
+	}
+	body.emplaceInstruction<Label>(node->lineNumber, startLabel); // start
+	if (node->condition) {
+		node->condition->accept(*this);
+		Operand condition = result;
+		body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, endLabel); // if false goto end
+	}
+	if (node->body) {
+		node->body->accept(*this);
+	}
+    body.emplaceInstruction<Label>(node->lineNumber, incrementLabel); // increment
+	if (node->increment) {
+		node->increment->accept(*this);
+	}
+	body.emplaceInstruction<Jump>(node->lineNumber, startLabel); // goto start
+	body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
+	result = nullptr;
 }

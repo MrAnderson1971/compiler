@@ -226,10 +226,11 @@ std::unique_ptr<ASTNode> Parser::Impl::parseStatement() {
 		{
 			getTokenAndAdvance(Symbol::OPEN_PAREN);
 			auto init = parseBlockItem();
-			getTokenAndAdvance(Symbol::SEMICOLON);
-			auto condition = parseExpression();
-			getTokenAndAdvance(Symbol::SEMICOLON);
-			auto increment = parseExpression();
+			auto condition = parseStatement();
+			std::unique_ptr<ASTNode> increment = nullptr;
+			if (peekToken() != Symbol::CLOSED_PAREN) { // may not exist
+				increment = parseExpression();
+			}
 			getTokenAndAdvance(Symbol::CLOSED_PAREN);
 			auto body = parseStatement();
 			statement = make_node<ForNode>(init, condition, increment, body, std::to_string(loopLabelCount++));

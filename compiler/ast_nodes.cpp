@@ -24,6 +24,9 @@ public:
     void visitCondition(ConditionNode* const node) override;
 	void visitBlock(BlockNode* const node) override;
 	void visitWhile(WhileNode* const node) override;
+	void visitBreak(BreakNode* const node) override;
+	void visitContinue(ContinueNode* const node) override;
+    void visitFor(ForNode* const node) override;
 
 private:
     std::ostream& os;
@@ -33,6 +36,32 @@ private:
     void decreaseIndent();
     std::string getIndent() const;
 };
+
+void PrintVisitor::visitFor(ForNode* const node) {
+	os << getIndent() << "FOR NODE\n";
+	increaseIndent();
+	if (node->init) {
+		node->init->accept(*this);
+	}
+	if (node->condition) {
+		node->condition->accept(*this);
+	}
+	if (node->increment) {
+		node->increment->accept(*this);
+	}
+	if (node->body) {
+		node->body->accept(*this);
+	}
+	decreaseIndent();
+}
+
+void PrintVisitor::visitBreak(BreakNode* const node) {
+	os << getIndent() << "BREAK NODE " << node->label << "\n";
+}
+
+void PrintVisitor::visitContinue(ContinueNode* const node) {
+	os << getIndent() << "CONTINUE NODE " << node->label << "\n";
+}
 
 void PrintVisitor::visitCondition(ConditionNode* const node) {
 	os << getIndent() << "CONDITION NODE\n";

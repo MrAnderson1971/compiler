@@ -33,11 +33,12 @@ public:
 	void visitWhile(WhileNode* const node) override;
     void visitBreak(BreakNode* const node) override;
 	void visitContinue(ContinueNode* const node) override;
+    void visitFor(ForNode* const node) override;
 
 private:
     int counter;
     int layer;
     std::string function;
     std::unordered_map<std::string, std::stack<Variable>> variableMap;
-	std::stack<std::string> loopLabels;
+	std::stack<std::pair<std::string, bool>> loopLabels;
 };
