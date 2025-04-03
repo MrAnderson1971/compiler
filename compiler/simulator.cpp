@@ -33,10 +33,9 @@ Simulator::~Simulator() {
 void Simulator::loadProgram(const std::string& asmCode) const {
     std::string cleanedCode;
 
-#ifdef _DEBUG
     std::cout << "Compiling assembly code:\n" << asmCode << std::endl;
-#endif
 
+    // Clean the code if in debug mode
     if constexpr (DEBUG) {
         std::istringstream stream(asmCode);
         std::string line;
@@ -49,16 +48,17 @@ void Simulator::loadProgram(const std::string& asmCode) const {
 
             cleanedCode += line + "\n";
         }
-	} else {
-		cleanedCode = asmCode;
-	}
+    } else {
+        cleanedCode = asmCode;
+    }
 
+    // Write the assembly code to a temporary file
     std::ofstream asmFile(tempAsmFile);
     if (!asmFile) {
         throw std::runtime_error("Failed to create assembly file");
     }
 
-    // Write the assembly code directly, renaming main to _runAsm for Windows
+    // Write the assembly code, renaming main to _runAsm for Windows
     std::string modifiedCode = cleanedCode;
     size_t pos = modifiedCode.find(".global main");
     if (pos != std::string::npos) {
@@ -72,20 +72,72 @@ void Simulator::loadProgram(const std::string& asmCode) const {
     asmFile << modifiedCode;
     asmFile.close();
 
-    // Compile assembly to object file
-    std::string compileCmd = "gcc -c \"" + tempAsmFile + "\" -o \"" + tempObjFile + "\"";
+    std::cout << "Wrote assembly to temporary file: " << tempAsmFile << std::endl;
+
+    // Helper function to execute command and capture output
+    auto executeCommand = [](const std::string& cmd) -> std::pair<int, std::string> {
+        std::string output;
+        FILE* pipe = _popen((cmd + " 2>&1").c_str(), "r");
+        if (!pipe) {
+            return { -1, "Failed to execute command" };
+        }
+
+        char buffer[256];
+        while (!feof(pipe)) {
+            if (fgets(buffer, sizeof(buffer), pipe) != NULL) {
+                output += buffer;
+            }
+        }
+
+        int status = _pclose(pipe);
+        return { status, output };
+        };
+
+    // Compile assembly to object file with verbose output
+    std::string compileCmd = "gcc -v -c \"" + tempAsmFile + "\" -o \"" + tempObjFile + "\"";
     std::cout << "Running compile command: " << compileCmd << std::endl;
-    int compileResult = system(compileCmd.c_str());
-    if (compileResult != 0) {
-        throw std::runtime_error("Failed to compile assembly: " + std::to_string(compileResult));
+
+    auto [compileStatus, compileOutput] = executeCommand(compileCmd);
+    std::cout << "Compilation output: " << compileOutput << std::endl;
+
+    if (compileStatus != 0) {
+        // Create a more detailed error message
+        std::ostringstream errorMsg;
+        errorMsg << "Failed to compile assembly (status code: " << compileStatus << ")" << std::endl;
+        errorMsg << "Command: " << compileCmd << std::endl;
+        errorMsg << "Output: " << compileOutput << std::endl;
+
+        // Get temp path for debug file
+        char tempPathBuffer[MAX_PATH];
+        GetTempPathA(MAX_PATH, tempPathBuffer);
+
+        // Save the assembly file for debugging (in case it gets deleted)
+        std::string debugFileName = std::string(tempPathBuffer) + "asm_debug_" + std::to_string(GetCurrentProcessId()) + ".s";
+        std::ofstream debugFile(debugFileName);
+        if (debugFile) {
+            debugFile << modifiedCode;
+            debugFile.close();
+            errorMsg << "Assembly code saved to: " << debugFileName << std::endl;
+        }
+
+        throw std::runtime_error(errorMsg.str());
     }
 
-    // Link object file to create DLL
-    std::string linkCmd = "gcc -shared \"" + tempObjFile + "\" -o \"" + tempDllFile + "\" -Wl,--export-all-symbols";
+    // Link object file to create DLL with verbose output
+    std::string linkCmd = "gcc -v -shared \"" + tempObjFile + "\" -o \"" + tempDllFile + "\" -Wl,--export-all-symbols";
     std::cout << "Running link command: " << linkCmd << std::endl;
-    int linkResult = system(linkCmd.c_str());
-    if (linkResult != 0) {
-        throw std::runtime_error("Failed to create DLL: " + std::to_string(linkResult));
+
+    auto [linkStatus, linkOutput] = executeCommand(linkCmd);
+    std::cout << "Linking output: " << linkOutput << std::endl;
+
+    if (linkStatus != 0) {
+        // Create a more detailed error message
+        std::ostringstream errorMsg;
+        errorMsg << "Failed to create DLL (status code: " << linkStatus << ")" << std::endl;
+        errorMsg << "Command: " << linkCmd << std::endl;
+        errorMsg << "Output: " << linkOutput << std::endl;
+
+        throw std::runtime_error(errorMsg.str());
     }
 
     std::cout << "Successfully compiled and linked assembly" << std::endl;

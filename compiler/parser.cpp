@@ -196,11 +196,12 @@ std::unique_ptr<ASTNode> Parser::Impl::parseStatement() {
 			throw syntax_error(std::format("Unexpected else at {}", lineNumber));
 		case Keyword::WHILE:
 		{
+			std::string label = std::to_string(loopLabelCount++);
 			getTokenAndAdvance(Symbol::OPEN_PAREN);
 			auto expression = parseExpression();
 			getTokenAndAdvance(Symbol::CLOSED_PAREN);
 			auto body = parseStatement();
-			statement = make_node<WhileNode>(expression, body, std::to_string(loopLabelCount++), false);
+			statement = make_node<WhileNode>(expression, body, label, false);
 			break;
 		}
 		case Keyword::BREAK:
@@ -213,17 +214,19 @@ std::unique_ptr<ASTNode> Parser::Impl::parseStatement() {
 			break;
 		case Keyword::DO:
 		{
+			std::string label = std::to_string(loopLabelCount++);
 			auto body = parseStatement();
 			getTokenAndAdvance(Keyword::WHILE);
 			getTokenAndAdvance(Symbol::OPEN_PAREN);
 			auto expression = parseExpression();
 			getTokenAndAdvance(Symbol::CLOSED_PAREN);
-			statement = make_node<WhileNode>(expression, body, std::to_string(loopLabelCount++), true);
+			statement = make_node<WhileNode>(expression, body, label, true);
 			endLine();
 			break;
 		}
 		case Keyword::FOR:
 		{
+			std::string label = std::to_string(loopLabelCount++);
 			getTokenAndAdvance(Symbol::OPEN_PAREN);
 			auto init = parseBlockItem();
 			auto condition = parseStatement();
@@ -233,7 +236,7 @@ std::unique_ptr<ASTNode> Parser::Impl::parseStatement() {
 			}
 			getTokenAndAdvance(Symbol::CLOSED_PAREN);
 			auto body = parseStatement();
-			statement = make_node<ForNode>(init, condition, increment, body, std::to_string(loopLabelCount++));
+			statement = make_node<ForNode>(init, condition, increment, body, label);
 			break;
 		}
 		default:

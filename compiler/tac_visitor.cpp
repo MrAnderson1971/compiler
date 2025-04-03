@@ -216,8 +216,8 @@ JumpIfZero(v, end)
 Label(end)
  */
 void TacVisitor::visitWhile(WhileNode* const node) {
-	std::string startLabel = std::format(".{}{}_start", body.name, node->label);
-	std::string endLabel = std::format(".{}{}_end", body.name, node->label);
+	std::string startLabel = std::format(".{}{}_start.loop", body.name, node->label);
+	std::string endLabel = std::format(".{}{}_end.loop", body.name, node->label);
 	body.emplaceInstruction<Label>(node->lineNumber, startLabel); // start
 	node->condition->accept(*this);
 	Operand condition = result;
@@ -231,21 +231,21 @@ void TacVisitor::visitWhile(WhileNode* const node) {
 }
 
 void TacVisitor::visitBreak(BreakNode* const node) {
-	body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_end", body.name, node->label));
+	body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_end.loop", body.name, node->label));
 }
 
 void TacVisitor::visitContinue(ContinueNode* const node) {
 	if (node->isFor) {
-		body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_increment", body.name, node->label));
+		body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_increment.loop", body.name, node->label));
 	} else {
-		body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_start", body.name, node->label));
+		body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_start.loop", body.name, node->label));
 	}
 }
 
 void TacVisitor::visitFor(ForNode* const node) {
-	std::string startLabel = std::format(".{}{}_start", body.name, node->label);
-	std::string endLabel = std::format(".{}{}_end", body.name, node->label);
-	std::string incrementLabel = std::format(".{}{}_increment", body.name, node->label);
+	std::string startLabel = std::format(".{}{}_start.loop", body.name, node->label);
+	std::string endLabel = std::format(".{}{}_end.loop", body.name, node->label);
+	std::string incrementLabel = std::format(".{}{}_increment.loop", body.name, node->label);
 	if (node->init) {
 		node->init->accept(*this);
 	}
