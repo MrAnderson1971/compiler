@@ -12,14 +12,9 @@ constexpr bool DEBUG = true;
 constexpr bool DEBUG = false;
 #endif
 
-template<typename T>
-bool isOneOf(const T&) {
-	return false;
-}
-
-template<typename T, typename U, typename... Args>
-bool isOneOf(const T& first, const U& second, const Args&... rest) {
-	return first == second || isOneOf(first, rest...);
+template<typename T, typename... Args>
+bool isOneOf(const T& first, const Args&... rest) {
+	return ((first == rest) || ...);
 }
 
 struct PseudoRegister {
