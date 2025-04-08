@@ -87,93 +87,88 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 	std::string src2 = std::visit(operandToAsm, right);
 	std::string d = operandToAsm(dest);
 
-	bool src1IsImmediate = src1.find('$') != std::string::npos;
 	bool src2IsImmediate = src2.find('$') != std::string::npos;
 
-	if (isOneOf(op, BinaryOperator::ADD, BinaryOperator::SUBTRACT, BinaryOperator::BITWISE_AND, BinaryOperator::BITWISE_OR, BinaryOperator::BITWISE_XOR, BinaryOperator::SHIFT_LEFT, BinaryOperator::SHIFT_RIGHT)) {
-		if (src1IsImmediate) {
-			ss << std::format("movl {}, {}\n", src1, d);
+	if (isOneOf(op, BinaryOperator::ADD, BinaryOperator::SUBTRACT, BinaryOperator::BITWISE_AND,
+		BinaryOperator::BITWISE_OR, BinaryOperator::BITWISE_XOR, BinaryOperator::SHIFT_LEFT,
+		BinaryOperator::SHIFT_RIGHT)) {
+		// Load the first operand into a register
+		ss << std::format("movl {}, %r10d\n", src1);
+
+		// Special handling for shift operations
+		if (isOneOf(op, BinaryOperator::SHIFT_LEFT, BinaryOperator::SHIFT_RIGHT)) {
+			if (src2IsImmediate) {
+				// Immediate shift count
+				std::string shiftOp = (op == BinaryOperator::SHIFT_LEFT) ? "shll" : "shrl";
+				ss << std::format("{} {}, %r10d\n", shiftOp, src2);
+			} else {
+				// Variable shift count (must use CL)
+				ss << std::format("movl {}, %ecx\n", src2);
+				std::string shiftOp = (op == BinaryOperator::SHIFT_LEFT) ? "shll" : "shrl";
+				ss << std::format("{} %cl, %r10d\n", shiftOp);
+			}
 		} else {
-			ss << std::format("movl {}, %r10d\n", src1);
-			ss << std::format("movl %r10d, {}\n", d);
+			// Handle other operations
+			std::string opcode;
+			switch (op) {
+			case BinaryOperator::ADD:
+				opcode = "addl";
+				break;
+			case BinaryOperator::SUBTRACT:
+				opcode = "subl";
+				break;
+			case BinaryOperator::BITWISE_AND:
+				opcode = "andl";  // Added 'l' suffix
+				break;
+			case BinaryOperator::BITWISE_OR:
+				opcode = "orl";   // Added 'l' suffix
+				break;
+			case BinaryOperator::BITWISE_XOR:
+				opcode = "xorl";  // Added 'l' suffix
+				break;
+			}
+
+			// Apply operation
+			if (src2IsImmediate) {
+				ss << std::format("{} {}, %r10d\n", opcode, src2);
+			} else {
+				ss << std::format("movl {}, %r11d\n", src2);
+				ss << std::format("{} %r11d, %r10d\n", opcode, src2);
+			}
 		}
 
-		// For add/subtract, we need to handle memory-to-memory operations
-		std::string opcode;
-		switch (op) {
-		case BinaryOperator::ADD:
-			opcode = "addl";
-			break;
-		case BinaryOperator::SUBTRACT:
-			opcode = "subl";
-			break;
-		case BinaryOperator::BITWISE_AND:
-			opcode = "and";
-			break;
-		case BinaryOperator::BITWISE_OR:
-			opcode = "or";
-			break;
-		case BinaryOperator::BITWISE_XOR:
-			opcode = "xor";
-			break;
-		case BinaryOperator::SHIFT_LEFT:
-			opcode = "shl";
-			break;
-		case BinaryOperator::SHIFT_RIGHT:
-			opcode = "shr";
-			break;
-		}
-		if (src2IsImmediate) {
-			ss << std::format("{} {}, {}\n", opcode, src2, d);
-		}
-		else {
-			ss << std::format("movl {}, %r10d\n", src2);
-			ss << std::format("{} %r10d, {}\n", opcode, d);
-		}
-	}
-	else if (op == BinaryOperator::MULTIPLY) {
-		if (src1IsImmediate) {
-			ss << std::format("movl {}, {}\n", src1, d);
-		} else {
-			ss << std::format("movl {}, %r10d\n", src1);
-			ss << std::format("movl %r10d, {}\n", d);
-		}
+		// Store result
+		ss << std::format("movl %r10d, {}\n", d);
+	} else if (op == BinaryOperator::MULTIPLY) {
+		ss << std::format("movl {}, %r11d\n", src1);
 
-		ss << std::format("movl {}, %r11d\n", d);
-
+		// Handle second operand
 		if (src2IsImmediate) {
 			ss << std::format("imull {}, %r11d\n", src2);
-		}
-		else {
+		} else {
 			ss << std::format("movl {}, %r10d\n", src2);
-			ss << std::format("imull %r10d, %r11d\n");
+			ss << "imull %r10d, %r11d\n";
 		}
 
+		// Store result to destination
 		ss << std::format("movl %r11d, {}\n", d);
-	}
-	else if (isOneOf(op, BinaryOperator::DIVIDE, BinaryOperator::MODULO)) {
+	} else if (isOneOf(op, BinaryOperator::DIVIDE, BinaryOperator::MODULO)) {
+		// Load dividend into eax (required for division)
 		ss << std::format("movl {}, %eax\n", src1);
-		ss << "cdq\n";
+		ss << "cdq\n";  // Sign-extend eax into edx:eax pair
 
-		if (src2IsImmediate) {
-			std::string immValue = src2.substr(1);
-			ss << std::format("movl {}, %ecx\n", src2);
-			ss << "idiv %ecx\n";  // Use idiv without suffix
-		}
-		else {
-			ss << std::format("movl {}, %ecx\n", src2);
-			ss << "idiv %ecx\n";
-		}
+		// Load divisor into ecx
+		ss << std::format("movl {}, %ecx\n", src2);
+		ss << "idiv %ecx\n";
 
+		// Store appropriate result (quotient or remainder)
 		if (op == BinaryOperator::DIVIDE) {
-			ss << std::format("movl %eax, {}\n", d);
-		}
-		else {
-			ss << std::format("movl %edx, {}\n", d);
+			ss << std::format("movl %eax, {}\n", d);  // Division result in eax
+		} else {
+			ss << std::format("movl %edx, {}\n", d);  // Remainder in edx
 		}
 	} else if (isOneOf(op, BinaryOperator::EQUALS, BinaryOperator::NOT_EQUALS, BinaryOperator::LESS_THAN, BinaryOperator::GREATER_THAN, BinaryOperator::LESS_THAN_OR_EQUAL, BinaryOperator::GREATER_THAN_OR_EQUAL)) {
 		ss << std::format("movl {}, %edx\n", src1);
-		ss << std::format("movl %edx, {}\n", d);
 		ss << std::format("cmpl {}, %edx\n", src2);
 		ss << std::format("movl $0, {}\n", d);
 		switch (op) {
@@ -196,7 +191,6 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 			ss << std::format("setge {}\n", d);
 			break;
 		}
-		//ss << std::format("movl %al, {}\n", dest);
 	}
 	if constexpr (DEBUG) {
 		ss << "\n";
