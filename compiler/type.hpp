@@ -56,14 +56,14 @@ struct std::formatter<Position> : std::formatter<std::string> {
  Turns all unique_ptr to rvalues. Everything else, does perfect forwarding.
  */
 namespace forward {
-	template<typename T>
+	template<typename>
 	struct is_unique_ptr : std::false_type {};
 
 	template<typename T, typename D>
 	struct is_unique_ptr<std::unique_ptr<T, D>> : std::true_type {};
 
 	template<typename T>
-	inline constexpr bool is_unique_ptr_v = is_unique_ptr<std::remove_cvref_t<T>>::value;
+	concept is_unique_ptr_v = is_unique_ptr<std::remove_cvref_t<T>>::value;
 
 	// Separate overloads for lvalues and rvalues
 	template<typename T>
