@@ -1,5 +1,4 @@
-use crate::common::Position;
-use crate::errors::CompilerError;
+use std::collections::VecDeque;
 use crate::lexer::Symbol::{Ambiguous, Binary, Unary};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -91,8 +90,8 @@ fn match_keyword(string: &str) -> Option<Keyword> {
     }
 }
 
-pub fn lex(source: String) -> Vec<Token> {
-    let mut tokens: Vec<Token> = Vec::new();
+pub fn lex(source: String) -> VecDeque<Token> {
+    let mut tokens: VecDeque<Token> = VecDeque::new();
     let mut chars = source.chars().peekable();
     while let Some(c) = chars.next() {
         let next: Token = match c {
@@ -227,27 +226,8 @@ pub fn lex(source: String) -> Vec<Token> {
             ' ' | '\n' | '\t' => continue,
             _ => Token::Invalid,
         };
-        tokens.push(next);
+        tokens.push_back(next);
     }
-    tokens.push(Token::EOF);
+    tokens.push_back(Token::EOF);
     tokens
-}
-
-trait TryFrom<T> {
-    fn try_from(self, line_number: Position) -> Result<T, CompilerError>;
-}
-
-macro_rules! impl_token_try_from {
-    ($target_type:ty, $variant:path, $type_name:expr) => {
-        impl TryFrom<Token> for $target_type {
-            fn try_from(token: Token, line_number: Position) -> Result<Self, CompilerError> {
-                match token {
-                    $variant(value) => Ok(value),
-                    _ => Err(SyntaxError(
-                        format!("Expected {}, got {:?} at {:?}", $type_name, token, line_number),
-                    ))
-                }
-            }
-        }
-    };
 }
