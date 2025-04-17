@@ -47,13 +47,14 @@ pub enum ASTNodeType {
     },
     ConditionNode {
         condition: Box<ASTNode>,
-        if_true: Box<ASTNode>,
+        if_true: Option<Box<ASTNode>>,
         if_false: Option<Box<ASTNode>>,
     },
     WhileNode {
         condition: Box<ASTNode>,
         body: Option<Box<ASTNode>>,
         label: String,
+        is_do_while: bool
     },
     BreakNode {
         label: String,
@@ -65,6 +66,7 @@ pub enum ASTNodeType {
         init: Option<Box<ASTNode>>,
         condition: Option<Box<ASTNode>>,
         increment: Option<Box<ASTNode>>,
+        body: Option<Box<ASTNode>>,
         label: String,
     },
 }
