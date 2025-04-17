@@ -71,7 +71,7 @@ pub enum Token {
     Identifier(String),
     NumberLiteral(Number),
     Invalid,
-    Nothing,
+    EOF,
 }
 
 fn match_keyword(string: &str) -> Option<Keyword> {
@@ -122,13 +122,14 @@ pub fn lex(source: String) -> Vec<Token> {
             }
             '*' => Token::Symbol(Binary(BinaryOperator::Multiply)),
             '/' => {
-                if chars.peek() == Some(&'/') { // single line comment
-                    while let Some(&next) = chars.peek() {
-                        if next != '\n' {
-                            chars.next();
+                if chars.peek() == Some(&'/') {
+                    // single line comment
+                    while let Some(next) = chars.next() {
+                        if next == '\n' {
+                            break;
                         }
                     }
-                    Token::Nothing
+                    continue;
                 } else {
                     Token::Symbol(Binary(BinaryOperator::Divide))
                 }
@@ -221,13 +222,11 @@ pub fn lex(source: String) -> Vec<Token> {
                     None => Token::Identifier(identifier),
                 }
             }
-            ' ' | '\n' | '\t' => Token::Nothing,
+            ' ' | '\n' | '\t' => continue,
             _ => Token::Invalid,
         };
-        match next {
-            Token::Nothing => {},
-            _ => tokens.push(next),
-        }
+        tokens.push(next);
     }
+    tokens.push(Token::EOF);
     tokens
 }
