@@ -1,3 +1,5 @@
+use crate::common::Position;
+use crate::errors::CompilerError;
 use crate::lexer::Symbol::{Ambiguous, Binary, Unary};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -229,4 +231,23 @@ pub fn lex(source: String) -> Vec<Token> {
     }
     tokens.push(Token::EOF);
     tokens
+}
+
+trait TryFrom<T> {
+    fn try_from(self, line_number: Position) -> Result<T, CompilerError>;
+}
+
+macro_rules! impl_token_try_from {
+    ($target_type:ty, $variant:path, $type_name:expr) => {
+        impl TryFrom<Token> for $target_type {
+            fn try_from(token: Token, line_number: Position) -> Result<Self, CompilerError> {
+                match token {
+                    $variant(value) => Ok(value),
+                    _ => Err(SyntaxError(
+                        format!("Expected {}, got {:?} at {:?}", $type_name, token, line_number),
+                    ))
+                }
+            }
+        }
+    };
 }
