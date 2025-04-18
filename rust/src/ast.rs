@@ -33,13 +33,16 @@ pub enum ASTNodeType {
     ConstNode {
         value: Number,
     },
+    VariableNode {
+        identifier: String,
+    },
     PrefixNode {
         variable: Box<ASTNode>,
-        operator: BinaryOperator,
+        operator: UnaryOperator,
     },
     PostfixNode {
         variable: Box<ASTNode>,
-        operator: BinaryOperator,
+        operator: UnaryOperator,
     },
     AssignmentNode {
         left: Box<ASTNode>,
@@ -54,7 +57,7 @@ pub enum ASTNodeType {
         condition: Box<ASTNode>,
         body: Option<Box<ASTNode>>,
         label: String,
-        is_do_while: bool
+        is_do_while: bool,
     },
     BreakNode {
         label: String,
@@ -80,5 +83,12 @@ pub struct ASTNode {
 impl ASTNode {
     pub fn new(line_number: (i32, String), kind: ASTNodeType) -> ASTNode {
         ASTNode { line_number, kind }
+    }
+}
+
+pub fn is_lvalue_node(node: &ASTNodeType) -> bool {
+    match node {
+        ASTNodeType::VariableNode { .. } | ASTNodeType::PrefixNode { .. } => true,
+        _ => false,
     }
 }

@@ -8,7 +8,7 @@ mod parser;
 
 fn main() {
     let tokens = lex("int main() {\
-    return 0; // entry point\
+    return 0; // entry point\n\
     }"
     .parse()
     .unwrap());

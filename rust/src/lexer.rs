@@ -1,8 +1,11 @@
-use std::collections::VecDeque;
 use crate::lexer::Symbol::{Ambiguous, Binary, Unary};
+use std::collections::VecDeque;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinaryOperator {
+    Addition,
+    Subtraction,
+
     Multiply,
     Modulo,
     Divide,
