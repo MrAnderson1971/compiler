@@ -22,7 +22,7 @@ pub enum TACInstructionType {
         label: Rc<String>,
         operand: Rc<Operand>,
     },
-    JumpIfNonZero {
+    JumpIfNotZero {
         label: Rc<String>,
         operand: Rc<Operand>,
     },
@@ -44,9 +44,8 @@ pub enum TACInstructionType {
 
 pub struct FunctionBody {
     pub(crate) variable_count: i32,
-    pub(crate) label_count: i32,
     instructions: Vec<TACInstruction>,
-    pub(crate) variable_to_pseudoregister: HashMap<Rc<String>, Rc<Pseudoregister>>,
+    pub(crate) variable_to_pseudoregister: HashMap<String, Rc<Pseudoregister>>,
 }
 
 impl FunctionBody {

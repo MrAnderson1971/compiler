@@ -57,6 +57,7 @@ pub trait Visitor {
         condition: &mut Box<ASTNode>,
         if_true: &mut Option<Box<ASTNode>>,
         if_false: &mut Option<Box<ASTNode>>,
+        is_ternary: &mut bool,
     ) -> Result<(), CompilerError>;
     fn visit_while(
         &mut self,
@@ -160,6 +161,7 @@ pub enum ASTNodeType {
         condition: Box<ASTNode>,
         if_true: Option<Box<ASTNode>>,
         if_false: Option<Box<ASTNode>>,
+        is_ternary: bool,
     },
     WhileNode {
         condition: Box<ASTNode>,
@@ -220,7 +222,8 @@ impl ASTNode {
                 condition,
                 if_true,
                 if_false,
-            } => visitor.visit_condition(&self.line_number, condition, if_true, if_false),
+                is_ternary
+            } => visitor.visit_condition(&self.line_number, condition, if_true, if_false, is_ternary),
             ASTNodeType::WhileNode {
                 condition,
                 body,

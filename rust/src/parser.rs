@@ -23,7 +23,7 @@ macro_rules! expect_token {
                 match $parser.tokens.pop_front() {
                     Some(_) => Ok(()),
                     None => {
-                        let line = $parser.line_number.clone();
+                        let line = Rc::clone(&$parser.line_number);
                         Err(CompilerError::SyntaxError(format!(
                             "Internal error: Token was peeked but couldn't be consumed at {:?}",
                             line
@@ -33,7 +33,7 @@ macro_rules! expect_token {
             }
             Ok(other_token) => {
                 // Peeked successfully, but the token doesn't match.
-                let line = $parser.line_number.clone();
+                let line = Rc::clone(&$parser.line_number);
                 Err(CompilerError::SyntaxError(format!(
                     "Expected {:?} but got {:?} at {:?}",
                     expected, other_token, line
@@ -78,7 +78,7 @@ impl Parser {
     pub(crate) fn new(tokens: VecDeque<Token>) -> Self {
         Parser {
             loop_label_counter: 0,
-            tokens: tokens.clone(),
+            tokens,
             line_number: Rc::from((0, "".to_string())),
         }
     }
@@ -308,6 +308,7 @@ impl Parser {
                                 condition: left,
                                 if_true: Some(middle),
                                 if_false: Some(right),
+                                is_ternary: true,
                             });
                         }
 
@@ -401,12 +402,14 @@ impl Parser {
                                 condition,
                                 if_true: body,
                                 if_false: else_body,
+                                is_ternary: false,
                             })))
                         } else {
                             Ok(Some(self.make_node(ConditionNode {
                                 condition,
                                 if_true: body,
                                 if_false: None,
+                                is_ternary: false,
                             })))
                         }
                     }
@@ -562,6 +565,6 @@ impl Parser {
     }
 
     fn make_node(&self, kind: ASTNodeType) -> Box<ASTNode> {
-        Box::new(ASTNode::new(self.line_number.clone(), kind))
+        Box::new(ASTNode::new(Rc::clone(&self.line_number), kind))
     }
 }

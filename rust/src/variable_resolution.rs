@@ -9,7 +9,7 @@ use crate::common::Position;
 pub struct VariableResolutionVisitor {
     layer: i32,
     function: Rc<String>,
-    variable_map: HashMap<Rc<String>, VecDeque<i32>>,
+    variable_map: HashMap<String, VecDeque<i32>>,
     loop_labels: VecDeque<(Rc<String>, bool)>,
 }
 
@@ -62,12 +62,12 @@ impl Visitor for VariableResolutionVisitor {
         identifier: &mut Rc<String>,
         expression: &mut Option<Box<ASTNode>>,
     ) -> Result<(), CompilerError> {
-        if !self.variable_map.contains_key(identifier) {
+        if !self.variable_map.contains_key(&(*Rc::clone(&identifier)).clone()) {
             let mut stack = VecDeque::new();
             stack.push_back(self.layer);
-            self.variable_map.insert(identifier.clone(), stack);
+            self.variable_map.insert((*Rc::clone(&identifier)).clone(), stack);
         } else {
-            let stack = self.variable_map.get_mut(identifier).unwrap();
+            let stack = self.variable_map.get_mut(&(*Rc::clone(&identifier)).clone()).unwrap();
             if !stack.is_empty() && *stack.back().unwrap() == self.layer {
                 return Err(SemanticError(format!(
                     "Duplicate variable declaration {} at {:?}",
@@ -146,6 +146,7 @@ impl Visitor for VariableResolutionVisitor {
         condition: &mut Box<ASTNode>,
         if_true: &mut Option<Box<ASTNode>>,
         if_false: &mut Option<Box<ASTNode>>,
+        _is_ternary: &mut bool,
     ) -> Result<(), CompilerError> {
         condition.accept(self)?;
         if let Some(if_true) = if_true {
@@ -180,7 +181,7 @@ impl Visitor for VariableResolutionVisitor {
         if self.loop_labels.is_empty() {
             Err(SemanticError(format!("Break outside loop at {:?}", line_number)))
         } else {
-            *label = self.loop_labels.back().unwrap().0.clone();
+            *label = Rc::clone(&self.loop_labels.back().unwrap().0);
             Ok(())
         }
     }
@@ -194,7 +195,7 @@ impl Visitor for VariableResolutionVisitor {
         if self.loop_labels.is_empty() {
             Err(SemanticError(format!("Continue outside loop at {:?}", line_number)))
         } else {
-            *label = self.loop_labels.back().unwrap().0.clone();
+            *label = Rc::clone(&self.loop_labels.back().unwrap().0);
             *is_for = self.loop_labels.back().unwrap().1;
             Ok(())
         }
@@ -212,7 +213,7 @@ impl Visitor for VariableResolutionVisitor {
         if let Some(init) = init { // the init adds a scope
             init.accept(self)?;
         }
-        self.loop_labels.push_back((label.clone(), true));
+        self.loop_labels.push_back((Rc::clone(&label), true));
         if let Some(condition) = condition {
             condition.accept(self)?;
         }
@@ -243,7 +244,7 @@ impl Visitor for VariableResolutionVisitor {
         line_number: &Rc<Position>,
         identifier: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
-        match self.variable_map.get_mut(identifier) {
+        match self.variable_map.get_mut(&(*Rc::clone(&identifier)).clone()) {
             None => Err(SemanticError(format!("Undefined variable {} at {:?}", identifier, line_number))),
             Some(stack) => {
                 if stack.is_empty() {
