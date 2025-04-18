@@ -6,6 +6,8 @@ mod errors;
 mod lexer;
 mod parser;
 mod variable_resolution;
+mod tac;
+mod tac_visitor;
 
 fn main() {
     let tokens = lex("int main() {\

@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use crate::common::Position;
 use crate::errors::CompilerError;
 use crate::lexer::{BinaryOperator, Number, UnaryOperator};
@@ -6,104 +7,104 @@ use crate::variable_resolution::VariableResolutionVisitor;
 pub trait Visitor {
     fn visit_program(
         &mut self,
-        line_number: &Position,
+        line_number: &Rc<Position>,
         function_declaration: &mut Box<ASTNode>,
     ) -> Result<(), CompilerError>;
     fn visit_function(
         &mut self,
-        line_number: &Position,
-        identifier: &mut String,
+        line_number: &Rc<Position>,
+        identifier: &mut Rc<String>,
         body: &mut Option<Box<ASTNode>>,
     ) -> Result<(), CompilerError>;
     fn visit_declaration(
         &mut self,
-        line_number: &Position,
-        identifier: &mut String,
+        line_number: &Rc<Position>,
+        identifier: &mut Rc<String>,
         expression: &mut Option<Box<ASTNode>>,
     ) -> Result<(), CompilerError>;
     fn visit_assignment(
         &mut self,
-        line_number: &Position,
+        line_number: &Rc<Position>,
         left: &mut Box<ASTNode>,
         right: &mut Box<ASTNode>,
     ) -> Result<(), CompilerError>;
     fn visit_return(
         &mut self,
-        line_number: &Position,
+        line_number: &Rc<Position>,
         expression: &mut Option<Box<ASTNode>>,
     ) -> Result<(), CompilerError>;
     fn visit_block(
         &mut self,
-        line_number: &Position,
+        line_number: &Rc<Position>,
         body: &mut Vec<Box<ASTNode>>,
     ) -> Result<(), CompilerError>;
     fn visit_unary(
         &mut self,
-        line_number: &Position,
+        line_number: &Rc<Position>,
         op: &mut UnaryOperator,
         expression: &mut Box<ASTNode>,
     ) -> Result<(), CompilerError>;
     fn visit_binary(
         &mut self,
-        line_number: &Position,
+        line_number: &Rc<Position>,
         op: &mut BinaryOperator,
         left: &mut Box<ASTNode>,
         right: &mut Box<ASTNode>,
     ) -> Result<(), CompilerError>;
     fn visit_condition(
         &mut self,
-        line_number: &Position,
+        line_number: &Rc<Position>,
         condition: &mut Box<ASTNode>,
         if_true: &mut Option<Box<ASTNode>>,
         if_false: &mut Option<Box<ASTNode>>,
     ) -> Result<(), CompilerError>;
     fn visit_while(
         &mut self,
-        line_number: &Position,
+        line_number: &Rc<Position>,
         condition: &mut Box<ASTNode>,
         body: &mut Option<Box<ASTNode>>,
-        label: &mut String,
+        label: &mut Rc<String>,
         is_do_while: &mut bool,
     ) -> Result<(), CompilerError>;
     fn visit_break(
         &mut self,
-        line_number: &Position,
-        label: &mut String,
+        line_number: &Rc<Position>,
+        label: &mut Rc<String>,
     ) -> Result<(), CompilerError>;
     fn visit_continue(
         &mut self,
-        line_number: &Position,
-        label: &mut String,
+        line_number: &Rc<Position>,
+        label: &mut Rc<String>,
         is_for: &mut bool,
     ) -> Result<(), CompilerError>;
     fn visit_for(
         &mut self,
-        line_number: &Position,
+        line_number: &Rc<Position>,
         init: &mut Option<Box<ASTNode>>,
         condition: &mut Option<Box<ASTNode>>,
         increment: &mut Option<Box<ASTNode>>,
         body: &mut Option<Box<ASTNode>>,
-        label: &mut String,
+        label: &mut Rc<String>,
     ) -> Result<(), CompilerError>;
     fn visit_const(
         &mut self,
-        line_number: &Position,
+        line_number: &Rc<Position>,
         value: &mut Number,
     ) -> Result<(), CompilerError>;
     fn visit_variable(
         &mut self,
-        line_number: &Position,
-        identifier: &mut String,
+        line_number: &Rc<Position>,
+        identifier: &mut Rc<String>,
     ) -> Result<(), CompilerError>;
     fn visit_prefix(
         &mut self,
-        line_number: &Position,
+        line_number: &Rc<Position>,
         variable: &mut Box<ASTNode>,
         operator: &mut UnaryOperator,
     ) -> Result<(), CompilerError>;
     fn visit_postfix(
         &mut self,
-        line_number: &Position,
+        line_number: &Rc<Position>,
         variable: &mut Box<ASTNode>,
         operator: &mut UnaryOperator,
     ) -> Result<(), CompilerError>;
@@ -115,14 +116,14 @@ pub enum ASTNodeType {
         function_declaration: Box<ASTNode>,
     },
     FunctionNode {
-        identifier: String,
+        identifier: Rc<String>,
         body: Option<Box<ASTNode>>,
     },
     BlockNode {
         body: Vec<Box<ASTNode>>,
     },
     DeclarationNode {
-        identifier: String,
+        identifier: Rc<String>,
         expression: Option<Box<ASTNode>>,
     },
     ReturnNode {
@@ -141,7 +142,7 @@ pub enum ASTNodeType {
         value: Number,
     },
     VariableNode {
-        identifier: String,
+        identifier: Rc<String>,
     },
     PrefixNode {
         variable: Box<ASTNode>,
@@ -163,14 +164,14 @@ pub enum ASTNodeType {
     WhileNode {
         condition: Box<ASTNode>,
         body: Option<Box<ASTNode>>,
-        label: String,
+        label: Rc<String>,
         is_do_while: bool,
     },
     BreakNode {
-        label: String,
+        label: Rc<String>,
     },
     ContinueNode {
-        label: String,
+        label: Rc<String>,
         is_for: bool,
     },
     ForNode {
@@ -178,18 +179,18 @@ pub enum ASTNodeType {
         condition: Option<Box<ASTNode>>,
         increment: Option<Box<ASTNode>>,
         body: Option<Box<ASTNode>>,
-        label: String,
+        label: Rc<String>,
     },
 }
 
 #[derive(Debug)]
 pub struct ASTNode {
-    line_number: (i32, String),
+    line_number: Rc<Position>,
     pub(crate) kind: ASTNodeType,
 }
 
 impl ASTNode {
-    pub fn new(line_number: (i32, String), kind: ASTNodeType) -> ASTNode {
+    pub fn new(line_number: Rc<Position>, kind: ASTNodeType) -> ASTNode {
         ASTNode { line_number, kind }
     }
 
@@ -259,7 +260,7 @@ impl ASTNode {
                 function_declaration.generate(out)
             }
             ASTNodeType::FunctionNode { identifier, body } => {
-                let mut variable_resolution_visitor = VariableResolutionVisitor::new(identifier.clone());
+                let mut variable_resolution_visitor = VariableResolutionVisitor::new(Rc::clone(identifier));
                 if let Some(body) = body.as_mut() {
                     body.accept(&mut variable_resolution_visitor as &mut dyn Visitor)
                 } else {
@@ -280,7 +281,7 @@ pub fn is_lvalue_node(node: &ASTNodeType) -> bool {
     }
 }
 
-pub fn extract_base_variable(node: &ASTNodeType) -> Option<String> {
+pub fn extract_base_variable(node: &ASTNodeType) -> Option<Rc<String>> {
     match node {
         ASTNodeType::VariableNode { identifier } => Some(identifier.clone()),
         ASTNodeType::PrefixNode { variable, .. } => extract_base_variable(&variable.kind),

@@ -1,19 +1,20 @@
 use crate::ast::{ASTNode, Visitor};
-use crate::common::Position;
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{BinaryOperator, Number, UnaryOperator};
 use std::collections::{HashMap, VecDeque};
+use std::rc::Rc;
+use crate::common::Position;
 
 pub struct VariableResolutionVisitor {
     layer: i32,
-    function: String,
-    variable_map: HashMap<String, VecDeque<i32>>,
-    loop_labels: VecDeque<(String, bool)>,
+    function: Rc<String>,
+    variable_map: HashMap<Rc<String>, VecDeque<i32>>,
+    loop_labels: VecDeque<(Rc<String>, bool)>,
 }
 
 impl VariableResolutionVisitor {
-    pub fn new(function: String) -> Self {
+    pub fn new(function: Rc<String>) -> Self {
         Self {
             layer: 0,
             function,
@@ -36,7 +37,7 @@ init = resolve_exp(init, variable_map)
 impl Visitor for VariableResolutionVisitor {
     fn visit_program(
         &mut self,
-        _line_number: &Position,
+        _line_number: &Rc<Position>,
         _function_declaration: &mut Box<ASTNode>,
     ) -> Result<(), CompilerError> {
         panic!("Should not be called")
@@ -44,8 +45,8 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_function(
         &mut self,
-        _line_number: &Position,
-        _identifier: &mut String,
+        _line_number: &Rc<Position>,
+        _identifier: &mut Rc<String>,
         body: &mut Option<Box<ASTNode>>,
     ) -> Result<(), CompilerError> {
         if let Some(body) = body {
@@ -57,8 +58,8 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_declaration(
         &mut self,
-        line_number: &Position,
-        identifier: &mut String,
+        line_number: &Rc<Position>,
+        identifier: &mut Rc<String>,
         expression: &mut Option<Box<ASTNode>>,
     ) -> Result<(), CompilerError> {
         if !self.variable_map.contains_key(identifier) {
@@ -75,7 +76,7 @@ impl Visitor for VariableResolutionVisitor {
             }
             stack.push_back(self.layer);
         }
-        *identifier = self.function.clone() + "::" + identifier + "::" + &*self.layer.to_string();
+        *identifier = Rc::new(format!("{}::{}::{}", self.function, identifier, self.layer));
         if let Some(expression) = expression {
             expression.accept(self)
         } else {
@@ -85,7 +86,7 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_assignment(
         &mut self,
-        _line_number: &Position,
+        _line_number: &Rc<Position>,
         left: &mut Box<ASTNode>,
         right: &mut Box<ASTNode>,
     ) -> Result<(), CompilerError> {
@@ -95,7 +96,7 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_return(
         &mut self,
-        _line_number: &Position,
+        _line_number: &Rc<Position>,
         expression: &mut Option<Box<ASTNode>>,
     ) -> Result<(), CompilerError> {
         if let Some(expression) = expression {
@@ -107,7 +108,7 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_block(
         &mut self,
-        _line_number: &Position,
+        _line_number: &Rc<Position>,
         body: &mut Vec<Box<ASTNode>>,
     ) -> Result<(), CompilerError> {
         self.layer += 1;
@@ -121,7 +122,7 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_unary(
         &mut self,
-        _line_number: &Position,
+        _line_number: &Rc<Position>,
         _op: &mut UnaryOperator,
         expression: &mut Box<ASTNode>,
     ) -> Result<(), CompilerError> {
@@ -130,7 +131,7 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_binary(
         &mut self,
-        _line_number: &Position,
+        _line_number: &Rc<Position>,
         _op: &mut BinaryOperator,
         left: &mut Box<ASTNode>,
         right: &mut Box<ASTNode>,
@@ -141,7 +142,7 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_condition(
         &mut self,
-        _line_number: &Position,
+        _line_number: &Rc<Position>,
         condition: &mut Box<ASTNode>,
         if_true: &mut Option<Box<ASTNode>>,
         if_false: &mut Option<Box<ASTNode>>,
@@ -158,10 +159,10 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_while(
         &mut self,
-        _line_number: &Position,
+        _line_number: &Rc<Position>,
         condition: &mut Box<ASTNode>,
         body: &mut Option<Box<ASTNode>>,
-        _label: &mut String,
+        _label: &mut Rc<String>,
         _is_do_while: &mut bool,
     ) -> Result<(), CompilerError> {
         condition.accept(self)?;
@@ -173,8 +174,8 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_break(
         &mut self,
-        line_number: &Position,
-        label: &mut String,
+        line_number: &Rc<Position>,
+        label: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
         if self.loop_labels.is_empty() {
             Err(SemanticError(format!("Break outside loop at {:?}", line_number)))
@@ -186,8 +187,8 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_continue(
         &mut self,
-        line_number: &Position,
-        label: &mut String,
+        line_number: &Rc<Position>,
+        label: &mut Rc<String>,
         is_for: &mut bool,
     ) -> Result<(), CompilerError> {
         if self.loop_labels.is_empty() {
@@ -201,12 +202,12 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_for(
         &mut self,
-        _line_number: &Position,
+        _line_number: &Rc<Position>,
         init: &mut Option<Box<ASTNode>>,
         condition: &mut Option<Box<ASTNode>>,
         increment: &mut Option<Box<ASTNode>>,
         body: &mut Option<Box<ASTNode>>,
-        label: &mut String,
+        label: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
         if let Some(init) = init { // the init adds a scope
             init.accept(self)?;
@@ -231,7 +232,7 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_const(
         &mut self,
-        _line_number: &Position,
+        _line_number: &Rc<Position>,
         _value: &mut Number,
     ) -> Result<(), CompilerError> {
         Ok(())
@@ -239,8 +240,8 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_variable(
         &mut self,
-        line_number: &Position,
-        identifier: &mut String,
+        line_number: &Rc<Position>,
+        identifier: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
         match self.variable_map.get_mut(identifier) {
             None => Err(SemanticError(format!("Undefined variable {} at {:?}", identifier, line_number))),
@@ -249,7 +250,7 @@ impl Visitor for VariableResolutionVisitor {
                     Err(SemanticError(format!("Variable {} at {:?} out of scope", identifier, line_number)))
                 } else {
                     let variable = stack.back().unwrap();
-                    *identifier = self.function.clone() + "::" + identifier + "::" + variable.to_string().as_str();
+                    *identifier = Rc::new(format!("{}::{}::{}", self.function, identifier, variable));
                     Ok(())
                 }
             }
@@ -258,7 +259,7 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_prefix(
         &mut self,
-        _line_number: &Position,
+        _line_number: &Rc<Position>,
         variable: &mut Box<ASTNode>,
         _operator: &mut UnaryOperator,
     ) -> Result<(), CompilerError> {
@@ -267,7 +268,7 @@ impl Visitor for VariableResolutionVisitor {
 
     fn visit_postfix(
         &mut self,
-        _line_number: &Position,
+        _line_number: &Rc<Position>,
         variable: &mut Box<ASTNode>,
         _operator: &mut UnaryOperator,
     ) -> Result<(), CompilerError> {

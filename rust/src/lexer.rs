@@ -32,6 +32,8 @@ pub enum UnaryOperator {
     Decrement,
     LogicalNot,
     BitwiseNot,
+    Negate,
+    UnaryAdd,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -10,6 +10,7 @@ use crate::errors::CompilerError::{SemanticError, SyntaxError};
 use crate::lexer::Symbol::{Ambiguous, Binary};
 use crate::lexer::{BinaryOperator, Keyword, Symbol, Token, UnaryOperator, UnaryOrBinaryOp};
 use std::collections::VecDeque;
+use std::rc::Rc;
 
 macro_rules! expect_token {
     ($parser:expr, $expected_token:expr) => {{
@@ -46,7 +47,7 @@ macro_rules! expect_token {
 pub(crate) struct Parser {
     loop_label_counter: i32,
     tokens: VecDeque<Token>,
-    line_number: Position,
+    line_number: Rc<Position>,
 }
 
 fn get_precedence(op: Symbol) -> i32 {
@@ -78,7 +79,7 @@ impl Parser {
         Parser {
             loop_label_counter: 0,
             tokens: tokens.clone(),
-            line_number: (0, "".to_string()),
+            line_number: Rc::from((0, "".to_string())),
         }
     }
 
@@ -95,7 +96,7 @@ impl Parser {
             }
         };
         self.tokens.pop_front();
-        self.line_number = (0, function_name.clone());
+        self.line_number = Rc::from((0, function_name.clone()));
         let mut function_body = self.make_node(BlockNode { body: Vec::new() });
         expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;
         expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
@@ -117,7 +118,7 @@ impl Parser {
         }
         expect_token!(self, Token::Symbol(Symbol::CloseBrace))?;
         Ok(self.make_node(FunctionNode {
-            identifier: function_name,
+            identifier: Rc::from(function_name),
             body: Some(function_body),
         }))
     }
@@ -139,7 +140,7 @@ impl Parser {
                 self.tokens.pop_front();
                 let expression = self.parse_expression()?;
                 Ok(self.make_node(DeclarationNode {
-                    identifier,
+                    identifier: Rc::from(identifier),
                     expression: Some(expression),
                 }))
             } else {
@@ -150,7 +151,7 @@ impl Parser {
             }
         } else {
             Ok(self.make_node(DeclarationNode {
-                identifier,
+                identifier: Rc::from(identifier),
                 expression: None,
             }))
         }
@@ -194,7 +195,7 @@ impl Parser {
                 expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
                 expression
             }
-            Token::Identifier(identifier) => Ok(self.make_node(VariableNode { identifier })),
+            Token::Identifier(identifier) => Ok(self.make_node(VariableNode { identifier: Rc::from(identifier) })),
             _ => Err(SemanticError(format!(
                 "Unexpected token {:?} at {:?}",
                 token, self.line_number
@@ -204,20 +205,38 @@ impl Parser {
 
     fn parse_unary_or_primary(&mut self) -> Result<Box<ASTNode>, CompilerError> {
         let token = self.peek_token()?;
-        if let Token::Symbol(Symbol::Unary(op)) = token {
-            self.tokens.pop_front();
-            return match op {
-                UnaryOperator::Increment | UnaryOperator::Decrement => {
-                    self.tokens.pop_front();
-                    let expression = self.parse_unary_or_primary()?;
-                    self.parse_increment_decrement(expression, op, true)
-                }
-                _ => {
-                    let expression = self.parse_unary_or_primary()?;
-                    Ok(self.make_node(UnaryNode { op, expression }))
-                }
-            };
+        match token {
+            Token::Symbol(Symbol::Unary(op)) => {
+                self.tokens.pop_front();
+                return match op {
+                    UnaryOperator::Increment | UnaryOperator::Decrement => {
+                        self.tokens.pop_front();
+                        let expression = self.parse_unary_or_primary()?;
+                        self.parse_increment_decrement(expression, op, true)
+                    }
+                    _ => {
+                        let expression = self.parse_unary_or_primary()?;
+                        Ok(self.make_node(UnaryNode { op, expression }))
+                    }
+                };
+            }
+            Token::Symbol(Ambiguous(UnaryOrBinaryOp::Addition)) => {
+                let expression = self.parse_unary_or_primary()?;
+                return Ok(self.make_node(UnaryNode {
+                    op: UnaryOperator::UnaryAdd,
+                    expression,
+                }));
+            }
+            Token::Symbol(Ambiguous(UnaryOrBinaryOp::Subtraction)) => {
+                let expression = self.parse_unary_or_primary()?;
+                return Ok(self.make_node(UnaryNode {
+                    op: UnaryOperator::Negate,
+                    expression,
+                }));
+            }
+            _ => {}
         }
+
         let primary = self.parse_primary()?;
 
         let token = self.peek_token()?;
@@ -405,20 +424,20 @@ impl Parser {
                         Ok(Some(self.make_node(WhileNode {
                             condition,
                             body,
-                            label,
+                            label: Rc::from(label),
                             is_do_while: false,
                         })))
                     }
                     Keyword::Break => {
                         let node = self.make_node(BreakNode {
-                            label: "".to_string(),
+                            label: Rc::from("".to_string()),
                         });
                         self.end_line()?;
                         Ok(Some(node))
                     }
                     Keyword::Continue => {
                         let node = self.make_node(ContinueNode {
-                            label: "".to_string(),
+                            label: Rc::from("".to_string()),
                             is_for: false,
                         });
                         self.end_line()?;
@@ -435,7 +454,7 @@ impl Parser {
                         Ok(Some(self.make_node(WhileNode {
                             condition,
                             body,
-                            label,
+                            label: Rc::from(label),
                             is_do_while: true,
                         })))
                     }
@@ -457,7 +476,7 @@ impl Parser {
                             condition,
                             increment,
                             body,
-                            label,
+                            label: Rc::from(label),
                         })))
                     }
                     _ => Err(SyntaxError(format!(
@@ -512,7 +531,7 @@ impl Parser {
     pub(crate) fn parse_program(&mut self) -> Result<Box<ASTNode>, CompilerError> {
         let function_declaration = self.parse_function_declaration()?;
         Ok(Box::new(ASTNode::new(
-            self.line_number.clone(),
+            Rc::clone(&self.line_number),
             ProgramNode {
                 function_declaration,
             },
@@ -531,7 +550,7 @@ impl Parser {
         let current = self.peek_token()?;
         match current {
             Token::Symbol(Symbol::Semicolon) => {
-                self.line_number.0 += 1;
+                self.line_number = Rc::from((self.line_number.0 + 1, "".to_string()));
                 self.tokens.pop_front();
                 Ok(())
             }
