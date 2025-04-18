@@ -1,8 +1,4 @@
-use crate::ast::ASTNodeType::{
-    AssignmentNode, BinaryNode, BlockNode, BreakNode, ConditionNode, ConstNode, ContinueNode,
-    DeclarationNode, ForNode, PostfixNode, PrefixNode, ProgramNode, ReturnNode, UnaryNode,
-    VariableNode, WhileNode,
-};
+use crate::ast::ASTNodeType::{AssignmentNode, BinaryNode, BlockNode, BreakNode, ConditionNode, ConstNode, ContinueNode, DeclarationNode, ForNode, FunctionNode, PostfixNode, PrefixNode, ProgramNode, ReturnNode, UnaryNode, VariableNode, WhileNode};
 use crate::ast::{ASTNode, ASTNodeType, is_lvalue_node};
 use crate::common::Position;
 use crate::errors::CompilerError;
@@ -82,15 +78,6 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse(&mut self) -> Result<Box<ASTNode>, CompilerError> {
-        Ok(Box::new(ASTNode::new(
-            self.line_number.clone(),
-            ProgramNode {
-                function_declaration: self.parse_program()?,
-            },
-        )))
-    }
-
     fn parse_function_declaration(&mut self) -> Result<Box<ASTNode>, CompilerError> {
         expect_token!(self, Token::Keyword(Keyword::Int))?;
         let current = self.peek_token()?;
@@ -125,7 +112,7 @@ impl Parser {
             next_token = self.peek_token()?;
         }
         expect_token!(self, Token::Symbol(Symbol::CloseBrace))?;
-        Ok(function_body)
+        Ok(self.make_node(FunctionNode {identifier: function_name, body: function_body}))
     }
 
     fn parse_declaration(&mut self) -> Result<Box<ASTNode>, CompilerError> {
@@ -486,7 +473,7 @@ impl Parser {
         }
     }
 
-    fn parse_program(&mut self) -> Result<Box<ASTNode>, CompilerError> {
+    pub(crate) fn parse_program(&mut self) -> Result<Box<ASTNode>, CompilerError> {
         let function_declaration = self.parse_function_declaration()?;
         Ok(Box::new(ASTNode::new(
             self.line_number.clone(),

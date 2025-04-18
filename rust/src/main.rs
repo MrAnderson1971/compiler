@@ -15,7 +15,7 @@ fn main() {
     println!("{:?}", tokens);
     let mut parser = parser::Parser::new(tokens);
 
-    let root = parser.parse();
+    let root = parser.parse_program();
     match root {
         Ok(ast) => println!("{:?}", ast),
         Err(err) => println!("{}", err),
