@@ -28,6 +28,7 @@ fn main() {
                 Ok(_) => {
                     println!("{}", out);
                     println!("{:?}", ast);
+                    println!("{}", out);
                 }
                 Err(err) => println!("{}", err),
             }

@@ -4,10 +4,7 @@ use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{BinaryOperator, Number, UnaryOperator};
 use crate::tac::FunctionBody;
-use crate::tac::TACInstructionType::{
-    BinaryOpInstruction, FunctionInstruction, Jump, JumpIfNotZero, JumpIfZero, Label,
-    ReturnInstruction, StoreValueInstruction, UnaryOpInstruction,
-};
+use crate::tac::TACInstructionType::{AllocateStackInstruction, BinaryOpInstruction, FunctionInstruction, Jump, JumpIfNotZero, JumpIfZero, Label, ReturnInstruction, StoreValueInstruction, UnaryOpInstruction};
 use std::rc::Rc;
 
 pub struct TacVisitor<'a> {
@@ -49,6 +46,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 name: Rc::clone(&identifier),
             },
         );
+        self.body.add_instruction(&line_number, AllocateStackInstruction);
         if let Some(body) = body {
             body.accept(self)
         } else {
