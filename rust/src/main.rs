@@ -5,10 +5,12 @@ mod common;
 mod errors;
 mod lexer;
 mod parser;
+mod variable_resolution;
 
 fn main() {
     let tokens = lex("int main() {\
-    return 0; // entry point\n\
+    int a = 1;\n\
+    return a; // entry point\n\
     }"
     .parse()
     .unwrap());
@@ -17,7 +19,17 @@ fn main() {
 
     let root = parser.parse_program();
     match root {
-        Ok(ast) => println!("{:?}", ast),
+        Ok(mut ast) => {
+            println!("{:?}", ast);
+            let mut out = String::with_capacity(1024);
+            match ast.generate(&mut out) {
+                Ok(_) => {
+                    println!("{}", out);
+                    println!("{:?}", ast);
+                }
+                Err(err) => println!("{}", err),
+            }
+        }
         Err(err) => println!("{}", err),
     }
 }

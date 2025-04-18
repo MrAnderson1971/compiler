@@ -118,7 +118,7 @@ impl Parser {
         expect_token!(self, Token::Symbol(Symbol::CloseBrace))?;
         Ok(self.make_node(FunctionNode {
             identifier: function_name,
-            body: function_body,
+            body: Some(function_body),
         }))
     }
 
@@ -136,6 +136,7 @@ impl Parser {
         };
         if let Token::Symbol(symbol) = self.peek_token()? {
             if let Binary(BinaryOperator::Assign) = symbol {
+                self.tokens.pop_front();
                 let expression = self.parse_expression()?;
                 Ok(self.make_node(DeclarationNode {
                     identifier,
@@ -418,6 +419,7 @@ impl Parser {
                     Keyword::Continue => {
                         let node = self.make_node(ContinueNode {
                             label: "".to_string(),
+                            is_for: false,
                         });
                         self.end_line()?;
                         Ok(Some(node))
