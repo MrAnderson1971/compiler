@@ -2,6 +2,8 @@ use std::rc::Rc;
 use crate::common::Position;
 use crate::errors::CompilerError;
 use crate::lexer::{BinaryOperator, Number, UnaryOperator};
+use crate::tac::FunctionBody;
+use crate::tac_visitor::TacVisitor;
 use crate::variable_resolution::VariableResolutionVisitor;
 
 pub trait Visitor {
@@ -263,14 +265,25 @@ impl ASTNode {
                 function_declaration.generate(out)
             }
             ASTNodeType::FunctionNode { identifier, body } => {
-                let mut variable_resolution_visitor = VariableResolutionVisitor::new(Rc::clone(identifier));
                 if let Some(body) = body.as_mut() {
-                    body.accept(&mut variable_resolution_visitor as &mut dyn Visitor)
-                } else {
-                    Ok(())
-                }
-                // let mut function_body = FunctionBody::new(identifier.clone());
+                    let mut variable_resolution_visitor = VariableResolutionVisitor::new(Rc::clone(identifier));
+                    body.accept(&mut variable_resolution_visitor as &mut dyn Visitor)?;
+                    let mut function_body = FunctionBody::new();
+                    let mut tac_visitor = TacVisitor::new(Rc::clone(identifier), &mut function_body);
+                    body.accept(&mut tac_visitor)?;
 
+                    // Default return statement in the main method
+                    if identifier.as_str() == "main" {
+                        function_body.add_default_return_to_main(&self.line_number);
+                    }
+
+                    println!("{:?}", function_body);
+
+                    // for instruction in function_body.instructions {
+                    //     instruction.make_assembly(&out, &function_body);
+                    // }
+                }
+                Ok(())
             }
             _ => Ok(())
         }
