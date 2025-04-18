@@ -92,3 +92,11 @@ pub fn is_lvalue_node(node: &ASTNodeType) -> bool {
         _ => false,
     }
 }
+
+pub fn extract_base_variable(node: &ASTNodeType) -> Option<String> {
+    match node {
+        ASTNodeType::VariableNode {identifier} => Some(identifier.clone()),
+        ASTNodeType::PrefixNode {variable, ..} => extract_base_variable(&variable.kind),
+        _ => None,
+    }
+}

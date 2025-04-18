@@ -1,5 +1,9 @@
-use crate::ast::ASTNodeType::{AssignmentNode, BinaryNode, BlockNode, BreakNode, ConditionNode, ConstNode, ContinueNode, DeclarationNode, ForNode, FunctionNode, PostfixNode, PrefixNode, ProgramNode, ReturnNode, UnaryNode, VariableNode, WhileNode};
-use crate::ast::{ASTNode, ASTNodeType, is_lvalue_node};
+use crate::ast::ASTNodeType::{
+    AssignmentNode, BinaryNode, BlockNode, BreakNode, ConditionNode, ConstNode, ContinueNode,
+    DeclarationNode, ForNode, FunctionNode, PostfixNode, PrefixNode, ProgramNode, ReturnNode,
+    UnaryNode, VariableNode, WhileNode,
+};
+use crate::ast::{ASTNode, ASTNodeType, extract_base_variable, is_lvalue_node};
 use crate::common::Position;
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::{SemanticError, SyntaxError};
@@ -112,7 +116,10 @@ impl Parser {
             next_token = self.peek_token()?;
         }
         expect_token!(self, Token::Symbol(Symbol::CloseBrace))?;
-        Ok(self.make_node(FunctionNode {identifier: function_name, body: function_body}))
+        Ok(self.make_node(FunctionNode {
+            identifier: function_name,
+            body: function_body,
+        }))
     }
 
     fn parse_declaration(&mut self) -> Result<Box<ASTNode>, CompilerError> {
@@ -285,8 +292,35 @@ impl Parser {
                         }
 
                         _ => {
-                            let right = self.parse_binary_op(get_precedence(symbol) + 1)?;
-                            left = self.make_node(BinaryNode { op, left, right });
+                            if let Token::Symbol(Binary(BinaryOperator::Assign)) =
+                                self.peek_token()?
+                            {
+                                // compound assignment
+                                if is_lvalue_node(&left.kind) {
+                                    self.tokens.pop_front();
+                                    let right = self.parse_binary_op(get_precedence(symbol))?;
+                                    let left_variable = self.make_node(VariableNode {
+                                        identifier: extract_base_variable(&left.kind).unwrap(),
+                                    });
+                                    let binary = self.make_node(BinaryNode {
+                                        op,
+                                        left: left_variable,
+                                        right,
+                                    });
+                                    left = self.make_node(AssignmentNode {
+                                        left,
+                                        right: binary,
+                                    });
+                                } else {
+                                    return Err(SemanticError(format!(
+                                        "Expected lvalue at {:?}",
+                                        self.line_number
+                                    )));
+                                }
+                            } else {
+                                let right = self.parse_binary_op(get_precedence(symbol) + 1)?;
+                                left = self.make_node(BinaryNode { op, left, right });
+                            }
                         }
                     }
                 }
