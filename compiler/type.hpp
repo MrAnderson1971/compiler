@@ -23,9 +23,9 @@ struct PseudoRegister {
 };
 
 template <>
-struct std::formatter<PseudoRegister> : std::formatter<std::string> {
-	auto format(const PseudoRegister& reg, std::format_context& ctx) const {
-		return std::formatter<std::string>::format(std::to_string(-4 * reg.position) + "(%rbp)", ctx);
+struct std::formatter<std::shared_ptr<PseudoRegister>> : std::formatter<std::string> {
+	auto format(const std::shared_ptr<PseudoRegister>& reg, std::format_context& ctx) const {
+		return std::formatter<std::string>::format(std::to_string(-4 * reg->position) + "(%rbp)", ctx);
 	}
 };
 
@@ -34,9 +34,8 @@ inline std::ostream& operator<<(std::ostream& os, const PseudoRegister& reg) {
 }
 
 using Number = unsigned int;
-using Operand = std::variant<PseudoRegister, 
-	Number, // number literal
-	std::nullptr_t
+using Operand = std::variant<std::shared_ptr<PseudoRegister>, 
+	Number // number literal
 >;
 
 enum class Types {
@@ -45,12 +44,18 @@ enum class Types {
 
 using Position = std::pair<int, std::string>; // function name and line number, for error messages
 template<>
-struct std::formatter<Position> : std::formatter<std::string> {
-	auto format(const Position& pos, std::format_context& ctx) const {
-		return std::formatter<std::string>::format(std::format("line {} in {}", pos.first, pos.second), ctx);
+struct std::formatter<std::shared_ptr<Position>> : std::formatter<std::string> {
+	auto format(const std::shared_ptr<Position>& pos, std::format_context& ctx) const {
+		return std::formatter<std::string>::format(std::format("line {} in {}", pos->first, pos->second), ctx);
 	}
 };
 
+template<>
+struct std::formatter<std::shared_ptr<std::string>> : std::formatter<std::string> {
+	auto format(const std::shared_ptr<std::string>& str, std::format_context& ctx) const {
+		return std::formatter<std::string>::format(*str, ctx);
+	}
+};
 
 /*
  Turns all unique_ptr to rvalues. Everything else, does perfect forwarding.

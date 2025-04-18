@@ -19,7 +19,7 @@ public:
 
 	int loopLabelCount;
 	std::deque<Token> tokens;
-	Position lineNumber;
+	std::shared_ptr<Position> lineNumber;
 	GetTokenAndAdvance getTokenAndAdvanceVisitor;
 
 	std::unique_ptr<ASTNode> parseProgram();
@@ -48,10 +48,10 @@ public:
 	Token peekToken();
 	void endLine() {
 		getTokenAndAdvance(Symbol::SEMICOLON);
-		lineNumber.first++;
+		lineNumber = std::make_shared<Position>(lineNumber->first + 1, lineNumber->second);
 	}
 
-	Impl(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()), lineNumber({1, ""}) {
+	Impl(const std::vector<Token>& tokens) : tokens(tokens.begin(), tokens.end()), lineNumber(std::make_shared<Position>(Position{0, ""})) {
 		getTokenAndAdvanceVisitor.tokens = &this->tokens;
 	}
 };
@@ -114,10 +114,10 @@ std::unique_ptr<ASTNode> Parser::Impl::parseProgram() {
 
 std::unique_ptr<ASTNode> Parser::Impl::parseFunctionDeclaration() {
 	getTokenAndAdvance(Keyword::INT);
-	std::string functionName = getTokenAndAdvance<std::string>();
+	auto functionName = std::make_shared<std::string>(getTokenAndAdvance<std::string>());
 	auto function_declaration = make_node<FunctionDefinitionNode>(functionName, make_node<BlockNode>());
 	auto& body = function_declaration->body;
-	lineNumber = {1, function_declaration->identifier}; // reset line number at new function
+	lineNumber = std::make_shared<Position>(Position{1, *function_declaration->identifier}); // reset line number at new function
 	getTokenAndAdvance(Symbol::OPEN_PAREN);
 	getTokenAndAdvance(Symbol::CLOSED_PAREN);
 	getTokenAndAdvance(Symbol::OPEN_BRACE);
@@ -136,7 +136,7 @@ std::unique_ptr<ASTNode> Parser::Impl::parseFunctionDeclaration() {
 
 std::unique_ptr<ASTNode> Parser::Impl::parseDeclaration() {
 	auto declarationNode = make_node<DeclarationNode>();
-	declarationNode->identifier = getTokenAndAdvance<std::string>();
+	declarationNode->identifier = std::make_shared<std::string>(getTokenAndAdvance<std::string>());
 	if (peekToken() == Symbol::EQUALS) {
 		getTokenAndAdvance(Symbol::EQUALS);
 		declarationNode->expression = parseExpression();
@@ -196,7 +196,7 @@ std::unique_ptr<ASTNode> Parser::Impl::parseStatement() {
 			throw syntax_error(std::format("Unexpected else at {}", lineNumber));
 		case Keyword::WHILE:
 		{
-			std::string label = std::to_string(loopLabelCount++);
+			auto label = std::make_shared<std::string>(std::to_string(loopLabelCount++));
 			getTokenAndAdvance(Symbol::OPEN_PAREN);
 			auto expression = parseExpression();
 			getTokenAndAdvance(Symbol::CLOSED_PAREN);
@@ -214,7 +214,7 @@ std::unique_ptr<ASTNode> Parser::Impl::parseStatement() {
 			break;
 		case Keyword::DO:
 		{
-			std::string label = std::to_string(loopLabelCount++);
+			auto label = std::make_shared<std::string>(std::to_string(loopLabelCount++));
 			auto body = parseStatement();
 			getTokenAndAdvance(Keyword::WHILE);
 			getTokenAndAdvance(Symbol::OPEN_PAREN);
@@ -226,7 +226,7 @@ std::unique_ptr<ASTNode> Parser::Impl::parseStatement() {
 		}
 		case Keyword::FOR:
 		{
-			std::string label = std::to_string(loopLabelCount++);
+			auto label = std::make_shared<std::string>(std::to_string(loopLabelCount++));
 			getTokenAndAdvance(Symbol::OPEN_PAREN);
 			auto init = parseBlockItem();
 			auto condition = parseStatement();
@@ -313,7 +313,7 @@ std::unique_ptr<ASTNode> Parser::Impl::parsePrimary() {
 	}
 	if (std::holds_alternative<std::string>(token)) {
 		// variable
-		return make_node<VariableNode>(getTokenAndAdvance<std::string>());
+		return make_node<VariableNode>(std::make_shared<std::string>(getTokenAndAdvance<std::string>()));
 	}
 	throw syntax_error(std::format("Unexpected token {} at {}", peekToken(), lineNumber));
 }

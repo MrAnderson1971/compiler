@@ -16,8 +16,8 @@ std::string OperandToAsm::operator()(const Number n) const {
 	return std::format("${}", n);
 }
 
-std::string OperandToAsm::operator()(const PseudoRegister& reg) const {
-	return std::format("-{}(%rbp)", 4 * reg.position);
+std::string OperandToAsm::operator()(const std::shared_ptr<PseudoRegister>& reg) const {
+	return std::format("-{}(%rbp)", 4 * reg->position);
 }
 
 std::string OperandToAsm::operator()(const std::nullptr_t) const {
@@ -41,7 +41,7 @@ std::string UnaryOpInstruction::print() const {
 		ss << "!";
 		break;
 	}
-	std::visit(OperandPrinter{ ss }, arg);
+	std::visit(OperandPrinter{ ss }, *arg);
 	return ss.str();
 }
 
@@ -49,7 +49,7 @@ void UnaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body)
 	if constexpr (DEBUG) {
 		ss << std::format("; {}\n", print());
 	}
-	ss << std::format("movl {}, %r10d\n", std::visit(operandToAsm, arg));
+	ss << std::format("movl {}, %r10d\n", std::visit(operandToAsm, *arg));
 	ss << std::format("movl %r10d, {}\n", dest);
 	switch (op) {
 	case UnaryOperator::NEGATION:
@@ -71,11 +71,11 @@ void UnaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body)
 std::string BinaryOpInstruction::print() const {
 	std::stringstream ss;
 	ss << dest << " = ";
-	std::visit(OperandPrinter{ ss }, left);
+	std::visit(OperandPrinter{ ss }, *left);
 	ss << " ";
 	ss << tokenPrinter(static_cast<Symbol>(op));
 	ss << " ";
-	std::visit(OperandPrinter{ ss }, right);
+	std::visit(OperandPrinter{ ss }, *right);
 	return ss.str();
 }
 
@@ -83,8 +83,8 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 	if constexpr (DEBUG) {
 		ss << std::format("; {}\n", print());
 	}
-	std::string src1 = std::visit(operandToAsm, left);
-	std::string src2 = std::visit(operandToAsm, right);
+	std::string src1 = std::visit(operandToAsm, *left);
+	std::string src2 = std::visit(operandToAsm, *right);
 	std::string d = operandToAsm(dest);
 
 	bool src2IsImmediate = src2.find('$') != std::string::npos;
@@ -200,8 +200,8 @@ void BinaryOpInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body
 std::string JumpIfZero::print() const {
 	std::stringstream ss;
 	ss << "if ";
-	std::visit(OperandPrinter{ ss }, op);
-	ss << " == 0 goto " << label;
+	std::visit(OperandPrinter{ ss }, *op);
+	ss << " == 0 goto " << *label;
 	return ss.str();
 }
 
@@ -209,7 +209,7 @@ void JumpIfZero::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
 	if constexpr (DEBUG) {
 		ss << std::format("; {}\n", print());
 	}
-	std::string src = std::visit(operandToAsm, op);
+	std::string src = std::visit(operandToAsm, *op);
 	ss << std::format("movl {}, %edx\n", src);
 	ss << "cmpl $0, %edx\n";
 	ss << std::format("je {}\n", label);
@@ -221,8 +221,8 @@ void JumpIfZero::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
 std::string JumpIfNotZero::print() const {
 	std::stringstream ss;
 	ss << "if ";
-	std::visit(OperandPrinter{ ss }, op);
-	ss << " != 0 goto " << label;
+	std::visit(OperandPrinter{ ss }, *op);
+	ss << " != 0 goto " << *label;
 	return ss.str();
 }
 
@@ -230,7 +230,7 @@ void JumpIfNotZero::makeAssembly(std::stringstream& ss, FunctionBody& body) cons
 	if constexpr (DEBUG) {
 		ss << std::format("; {}\n", print());
 	}
-	std::string src = std::visit(operandToAsm, op);
+	std::string src = std::visit(operandToAsm, *op);
 	ss << std::format("movl {}, %edx\n", src);
 	ss << "cmpl $0, %edx\n";
 	ss << std::format("jne {}\n", label);
@@ -240,25 +240,25 @@ void JumpIfNotZero::makeAssembly(std::stringstream& ss, FunctionBody& body) cons
 }
 
 std::string Jump::print() const {
-	return "goto " + label;
+	return "goto " + *label;
 }
 
 void Jump::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
-	ss << "jmp " << label << "\n";
+	ss << "jmp " << *label << "\n";
 }
 
 std::string Label::print() const {
-	return label + ":";
+	return *label + ":";
 }
 
 void Label::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
-	ss << label << ":\n";
+	ss << *label << ":\n";
 }
 
 std::string StoreValueInstruction::print() const {
 	std::stringstream ss;
 	ss << dest << " = ";
-	std::visit(OperandPrinter{ ss }, val);
+	std::visit(OperandPrinter{ ss }, *val);
 	return ss.str();
 }
 
@@ -266,7 +266,7 @@ void StoreValueInstruction::makeAssembly(std::stringstream& ss, FunctionBody& bo
 	if constexpr (DEBUG) {
 		ss << std::format("; {}\n", print());
 	}
-	if (std::holds_alternative<PseudoRegister>(val)) {
+	if (std::holds_alternative<std::shared_ptr<PseudoRegister>>(*val)) {
 		ss << std::format("movl {}, %r10d\n", val);
 		ss << std::format("movl %r10d, {}\n", dest);
 	} else {
@@ -280,7 +280,7 @@ void StoreValueInstruction::makeAssembly(std::stringstream& ss, FunctionBody& bo
 std::string ReturnInstruction::print() const {
 	std::stringstream ss;
 	ss << "return ";
-	std::visit(OperandPrinter{ ss }, val);
+	std::visit(OperandPrinter{ ss }, *val);
 	return ss.str();
 }
 
@@ -299,8 +299,8 @@ std::string FunctionInstruction::print() const {
 }
 
 void FunctionInstruction::makeAssembly(std::stringstream& ss, FunctionBody& body) const {
-	ss << ".global " << name << "\n" 
-		<< name << ":\n"
+	ss << ".global " << *name << "\n" 
+		<< *name << ":\n"
 	<< "pushq %rbp\n"
 		<< "movq %rsp, %rbp\n";
 }
