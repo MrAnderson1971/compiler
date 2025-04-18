@@ -21,7 +21,7 @@ struct CodeContext {
 
 // Base node class
 struct ASTNode {
-    Position lineNumber;
+    std::shared_ptr<Position> lineNumber;
     virtual ~ASTNode() = default;
 
     // Single visitor pattern method

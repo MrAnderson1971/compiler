@@ -18,8 +18,8 @@ void TacVisitor::visitFunctionDefinition(FunctionDefinitionNode* const node) {
 }
 
 void TacVisitor::visitDeclaration(DeclarationNode* const node) {
-    PseudoRegister pseudoRegister{ body.name, body.variableCount };
-    body.variableToPseudoregister[node->identifier] = pseudoRegister;
+    auto pseudoRegister = std::make_shared<PseudoRegister>(PseudoRegister{ *body.name, body.variableCount });
+    body.variableToPseudoregister[*node->identifier] = pseudoRegister;
     if (node->expression) {
         node->expression->accept(*this);
         body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, pseudoRegister, result);
@@ -29,10 +29,10 @@ void TacVisitor::visitDeclaration(DeclarationNode* const node) {
 
 void TacVisitor::visitAssignment(AssignmentNode* const node) {
     node->right->accept(*this);
-    Operand src = result;
+    std::shared_ptr<Operand> src = result;
     try {
         node->left->accept(*this);
-        PseudoRegister variable = std::get<PseudoRegister>(result);
+        auto variable = std::get<std::shared_ptr<PseudoRegister>>(*result);
         //node->right->accept(*this);
         //Operand src = result;
         body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, variable, src);
@@ -42,7 +42,7 @@ void TacVisitor::visitAssignment(AssignmentNode* const node) {
 }
 
 void TacVisitor::visitReturn(ReturnNode* const node) {
-    Operand dest = nullptr;
+    std::shared_ptr<Operand> dest = nullptr;
     if (node->expression) {
         node->expression->accept(*this);
         dest = result;
@@ -56,101 +56,101 @@ void TacVisitor::visitUnary(UnaryNode* const node) {
     if (node->op == UnaryOperator::UNARY_ADD) { // if unary add do nothing
         return;
     }
-    Operand src = result;
-    PseudoRegister dest = body.emplaceInstruction<UnaryOpInstruction>(node->lineNumber, node->op, src);
+    std::shared_ptr<Operand> src = result;
+    auto dest = body.emplaceInstruction<UnaryOpInstruction>(node->lineNumber, node->op, src);
     body.variableCount++;
-    result = dest;
+    result = std::make_shared<Operand>(dest);
 }
 
 void TacVisitor::visitBinary(BinaryNode* const node) {
     if (node->op == BinaryOperator::LOGICAL_AND) {
-        std::string falseLabel = std::format(".{}{}_false", body.name, ++body.labelCount);
-        std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
+        auto falseLabel = std::make_shared<std::string>(std::format(".{}{}_false", body.name, ++body.labelCount));
+        auto endLabel = std::make_shared<std::string>(std::format(".{}{}_end", body.name, ++body.labelCount));
 
         // Short-circuiting
         node->left->accept(*this);
-        Operand leftOperand = result;
+        auto leftOperand = result;
         body.emplaceInstruction<JumpIfZero>(node->lineNumber, leftOperand, falseLabel); // goto false label
 
         node->right->accept(*this);
-        Operand rightOperand = result;
+        auto rightOperand = result;
         body.emplaceInstruction<JumpIfZero>(node->lineNumber, rightOperand, falseLabel);
 
-        PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, static_cast<Number>(1));
+        auto dest = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, std::make_shared<Operand>(static_cast<Number>(1)));
         body.emplaceInstruction<Jump>(node->lineNumber, endLabel); // goto end
 
         body.emplaceInstruction<Label>(node->lineNumber, falseLabel); // false label
-        dest = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, static_cast<Number>(0));
+        dest = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, std::make_shared<Operand>(static_cast<Number>(0)));
 
         body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
         body.variableCount++;
-        result = dest;
+        result = std::make_shared<Operand>(dest);
         return;
     }
 
     if (node->op == BinaryOperator::LOGICAL_OR) {
-        std::string trueLabel = std::format(".{}{}_true", body.name, ++body.labelCount);
-        std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
+        auto trueLabel = std::make_shared<std::string>(std::format(".{}{}_true", body.name, ++body.labelCount));
+        auto endLabel = std::make_shared<std::string>(std::format(".{}{}_end", body.name, ++body.labelCount));
 
         // Short-circuiting
         node->left->accept(*this);
-        Operand leftOperand = result;
+        auto leftOperand = result;
         body.emplaceInstruction<JumpIfNotZero>(node->lineNumber, leftOperand, trueLabel); // goto true label
 
         node->right->accept(*this);
-        Operand rightOperand = result;
+        auto rightOperand = result;
         body.emplaceInstruction<JumpIfNotZero>(node->lineNumber, rightOperand, trueLabel);
 
-        PseudoRegister dest = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, static_cast<Number>(0));
+        auto dest = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, std::make_shared<Operand>(static_cast<Number>(0)));
         body.emplaceInstruction<Jump>(node->lineNumber, endLabel); // goto end
 
         body.emplaceInstruction<Label>(node->lineNumber, trueLabel); // true label
-        dest = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, static_cast<Number>(1));
+        dest = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, std::make_shared<Operand>(static_cast<Number>(1)));
 
         body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
         body.variableCount++;
-        result = dest;
+        result = std::make_shared<Operand>(dest);
         return;
     }
 
     node->left->accept(*this);
-    Operand leftOperand = result;
+    auto leftOperand = result;
 
     node->right->accept(*this);
-    Operand rightOperand = result;
+    auto rightOperand = result;
 
-    PseudoRegister dest = body.emplaceInstruction<BinaryOpInstruction>(node->lineNumber, node->op, leftOperand, rightOperand);
+    auto dest = body.emplaceInstruction<BinaryOpInstruction>(node->lineNumber, node->op, leftOperand, rightOperand);
     body.variableCount++;
-    result = dest;
+    result = std::make_shared<Operand>(dest);
 }
 
 void TacVisitor::visitConst(ConstNode* const node) {
-    result = node->value;
+    result = std::make_shared<Operand>(node->value);
 }
 
 void TacVisitor::visitVariable(VariableNode* const node) {
-    if (!body.variableToPseudoregister.contains(node->identifier)) {
+    if (!body.variableToPseudoregister.contains(*node->identifier)) {
         throw semantic_error(std::format("Undeclared variable {} at {}", node->identifier, node->lineNumber));
     }
-    result = body.variableToPseudoregister[node->identifier];
+    result = std::make_shared<Operand>(body.variableToPseudoregister[*node->identifier]);
 }
 
 void TacVisitor::visitPostfix(PostfixNode* const node) {
     node->variable->accept(*this); // get variable
-    PseudoRegister variable = std::get<PseudoRegister>(result); // save variable
-    PseudoRegister temp1 = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, result); // temp1 = a
+    auto variable = result; // save variable
+    auto temp1 = body.emplaceInstruction<StoreValueInstruction>(node->lineNumber, result); // temp1 = a
     body.variableCount++;
-    PseudoRegister temp2 = body.emplaceInstruction<BinaryOpInstruction>(node->lineNumber, node->op,
-        variable, static_cast<unsigned int>(1)); // t2 = a + 1
+    auto temp2 = body.emplaceInstruction<BinaryOpInstruction>(node->lineNumber, node->op,
+        variable, std::make_shared<Operand>(static_cast<Number>(1))); // t2 = a + 1
     ++body.variableCount;
-    body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, variable, temp2); // a = t2
-    result = temp1;
+    body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, std::get<std::shared_ptr<PseudoRegister>>(*variable), std::make_shared<Operand>(temp2)); // a = t2
+    result = std::make_shared<Operand>(temp1);
 }
 
 void TacVisitor::visitPrefix(PrefixNode* const node) {
     node->variable->accept(*this);
-    PseudoRegister variable = std::get<PseudoRegister>(result);
-    body.emplaceInstructionWithDestination<BinaryOpInstruction>(node->lineNumber, variable, node->op, variable, static_cast<unsigned int>(1));
+    auto variable = result;
+    body.emplaceInstructionWithDestination<BinaryOpInstruction>(node->lineNumber, std::get<std::shared_ptr<PseudoRegister>>(*variable), node->op, variable, std::make_shared<Operand>(static_cast<Number>(1)));
     body.variableCount++;
 }
 
@@ -164,10 +164,10 @@ Label(end)
 void TacVisitor::visitCondition(ConditionNode* const node) {
     if (node->isTernary) {
         node->condition->accept(*this);
-        Operand condition = result;
-        std::string elseLabel = std::format(".{}{}_else", body.name, ++body.labelCount);
-        std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
-        PseudoRegister dest = { body.name, body.variableCount++ };
+        auto condition = result;
+        auto elseLabel = std::make_shared<std::string>(std::format(".{}{}_else", body.name, ++body.labelCount));
+        auto endLabel = std::make_shared<std::string>(std::format(".{}{}_end", body.name, ++body.labelCount));
+        auto dest = std::make_shared<PseudoRegister>(PseudoRegister{ *body.name, body.variableCount++ });
         body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, elseLabel); // if false goto else
         node->ifTrue->accept(*this);
         body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, dest, result);
@@ -176,20 +176,20 @@ void TacVisitor::visitCondition(ConditionNode* const node) {
         node->ifFalse->accept(*this);
         body.emplaceInstructionWithDestination<StoreValueInstruction>(node->lineNumber, dest, result);
         body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
-        result = dest;
+        result = std::make_shared<Operand>(dest);
     } else if (node->ifFalse == nullptr) {
 		node->condition->accept(*this);
-		Operand condition = result;
-		std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
+		auto condition = result;
+		auto endLabel = std::make_shared<std::string>(std::format(".{}{}_end", body.name, ++body.labelCount));
 		body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, endLabel); // if false goto end
 		node->ifTrue->accept(*this);
 		body.emplaceInstruction<Label>(node->lineNumber, endLabel); // end
         result = nullptr;
     } else {
 		node->condition->accept(*this);
-		Operand condition = result;
-		std::string elseLabel = std::format(".{}{}_else", body.name, ++body.labelCount);
-		std::string endLabel = std::format(".{}{}_end", body.name, ++body.labelCount);
+		auto condition = result;
+		auto elseLabel = std::make_shared<std::string>(std::format(".{}{}_else", body.name, ++body.labelCount));
+		auto endLabel = std::make_shared<std::string>(std::format(".{}{}_end", body.name, ++body.labelCount));
 		body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, elseLabel); // if false goto else
 		node->ifTrue->accept(*this);
 		body.emplaceInstruction<Jump>(node->lineNumber, endLabel); // goto end
@@ -216,11 +216,11 @@ JumpIfZero(v, end)
 Label(end)
  */
 void TacVisitor::visitWhile(WhileNode* const node) {
-	std::string startLabel = std::format(".{}{}_start.loop", body.name, node->label);
-	std::string endLabel = std::format(".{}{}_end.loop", body.name, node->label);
+	auto startLabel = std::make_shared<std::string>(std::format(".{}{}_start.loop", body.name, node->label));
+	auto endLabel = std::make_shared<std::string>(std::format(".{}{}_end.loop", body.name, node->label));
 	body.emplaceInstruction<Label>(node->lineNumber, startLabel); // start
 	node->condition->accept(*this);
-	Operand condition = result;
+	auto condition = result;
 	body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, endLabel); // if false goto end
     if (node->body) {
         node->body->accept(*this);
@@ -231,28 +231,28 @@ void TacVisitor::visitWhile(WhileNode* const node) {
 }
 
 void TacVisitor::visitBreak(BreakNode* const node) {
-	body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_end.loop", body.name, node->label));
+	body.emplaceInstruction<Jump>(node->lineNumber, std::make_shared<std::string>(std::format(".{}{}_end.loop", body.name, node->label)));
 }
 
 void TacVisitor::visitContinue(ContinueNode* const node) {
 	if (node->isFor) {
-		body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_increment.loop", body.name, node->label));
+		body.emplaceInstruction<Jump>(node->lineNumber, std::make_shared<std::string>(std::format(".{}{}_increment.loop", body.name, node->label)));
 	} else {
-		body.emplaceInstruction<Jump>(node->lineNumber, std::format(".{}{}_start.loop", body.name, node->label));
+		body.emplaceInstruction<Jump>(node->lineNumber, std::make_shared<std::string>(std::format(".{}{}_start.loop", body.name, node->label)));
 	}
 }
 
 void TacVisitor::visitFor(ForNode* const node) {
-	std::string startLabel = std::format(".{}{}_start.loop", body.name, node->label);
-	std::string endLabel = std::format(".{}{}_end.loop", body.name, node->label);
-	std::string incrementLabel = std::format(".{}{}_increment.loop", body.name, node->label);
+	auto startLabel = std::make_shared<std::string>(std::format(".{}{}_start.loop", body.name, node->label));
+	auto endLabel = std::make_shared<std::string>(std::format(".{}{}_end.loop", body.name, node->label));
+	auto incrementLabel = std::make_shared<std::string>(std::format(".{}{}_increment.loop", body.name, node->label));
 	if (node->init) {
 		node->init->accept(*this);
 	}
 	body.emplaceInstruction<Label>(node->lineNumber, startLabel); // start
 	if (node->condition) {
 		node->condition->accept(*this);
-		Operand condition = result;
+		auto condition = result;
 		body.emplaceInstruction<JumpIfZero>(node->lineNumber, condition, endLabel); // if false goto end
 	}
 	if (node->body) {

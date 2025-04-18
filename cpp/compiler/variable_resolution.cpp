@@ -23,20 +23,20 @@ void VariableResolutionVisitor::visitFunctionDefinition(FunctionDefinitionNode* 
  4 return Declaration(unique_name, init)
  */
 void VariableResolutionVisitor::visitDeclaration(DeclarationNode* const node) {
-    if (!variableMap.contains(node->identifier)) {
-		std::stack<Variable> stack;
-        stack.emplace(function, node->identifier, layer);
-		variableMap[node->identifier] = std::move(stack);
+    if (!variableMap.contains(*node->identifier)) {
+		std::stack<int> stack;
+        stack.emplace(layer);
+		variableMap[*node->identifier] = std::move(stack);
 	} else {
-		auto& stack = variableMap[node->identifier];
+		auto& stack = variableMap[*node->identifier];
 
-		if (!stack.empty() && stack.top().layer == layer) {
+		if (!stack.empty() && stack.top() == layer) {
 			throw semantic_error(std::format("Duplicate variable declaration {} at {}", node->identifier, node->lineNumber));
 		}
 
-		stack.emplace(function, node->identifier, layer);
+		stack.emplace(layer);
 	}
-	node->identifier = function + "::" + node->identifier + "::" + std::to_string(layer);
+	node->identifier = std::make_shared<std::string>(*function + "::" + *node->identifier + "::" + std::to_string(layer));
 	if (node->expression) {
 		node->expression->accept(*this);
 	}
@@ -77,14 +77,14 @@ void VariableResolutionVisitor::visitBinary(BinaryNode* const node) {
 }
 
 void VariableResolutionVisitor::visitVariable(VariableNode* const node) {
-    if (!variableMap.contains(node->identifier)) {
+    if (!variableMap.contains(*node->identifier)) {
         throw semantic_error(std::format("Undeclared variable {} at {}", node->identifier, node->lineNumber));
     }
-	if (variableMap[node->identifier].empty()) {
+	if (variableMap[*node->identifier].empty()) {
 		throw semantic_error(std::format("Variable {} at {} out of scope", node->identifier, node->lineNumber));
 	}
-	auto& variable = variableMap[node->identifier].top();
-	node->identifier = variable.function + "::" + variable.name + "::" + std::to_string(variable.layer);
+	auto& variable = variableMap[*node->identifier].top();
+	node->identifier = std::make_shared<std::string>(*function + "::" + *node->identifier + "::" + std::to_string(variable));
 }
 
 void VariableResolutionVisitor::visitPostfix(PostfixNode* const node) {
@@ -110,7 +110,7 @@ void VariableResolutionVisitor::visitBlock(BlockNode* const node) {
 	}
 
 	for (auto& stack : variableMap | std::views::values) {
-		if (!stack.empty() && stack.top().layer == layer) {
+		if (!stack.empty() && stack.top() == layer) {
 			stack.pop();
 		}
 	}
@@ -161,7 +161,7 @@ void VariableResolutionVisitor::visitFor(ForNode* const node) {
 	loopLabels.pop();
 	if (node->init) {
 		for (auto& stack : variableMap | std::views::values) {
-			if (!stack.empty() && stack.top().layer == layer) {
+			if (!stack.empty() && stack.top() == layer) {
 				stack.pop();
 			}
 		}

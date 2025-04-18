@@ -2,20 +2,10 @@
 #include "ast_nodes.hpp"
 #include <stack>
 
-struct Variable {
-    std::string function;
-    std::string name;
-    int layer;
-};
-
-inline std::ostream& operator<<(std::ostream& os, const Variable& variable) {
-	return os << variable.name << "::" << variable.layer;
-}
-
 // Variable resolution visitor
 class VariableResolutionVisitor : public FullVisitor {
 public:
-    VariableResolutionVisitor(const std::string& function) : counter(0), layer(0), function(function) {}
+    VariableResolutionVisitor(const std::shared_ptr<std::string>& function) : counter(0), layer(0), function(function) {}
 
     void visitProgram(ProgramNode* const node) override;
     void visitFunctionDefinition(FunctionDefinitionNode* const node) override;
@@ -38,7 +28,7 @@ public:
 private:
     int counter;
     int layer;
-    std::string function;
-    std::unordered_map<std::string, std::stack<Variable>> variableMap;
-	std::stack<std::pair<std::string, bool>> loopLabels;
+    std::shared_ptr<std::string> function;
+    std::unordered_map<std::string, std::stack<int>> variableMap;
+	std::stack<std::pair<std::shared_ptr<std::string>, bool>> loopLabels;
 };

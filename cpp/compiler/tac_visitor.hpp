@@ -25,5 +25,5 @@ public:
 
 private:
     FunctionBody& body;
-    Operand result;
+    std::shared_ptr<Operand> result;
 };

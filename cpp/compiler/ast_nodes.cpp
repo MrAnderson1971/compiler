@@ -56,11 +56,11 @@ void PrintVisitor::visitFor(ForNode* const node) {
 }
 
 void PrintVisitor::visitBreak(BreakNode* const node) {
-	os << getIndent() << "BREAK NODE " << node->label << "\n";
+	os << getIndent() << "BREAK NODE " << *node->label << "\n";
 }
 
 void PrintVisitor::visitContinue(ContinueNode* const node) {
-	os << getIndent() << "CONTINUE NODE " << node->label << "\n";
+	os << getIndent() << "CONTINUE NODE " << *node->label << "\n";
 }
 
 void PrintVisitor::visitCondition(ConditionNode* const node) {
@@ -91,7 +91,7 @@ void PrintVisitor::visitBlock(BlockNode* const node) {
 }
 
 void PrintVisitor::visitWhile(WhileNode* const node) {
-	os << getIndent() << "WHILE NODE " << node->label << "\n";
+	os << getIndent() << "WHILE NODE " << *node->label << "\n";
 	increaseIndent();
 	os << getIndent() << "CONDITION\n";
 	node->condition->accept(*this);
@@ -129,8 +129,8 @@ void FunctionDefinitionNode::generate(const CodeContext& context) {
 
     TacVisitor visitor(body);
     accept(visitor);
-    if (!dynamic_cast<ReturnInstruction*>(body.instructions.back().get()) && body.name == "main") { // Default return statement in main method
-        body.emplaceInstruction<ReturnInstruction>(lineNumber, static_cast<unsigned int>(0));
+    if (!dynamic_cast<ReturnInstruction*>(body.instructions.back().get()) && *body.name == "main") { // Default return statement in main method
+        body.emplaceInstruction<ReturnInstruction>(lineNumber, std::make_shared<Operand>(static_cast<Number>(0)));
     }
 
     std::stringstream ss;
@@ -171,7 +171,7 @@ void PrintVisitor::visitProgram(ProgramNode* const node) {
 }
 
 void PrintVisitor::visitFunctionDefinition(FunctionDefinitionNode* const node) {
-    os << getIndent() << "FUNCTION DECLARATION NODE: " << node->identifier << '\n';
+    os << getIndent() << "FUNCTION DECLARATION NODE: " << *node->identifier << '\n';
     increaseIndent();
     if (node->body) {
 		node->body->accept(*this);
@@ -180,7 +180,7 @@ void PrintVisitor::visitFunctionDefinition(FunctionDefinitionNode* const node) {
 }
 
 void PrintVisitor::visitDeclaration(DeclarationNode* const node) {
-    os << getIndent() << "DECLARATION NODE: " << node->identifier << '\n';
+    os << getIndent() << "DECLARATION NODE: " << *node->identifier << '\n';
     if (node->expression) {
         increaseIndent();
         node->expression->accept(*this);
@@ -241,7 +241,7 @@ void PrintVisitor::visitConst(ConstNode* const node) {
 }
 
 void PrintVisitor::visitVariable(VariableNode* const node) {
-    os << getIndent() << "VARIABLE NODE: " << node->identifier << '\n';
+    os << getIndent() << "VARIABLE NODE: " << *node->identifier << '\n';
 }
 
 void PrintVisitor::visitPostfix(PostfixNode* const node) {

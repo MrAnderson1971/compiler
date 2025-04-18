@@ -45,10 +45,10 @@ public:
 
 // Function definition node
 struct FunctionDefinitionNode : public ASTNode {
-    std::string identifier;
+    std::shared_ptr<std::string> identifier;
     std::unique_ptr<BlockNode> body;
 
-	FunctionDefinitionNode(const std::string& identifier, std::unique_ptr<BlockNode> body)
+	FunctionDefinitionNode(const std::shared_ptr<std::string>& identifier, std::unique_ptr<BlockNode> body)
 		: identifier(identifier), body(std::move(body)) {
 	}
 
@@ -68,7 +68,7 @@ struct BlockNode : public ASTNode {
 
 // Variable declaration node
 struct DeclarationNode : public ASTNode {
-    std::string identifier;
+    std::shared_ptr<std::string> identifier;
     std::unique_ptr<ASTNode> expression;
 
     void accept(Visitor& visitor) override {
@@ -130,9 +130,9 @@ struct LvalueNode : public ASTNode {
 
 // Variable reference node
 struct VariableNode : public LvalueNode {
-    std::string identifier;
+    std::shared_ptr<std::string> identifier;
 
-    explicit VariableNode(const std::string& identifier) : identifier(identifier) {}
+    explicit VariableNode(const std::shared_ptr<std::string>& identifier) : identifier(identifier) {}
 
     void accept(Visitor& visitor) override {
         static_cast<FullVisitor&>(visitor).visitVariable(this);
@@ -196,9 +196,9 @@ struct ConditionNode : public ASTNode {
 struct WhileNode : public ASTNode {
 	std::unique_ptr<ASTNode> condition;
 	std::unique_ptr<ASTNode> body;
-    std::string label;
+    std::shared_ptr<std::string> label;
 	bool isDoWhile;
-	WhileNode(std::unique_ptr<ASTNode> condition, std::unique_ptr<ASTNode> block, const std::string& label, bool isDoWhile)
+	WhileNode(std::unique_ptr<ASTNode> condition, std::unique_ptr<ASTNode> block, const std::shared_ptr<std::string>& label, bool isDoWhile)
 		: condition(std::move(condition)), body(std::move(block)), label(label), isDoWhile(isDoWhile) {
 	}
 	void accept(Visitor& visitor) override {
@@ -207,17 +207,17 @@ struct WhileNode : public ASTNode {
 };
 
 struct BreakNode : public ASTNode {
-	std::string label;
-	BreakNode() = default;
+	std::shared_ptr<std::string> label;
+	BreakNode() : label(std::make_shared<std::string>("")) {}
 	void accept(Visitor& visitor) override {
 		static_cast<FullVisitor&>(visitor).visitBreak(this);
 	}
 };
 
 struct ContinueNode : public ASTNode {
-	std::string label;
+	std::shared_ptr<std::string> label;
 	bool isFor;
-	ContinueNode() = default;
+	ContinueNode() : label(std::make_shared<std::string>("")), isFor(false) {}
 	void accept(Visitor& visitor) override {
 		static_cast<FullVisitor&>(visitor).visitContinue(this);
 	}
@@ -228,8 +228,8 @@ struct ForNode : public ASTNode {
 	std::unique_ptr<ASTNode> condition;
 	std::unique_ptr<ASTNode> increment;
 	std::unique_ptr<ASTNode> body;
-	std::string label;
-	ForNode(std::unique_ptr<ASTNode> init, std::unique_ptr<ASTNode> condition, std::unique_ptr<ASTNode> increment, std::unique_ptr<ASTNode> block, const std::string& label)
+	std::shared_ptr<std::string> label;
+	ForNode(std::unique_ptr<ASTNode> init, std::unique_ptr<ASTNode> condition, std::unique_ptr<ASTNode> increment, std::unique_ptr<ASTNode> block, const std::shared_ptr<std::string>& label)
 		: init(std::move(init)), condition(std::move(condition)), increment(std::move(increment)), body(std::move(block)), label(label) {
 	}
 	void accept(Visitor& visitor) override {
