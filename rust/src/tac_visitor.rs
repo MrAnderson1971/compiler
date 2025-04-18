@@ -186,13 +186,13 @@ impl<'a> Visitor for TacVisitor<'a> {
         match op {
             BinaryOperator::LogicalAnd => {
                 let false_label: Rc<String> =
-                    Rc::from(format!("{}{}_false", self.name, self.label_count));
+                    Rc::from(format!(".{}{}_false", self.name, self.label_count));
                 self.label_count += 1;
                 let end_label: Rc<String> =
-                    Rc::from(format!("{}{}_end", self.name, self.label_count));
+                    Rc::from(format!(".{}{}_end", self.name, self.label_count));
                 self.label_count += 1;
 
-                // Short circuiting
+                // Short-circuiting
                 left.accept(self)?;
                 let left_operand = Rc::clone(&self.result);
                 self.body.add_instruction(
@@ -258,11 +258,11 @@ impl<'a> Visitor for TacVisitor<'a> {
             }
             BinaryOperator::LogicalOr => {
                 let true_label: Rc<String> =
-                    Rc::from(format!(".{}{}_true", self.name, self.body.variable_count));
-                self.body.variable_count += 1;
+                    Rc::from(format!(".{}{}_true", self.name, self.label_count));
+                self.label_count += 1;
                 let end_label: Rc<String> =
-                    Rc::from(format!(".{}{}_end", self.name, self.body.variable_count));
-                self.body.variable_count += 1;
+                    Rc::from(format!(".{}{}_end", self.name, self.label_count));
+                self.label_count += 1;
 
                 left.accept(self)?;
                 let left_operand = Rc::clone(&self.result);
@@ -733,6 +733,7 @@ impl<'a> Visitor for TacVisitor<'a> {
             self.body.variable_count,
         ));
         self.body.variable_count += 1;
+        self.body.add_instruction(&line_number, StoreValueInstruction {dest: Rc::clone(&temp1), src: Rc::clone(&self.result)});
         self.body.add_instruction(
             &line_number,
             BinaryOpInstruction {
