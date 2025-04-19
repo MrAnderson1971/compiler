@@ -465,6 +465,7 @@ impl Parser {
                         expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;
                         let condition = self.parse_binary_op(0)?;
                         expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
+                        self.end_line()?;
                         Ok(Some(self.make_node(WhileNode {
                             condition,
                             body,

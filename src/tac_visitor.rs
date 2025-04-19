@@ -404,9 +404,9 @@ impl<'a> Visitor for TacVisitor<'a> {
         label: &mut Rc<String>,
         is_do_while: &mut bool,
     ) -> Result<(), CompilerError> {
+        let start_label: Rc<String> = Rc::from(format!(".{}{}_start.loop", self.name, label));
+        let end_label: Rc<String> = Rc::from(format!(".{}{}_end.loop", self.name, label));
         if !*is_do_while {
-            let start_label: Rc<String> = Rc::from(format!(".{}{}_start.loop", self.name, label));
-            let end_label: Rc<String> = Rc::from(format!(".{}{}_end.loop", self.name, label));
             self.body.add_instruction(
                 // start
                 Label {
@@ -429,10 +429,26 @@ impl<'a> Visitor for TacVisitor<'a> {
                 label: Rc::clone(&end_label),
             }); // end
             self.result = Rc::from(Operand::None);
-            Ok(())
         } else {
-            todo!()
+            self.body.add_instruction(Label {
+                label: Rc::clone(&start_label),
+            }); // start
+            if let Some(body) = body {
+                body.accept(self)?;
+            }
+            condition.accept(self)?;
+            self.body.add_instruction(JumpIfZero {
+                label: Rc::clone(&end_label),
+                operand: Rc::clone(&self.result)
+            }); // if false goto end
+            self.body.add_instruction(Jump {
+                label: Rc::clone(&start_label),
+            }); // goto start
+            self.body.add_instruction(Label {
+                label: Rc::clone(&end_label),
+            });
         }
+        Ok(())
     }
 
     fn visit_break(
