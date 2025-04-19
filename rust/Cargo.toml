@@ -15,4 +15,4 @@ winapi = { version = "0.3", features = [
 uuid = { version = "1.16.0", features = ["v4"] }
 
 [dev-dependencies]
-rstest = "0.18"
+rstest = "0.25.0"

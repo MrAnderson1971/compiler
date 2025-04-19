@@ -1,9 +1,10 @@
 // tests/test_binary.rs
 mod simulator;
 
+use crate::simulator::expect_death;
+use compiler::CompilerError;
 use rstest::*;
 use simulator::{CompilerTest, harness};
-use compiler::CompilerError;
 
 #[rstest]
 fn test_addition(mut harness: CompilerTest) {
@@ -97,27 +98,24 @@ fn test_complicated(mut harness: CompilerTest) {
     let source = r#"int main() {
     return ((42 * 3) - (15 / 5) % 4 + (7 << 2)) & ~(255 - 128) | ((16 >> 2) ^ 10);
 }"#;
-    harness.assert_runs_ok(source, ((42 * 3) - (15 / 5) % 4 + (7 << 2)) & !(255 - 128) | ((16 >> 2) ^ 10));
+    harness.assert_runs_ok(
+        source,
+        ((42 * 3) - (15 / 5) % 4 + (7 << 2)) & !(255 - 128) | ((16 >> 2) ^ 10),
+    );
 }
 
 #[rstest]
-fn test_divide_by_zero(mut harness: CompilerTest) {
+fn test_divide_by_zero() {
     let source = r#"int main() {
-    return 1/0;
-}"#;
-    match compiler::compile(source.to_string()) {
-        Ok(asm) => harness.assert_asm_execution_fails(&asm),
-        Err(e) => panic!("Compilation failed unexpectedly when testing divide by zero: {}", e),
-    }
+    return 1 / 0;
+    }"#;
+    expect_death(source);
 }
 
 #[rstest]
-fn test_mod_by_zero(mut harness: CompilerTest) {
+fn test_mod_by_zero() {
     let source = r#"int main() {
     return 1 % 0;
 }"#;
-    match compiler::compile(source.to_string()) {
-        Ok(asm) => harness.assert_asm_execution_fails(&asm),
-        Err(e) => panic!("Compilation failed unexpectedly when testing modulo by zero: {}", e),
-    }
+    expect_death(source);
 }
