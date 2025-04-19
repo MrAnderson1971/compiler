@@ -163,13 +163,15 @@ impl Visitor for VariableResolutionVisitor {
         _line_number: &Rc<Position>,
         condition: &mut Box<ASTNode>,
         body: &mut Option<Box<ASTNode>>,
-        _label: &mut Rc<String>,
+        label: &mut Rc<String>,
         _is_do_while: &mut bool,
     ) -> Result<(), CompilerError> {
+        self.loop_labels.push_back((Rc::clone(&label), false));
         condition.accept(self)?;
         if let Some(body) = body {
             body.accept(self)?;
         }
+        self.loop_labels.pop_back();
         Ok(())
     }
 
@@ -211,6 +213,7 @@ impl Visitor for VariableResolutionVisitor {
         label: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
         if let Some(init) = init { // the init adds a scope
+            self.layer += 1;
             init.accept(self)?;
         }
         self.loop_labels.push_back((Rc::clone(&label), true));
