@@ -1,23 +1,23 @@
+use crate::lexer::Number;
 use std::fmt::Display;
 use std::rc::Rc;
-use crate::lexer::Number;
 
-pub(crate)type Position = (i32, String);
+pub(crate) type Position = (i32, String);
 
 #[derive(Debug)]
-pub(crate)struct Pseudoregister {
-    name: String,
+pub(crate) struct Pseudoregister {
+    //name: String,
     size: i32,
 }
 
 impl Pseudoregister {
-    pub(crate)fn new(name: String, size: i32) -> Self {
-        Self { name, size }
+    pub(crate) fn new(_name: String, size: i32) -> Self {
+        Self { size }
     }
 }
 
 #[derive(Debug)]
-pub(crate)enum Operand {
+pub(crate) enum Operand {
     Register(Rc<Pseudoregister>),
     Immediate(Number),
     None,

@@ -3,7 +3,6 @@ mod simulator;
 
 use rstest::*;
 use simulator::{CompilerTest, harness};
-use compiler::CompilerError;
 
 #[rstest]
 fn test_equality(mut harness: CompilerTest) {

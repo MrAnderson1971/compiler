@@ -306,6 +306,7 @@ impl CompilerTest {
 
     /// Compiles source code and asserts that a specific CompilerError occurs.
     /// Panics if compilation succeeds or if a different error occurs.
+    #[allow(dead_code)]
     pub fn assert_compile_error<F>(&self, source: &str, check: F)
     where
         F: FnOnce(&CompilerError) -> bool,
@@ -331,63 +332,9 @@ impl CompilerTest {
         }
     }
 
-    /// Compiles source, loads, and expects execution to fail (e.g., runtime error in asm).
-    /// Panics if compilation fails or if execution succeeds.
-    pub fn assert_execution_fails(&mut self, source: &str) {
-        let asm = match compile(source.to_string()) {
-            Ok(a) => a,
-            Err(e) => panic!(
-                "Test failed: Compilation failed when expecting execution failure. Error: {}",
-                e
-            ),
-        };
-        if let Err(e) = self.simulator.load_program(&asm) {
-            panic!(
-                "Test failed: Simulator failed to load program when expecting execution failure. Error: {}",
-                e
-            );
-        }
-        match self.simulator.execute() {
-            Ok(code) => {
-                panic!(
-                    "Test failed: Expected execution failure, but it succeeded with code: {}",
-                    code
-                );
-            }
-            Err(_) => {
-                // Execution failed as expected, test passes.
-            }
-        }
-    }
-
-    /// Directly loads assembly code and executes it, asserting the expected exit code.
-    /// Panics on simulator error or if the exit code doesn't match.
-    pub fn assert_asm_runs_ok(&mut self, asm_source: &str, expected_code: i32) {
-        if let Err(e) = self.simulator.load_program(asm_source) {
-            panic!(
-                "Test failed: Simulator failed to load program. Error: {}",
-                e
-            );
-        }
-        match self.simulator.execute() {
-            Ok(actual_code) => {
-                assert_eq!(
-                    actual_code, expected_code,
-                    "Test failed: Expected ASM exit code {}, but got {}",
-                    expected_code, actual_code
-                );
-            }
-            Err(e) => {
-                panic!(
-                    "Test failed: Expected successful ASM run with code {}, but got error: {}",
-                    expected_code, e
-                );
-            }
-        }
-    }
-
     /// Directly loads assembly code and expects execution to fail.
     /// Panics if loading fails or execution succeeds.
+    #[allow(dead_code)]
     pub fn assert_asm_execution_fails(&mut self, asm_source: &str) {
         if let Err(e) = self.simulator.load_program(asm_source) {
             panic!(
@@ -423,6 +370,7 @@ pub fn harness() -> CompilerTest {
     CompilerTest::new()
 }
 
+#[allow(dead_code)]
 pub fn expect_death(source: &str) {
     use compiler::compile;
     use std::env;
@@ -601,7 +549,7 @@ rstest = "0.25.0"
 
     if !crashed_as_expected {
         // Construct a helpful failure message
-        let mut failure_reason = format!("Death test failed. ");
+        let mut failure_reason = "Death test failed. ".to_string();
         match exit_code {
             Some(code) if code == NORMAL_EXIT_CODE_SIM => {
                 failure_reason

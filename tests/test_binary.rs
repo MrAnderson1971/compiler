@@ -1,7 +1,6 @@
 // tests/test_binary.rs
 mod simulator;
 
-use crate::simulator::expect_death;
 use compiler::CompilerError;
 use rstest::*;
 use simulator::{CompilerTest, harness};
@@ -13,7 +12,7 @@ fn test_addition(mut harness: CompilerTest) {
 }
 
 #[rstest]
-fn test_missing_operand(mut harness: CompilerTest) {
+fn test_missing_operand(harness: CompilerTest) {
     let source = "int main() { return 1 +; }";
     assert_compile_err!(harness, source, CompilerError::SyntaxError(_));
 }

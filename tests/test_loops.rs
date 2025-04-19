@@ -407,7 +407,7 @@ fn test_basic_do_while(mut harness: CompilerTest) {
 }
 
 #[rstest]
-fn test_do_while_no_semicolon(mut harness: CompilerTest) {
+fn test_do_while_no_semicolon(harness: CompilerTest) {
     let code = r#"
         int main() {
             int i = 0;

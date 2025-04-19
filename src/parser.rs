@@ -17,30 +17,18 @@ macro_rules! expect_token {
     ($parser:expr, $expected_token:expr) => {{
         let expected = $expected_token; // Evaluate expected token once
         // Peek first to check without consuming
-        match $parser.peek_token() {
-            // Check if peek succeeded AND the token matches
-            Ok(ref peeked_token) if peeked_token == &expected => {
-                // Instead of returning an Option, convert to Result
-                match $parser.tokens.pop_front() {
-                    Some(_) => Ok(()),
-                    None => {
-                        let line = Rc::clone(&$parser.line_number);
-                        Err(CompilerError::SyntaxError(format!(
-                            "Internal error: Token was peeked but couldn't be consumed at {:?}",
-                            line
-                        )))
-                    }
-                }
-            }
-            Ok(other_token) => {
-                // Peeked successfully, but the token doesn't match.
-                let line = Rc::clone(&$parser.line_number);
-                Err(CompilerError::SyntaxError(format!(
-                    "Expected {:?} but got {:?} at {:?}",
-                    expected, other_token, line
-                )))
-            }
-            Err(err) => Err(err), // Propagate the original error
+        let peeked_token = $parser.peek_token();
+        // Check if peek succeeded AND the token matches
+        if peeked_token == expected {
+            $parser.tokens.pop_front();
+            Ok(())
+        } else {
+            // Peeked successfully, but the token doesn't match.
+            let line = Rc::clone(&$parser.line_number);
+            Err(CompilerError::SyntaxError(format!(
+                "Expected {:?} but got {:?} at {:?}",
+                expected, peeked_token, line
+            )))
         }
     }};
 }
@@ -69,7 +57,7 @@ fn get_precedence(op: Symbol) -> i32 {
             BinaryOperator::LogicalAnd => 10,
             BinaryOperator::LogicalOr => 5,
             BinaryOperator::Ternary => 3,
-            BinaryOperator::Assign => 1,
+            Assign => 1,
         },
         _ => -1,
     }
@@ -86,7 +74,7 @@ impl Parser {
 
     fn parse_function_declaration(&mut self) -> Result<Box<ASTNode>, CompilerError> {
         expect_token!(self, Token::Keyword(Keyword::Int))?;
-        let current = self.peek_token()?;
+        let current = self.peek_token();
         let function_name = match current {
             Token::Identifier(name) => name,
             _ => {
@@ -103,7 +91,7 @@ impl Parser {
         expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
         expect_token!(self, Token::Symbol(Symbol::OpenBrace))?;
 
-        let mut next_token = self.peek_token()?;
+        let mut next_token = self.peek_token();
         loop {
             match next_token {
                 Token::Symbol(Symbol::CloseBrace) => break,
@@ -114,7 +102,7 @@ impl Parser {
                     }
                 }
             }
-            next_token = self.peek_token()?;
+            next_token = self.peek_token();
         }
         let function_body = self.make_node(BlockNode { body: block_items });
         expect_token!(self, Token::Symbol(Symbol::CloseBrace))?;
@@ -125,7 +113,7 @@ impl Parser {
     }
 
     fn parse_declaration(&mut self) -> Result<Box<ASTNode>, CompilerError> {
-        let current = self.peek_token()?;
+        let current = self.peek_token();
         self.tokens.pop_front();
         let identifier = match current {
             Token::Identifier(name) => name,
@@ -136,7 +124,7 @@ impl Parser {
                 )));
             }
         };
-        if let Token::Symbol(Binary(Assign)) = self.peek_token()? {
+        if let Token::Symbol(Binary(Assign)) = self.peek_token() {
             self.tokens.pop_front();
             let expression = self.parse_binary_op(0)?;
             Ok(self.make_node(DeclarationNode {
@@ -179,7 +167,7 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Result<Box<ASTNode>, CompilerError> {
-        let token = self.peek_token()?;
+        let token = self.peek_token();
         match token {
             Token::NumberLiteral(value) => {
                 self.tokens.pop_front();
@@ -205,7 +193,7 @@ impl Parser {
     }
 
     fn parse_unary_or_primary(&mut self) -> Result<Box<ASTNode>, CompilerError> {
-        let token = self.peek_token()?;
+        let token = self.peek_token();
         match token {
             Token::Symbol(Symbol::Unary(op)) => {
                 self.tokens.pop_front();
@@ -241,7 +229,7 @@ impl Parser {
 
         let primary = self.parse_primary()?;
 
-        let token = self.peek_token()?;
+        let token = self.peek_token();
         match token {
             Token::Symbol(Symbol::Unary(
                 op @ (UnaryOperator::Increment | UnaryOperator::Decrement),
@@ -285,7 +273,7 @@ impl Parser {
     fn parse_binary_op(&mut self, min_precedence: i32) -> Result<Box<ASTNode>, CompilerError> {
         let mut left = self.parse_unary_or_primary()?;
         loop {
-            let token = self.peek_token()?;
+            let token = self.peek_token();
             if !matches!(token, Token::Symbol(_)) {
                 return Err(SyntaxError(format!(
                     "Unexpected token {:?} at {:?}",
@@ -301,7 +289,7 @@ impl Parser {
                 break;
             }
             self.tokens.pop_front();
-            if let Token::Symbol(Binary(Assign)) = self.peek_token()? {
+            if let Token::Symbol(Binary(Assign)) = self.peek_token() {
                 // compound assignment
                 if is_lvalue_node(&left.kind) {
                     /*
@@ -338,7 +326,7 @@ impl Parser {
             }
             match token {
                 Binary(symbol) => match symbol {
-                    BinaryOperator::Assign => {
+                    Assign => {
                         if !is_lvalue_node(&left.kind) {
                             return Err(SemanticError(format!(
                                 "Expected lvalue node at {:?}",
@@ -391,7 +379,7 @@ impl Parser {
     }
 
     fn parse_statement(&mut self) -> Result<Option<Box<ASTNode>>, CompilerError> {
-        let token = self.peek_token()?;
+        let token = self.peek_token();
         match token {
             Token::Keyword(keyword) => {
                 self.tokens.pop_front();
@@ -408,7 +396,7 @@ impl Parser {
                         let condition = self.parse_binary_op(0)?;
                         expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
                         let body = self.parse_statement()?;
-                        if let Token::Keyword(Keyword::Else) = self.peek_token()? {
+                        if let Token::Keyword(Keyword::Else) = self.peek_token() {
                             self.tokens.pop_front();
                             let else_body = self.parse_statement()?;
                             Ok(Some(self.make_node(ConditionNode {
@@ -478,15 +466,15 @@ impl Parser {
                         let label = self.loop_label_counter.to_string();
                         self.loop_label_counter += 1;
                         let init = self.parse_block_item()?;
-                        let condition =
-                            if let Token::Symbol(Symbol::Semicolon) = self.peek_token()? {
-                                None
-                            } else {
-                                Some(self.parse_binary_op(0)?)
-                            };
+                        let condition = if let Token::Symbol(Symbol::Semicolon) = self.peek_token()
+                        {
+                            None
+                        } else {
+                            Some(self.parse_binary_op(0)?)
+                        };
                         self.end_line()?;
                         let increment =
-                            if let Token::Symbol(Symbol::CloseParenthesis) = self.peek_token()? {
+                            if let Token::Symbol(Symbol::CloseParenthesis) = self.peek_token() {
                                 None
                             } else {
                                 Some(self.parse_binary_op(0)?)
@@ -510,7 +498,7 @@ impl Parser {
             Token::Symbol(Symbol::OpenBrace) => {
                 self.tokens.pop_front();
                 let mut block_items = Vec::<Box<ASTNode>>::new();
-                let mut next_token = self.peek_token()?;
+                let mut next_token = self.peek_token();
                 loop {
                     match next_token {
                         Token::Symbol(Symbol::CloseBrace) => {
@@ -523,7 +511,7 @@ impl Parser {
                             }
                         }
                     }
-                    next_token = self.peek_token()?;
+                    next_token = self.peek_token();
                 }
                 Ok(Some(self.make_node(BlockNode { body: block_items })))
             }
@@ -540,7 +528,7 @@ impl Parser {
     }
 
     fn parse_block_item(&mut self) -> Result<Option<Box<ASTNode>>, CompilerError> {
-        let token = self.peek_token()?;
+        let token = self.peek_token();
         match token {
             Token::Keyword(keyword) => match keyword {
                 Keyword::Int => {
@@ -560,7 +548,7 @@ impl Parser {
         if !matches!(self.tokens.front().unwrap(), Token::EOF) {
             Err(SyntaxError(format!(
                 "Expected EOF but got {:?}",
-                self.peek_token()?
+                self.peek_token()
             )))
         } else {
             Ok(Box::new(ASTNode::new(
@@ -572,16 +560,12 @@ impl Parser {
         }
     }
 
-    fn peek_token(&self) -> Result<Token, CompilerError> {
-        if let Some(next) = self.tokens.front() {
-            Ok(next.clone())
-        } else {
-            Err(SyntaxError("Unexpected EOF".to_string()))
-        }
+    fn peek_token(&self) -> Token {
+        self.tokens.front().unwrap().clone()
     }
 
     fn end_line(&mut self) -> Result<(), CompilerError> {
-        let current = self.peek_token()?;
+        let current = self.peek_token();
         match current {
             Token::Symbol(Symbol::Semicolon) => {
                 self.line_number = Rc::from((self.line_number.0 + 1, "".to_string()));
