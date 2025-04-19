@@ -219,8 +219,8 @@ fn make_binary_op_instruction(
         | BinaryOperator::GreaterThanOrEquals
         | BinaryOperator::LessThan
         | BinaryOperator::LessThanOrEquals => {
-            *out += &format!("movl {}, %edx", src1);
-            *out += &format!("cmpl {}, %edx", src2);
+            *out += &format!("movl {}, %edx\n", src1);
+            *out += &format!("cmpl {}, %edx\n", src2);
             *out += &format!("movl $0, {}\n", d);
             let opcode = match op {
                 BinaryOperator::Equals => "sete",
