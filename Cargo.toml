@@ -1,0 +1,18 @@
+[package]
+name = "compiler"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+winapi = { version = "0.3", features = [
+    "winnt",
+    "libloaderapi",
+    "processthreadsapi",
+    "fileapi",
+    "errhandlingapi",
+    "minwindef"
+]}
+uuid = { version = "1.16.0", features = ["v4"] }
+
+[dev-dependencies]
+rstest = "0.25.0"
