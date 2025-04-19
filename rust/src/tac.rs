@@ -1,12 +1,12 @@
-use crate::common::{Operand, Position, Pseudoregister};
+use crate::common::{Operand, Pseudoregister};
 use crate::lexer::BinaryOperator::{BitwiseShiftLeft, BitwiseShiftRight};
 use crate::lexer::{BinaryOperator, UnaryOperator};
-use crate::tac::TACInstructionType::ReturnInstruction;
+use crate::tac::TACInstruction::ReturnInstruction;
 use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Debug)]
-pub(crate)enum TACInstructionType {
+pub(crate) enum TACInstruction {
     FunctionInstruction {
         name: Rc<String>,
     },
@@ -46,14 +46,14 @@ pub(crate)enum TACInstructionType {
 }
 
 #[derive(Debug)]
-pub(crate)struct FunctionBody {
+pub(crate) struct FunctionBody {
     pub(crate) variable_count: i32,
     pub(crate) instructions: Vec<TACInstruction>,
     pub(crate) variable_to_pseudoregister: HashMap<String, Rc<Pseudoregister>>,
 }
 
 impl FunctionBody {
-    pub(crate)fn new() -> Self {
+    pub(crate) fn new() -> Self {
         FunctionBody {
             variable_count: 0,
             instructions: vec![],
@@ -61,40 +61,26 @@ impl FunctionBody {
         }
     }
 
-    pub(crate)fn add_instruction(&mut self, line_number: &Rc<Position>, instruction: TACInstructionType) {
-        self.instructions
-            .push(TACInstruction::new(Rc::clone(&line_number), instruction));
+    pub(crate) fn add_instruction(&mut self, instruction: TACInstruction) {
+        self.instructions.push(instruction);
     }
 
-    pub(crate)fn add_default_return_to_main(&mut self, line_number: &Rc<Position>) {
-        match &self.instructions.last().unwrap().kind {
+    pub(crate) fn add_default_return_to_main(&mut self) {
+        match &self.instructions.last().unwrap() {
             ReturnInstruction { .. } => {}
             _ => {
-                self.add_instruction(
-                    line_number,
-                    ReturnInstruction {
-                        val: Rc::from(Operand::Immediate(0)),
-                    },
-                );
+                self.add_instruction(ReturnInstruction {
+                    val: Rc::from(Operand::Immediate(0)),
+                });
             }
         }
     }
 }
 
-#[derive(Debug)]
-pub(crate)struct TACInstruction {
-    line_number: Rc<Position>,
-    kind: TACInstructionType,
-}
-
 impl TACInstruction {
-    fn new(line_number: Rc<Position>, kind: TACInstructionType) -> Self {
-        Self { line_number, kind }
-    }
-
-    pub(crate)fn make_assembly(&self, out: &mut String, function_body: &FunctionBody) {
-        match &self.kind {
-            TACInstructionType::FunctionInstruction { name } => {
+    pub(crate) fn make_assembly(&self, out: &mut String, function_body: &FunctionBody) {
+        match &self {
+            TACInstruction::FunctionInstruction { name } => {
                 *out += &format!(
                     ".global {}\n\
                 {}:\n\
@@ -103,7 +89,7 @@ impl TACInstruction {
                     name, name
                 );
             }
-            TACInstructionType::UnaryOpInstruction { dest, op, operand } => {
+            TACInstruction::UnaryOpInstruction { dest, op, operand } => {
                 *out += &format!("movl {}, %r10\n", operand);
                 *out += &format!("movl %r10, {}\n", dest);
                 match op {
@@ -120,35 +106,35 @@ impl TACInstruction {
                     _ => {}
                 }
             }
-            TACInstructionType::BinaryOpInstruction {
+            TACInstruction::BinaryOpInstruction {
                 dest,
                 op,
                 left,
                 right,
             } => make_binary_op_instruction(out, dest, op, left, right),
-            TACInstructionType::JumpIfZero { label, operand } => {
+            TACInstruction::JumpIfZero { label, operand } => {
                 *out += &format!("movl {}, %edx\n", operand);
                 *out += "cmpl $0, %edx\n";
                 *out += &format!("je {}\n", label);
             }
-            TACInstructionType::JumpIfNotZero { label, operand } => {
+            TACInstruction::JumpIfNotZero { label, operand } => {
                 *out += &format!("movl {}, %edx\n", operand);
                 *out += "cmpl $0, %edx\n";
                 *out += &format!("jne {}\n", label);
             }
-            TACInstructionType::Jump { label } => *out += &format!("jmp {}\n", label),
-            TACInstructionType::Label { label } => *out += &format!("{}:\n", label),
-            TACInstructionType::StoreValueInstruction { dest, src } => {
+            TACInstruction::Jump { label } => *out += &format!("jmp {}\n", label),
+            TACInstruction::Label { label } => *out += &format!("{}:\n", label),
+            TACInstruction::StoreValueInstruction { dest, src } => {
                 *out += &format!("movl {}, %r10\n", src);
                 *out += &format!("movl %r10, {}\n", dest);
             }
-            TACInstructionType::ReturnInstruction { val } => {
+            TACInstruction::ReturnInstruction { val } => {
                 *out += &format!("movl {}, %eax\n", val);
                 *out += "movq %rbp, %rsp\n\
 popq %rbp\n\
 ret\n";
             }
-            TACInstructionType::AllocateStackInstruction => {
+            TACInstruction::AllocateStackInstruction => {
                 *out += &format!("subq ${}, %rsp\n", function_body.variable_count * 4)
             }
         }

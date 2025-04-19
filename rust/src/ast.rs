@@ -300,7 +300,7 @@ fn generate_function_node(out: &mut String, this: &mut ASTNode) -> Result<(), Co
 
     // Default return statement in the main method
     if identifier.as_str() == "main" {
-        function_body.add_default_return_to_main(&this.line_number);
+        function_body.add_default_return_to_main();
     }
 
     println!("{:?}", function_body);
