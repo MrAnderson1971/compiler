@@ -6,7 +6,7 @@ use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use crate::common::Position;
 
-pub struct VariableResolutionVisitor {
+pub(crate)struct VariableResolutionVisitor {
     layer: i32,
     function: Rc<String>,
     variable_map: HashMap<String, VecDeque<i32>>,
@@ -14,7 +14,7 @@ pub struct VariableResolutionVisitor {
 }
 
 impl VariableResolutionVisitor {
-    pub fn new(function: Rc<String>) -> Self {
+    pub(crate)fn new(function: Rc<String>) -> Self {
         Self {
             layer: 0,
             function,

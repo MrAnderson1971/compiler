@@ -7,7 +7,7 @@ use crate::tac::FunctionBody;
 use crate::tac::TACInstructionType::{AllocateStackInstruction, BinaryOpInstruction, FunctionInstruction, Jump, JumpIfNotZero, JumpIfZero, Label, ReturnInstruction, StoreValueInstruction, UnaryOpInstruction};
 use std::rc::Rc;
 
-pub struct TacVisitor<'a> {
+pub(crate)struct TacVisitor<'a> {
     name: Rc<String>,
     body: &'a mut FunctionBody,
     result: Rc<Operand>,
@@ -15,7 +15,7 @@ pub struct TacVisitor<'a> {
 }
 
 impl<'a> TacVisitor<'a> {
-    pub fn new(name: Rc<String>, body: &'a mut FunctionBody) -> Self {
+    pub(crate)fn new(name: Rc<String>, body: &'a mut FunctionBody) -> Self {
         Self {
             name,
             body,

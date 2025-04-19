@@ -6,7 +6,7 @@ use crate::tac_visitor::TacVisitor;
 use crate::variable_resolution::VariableResolutionVisitor;
 use std::rc::Rc;
 
-pub trait Visitor {
+pub(crate) trait Visitor {
     fn visit_program(
         &mut self,
         line_number: &Rc<Position>,
@@ -114,7 +114,7 @@ pub trait Visitor {
 }
 
 #[derive(Debug)]
-pub enum ASTNodeType {
+pub(crate) enum ASTNodeType {
     ProgramNode {
         function_declaration: Box<ASTNode>,
     },
@@ -188,17 +188,17 @@ pub enum ASTNodeType {
 }
 
 #[derive(Debug)]
-pub struct ASTNode {
+pub(crate) struct ASTNode {
     line_number: Rc<Position>,
     pub(crate) kind: ASTNodeType,
 }
 
 impl ASTNode {
-    pub fn new(line_number: Rc<Position>, kind: ASTNodeType) -> ASTNode {
+    pub(crate) fn new(line_number: Rc<Position>, kind: ASTNodeType) -> ASTNode {
         ASTNode { line_number, kind }
     }
 
-    pub fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
+    pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
         match &mut self.kind {
             ASTNodeType::ProgramNode {
                 function_declaration,
@@ -261,7 +261,7 @@ impl ASTNode {
         }
     }
 
-    pub fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
+    pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
         match &self.kind {
             ASTNodeType::ProgramNode { .. } => {
                 if let ASTNodeType::ProgramNode {
@@ -311,14 +311,14 @@ fn generate_function_node(out: &mut String, this: &mut ASTNode) -> Result<(), Co
     Ok(())
 }
 
-pub fn is_lvalue_node(node: &ASTNodeType) -> bool {
+pub(crate) fn is_lvalue_node(node: &ASTNodeType) -> bool {
     match node {
         ASTNodeType::VariableNode { .. } | ASTNodeType::PrefixNode { .. } => true,
         _ => false,
     }
 }
 
-pub fn extract_base_variable(node: &ASTNodeType) -> Option<Rc<String>> {
+pub(crate) fn extract_base_variable(node: &ASTNodeType) -> Option<Rc<String>> {
     match node {
         ASTNodeType::VariableNode { identifier } => Some(identifier.clone()),
         ASTNodeType::PrefixNode { variable, .. } => extract_base_variable(&variable.kind),

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Debug)]
-pub enum TACInstructionType {
+pub(crate)enum TACInstructionType {
     FunctionInstruction {
         name: Rc<String>,
     },
@@ -46,14 +46,14 @@ pub enum TACInstructionType {
 }
 
 #[derive(Debug)]
-pub struct FunctionBody {
+pub(crate)struct FunctionBody {
     pub(crate) variable_count: i32,
     pub(crate) instructions: Vec<TACInstruction>,
     pub(crate) variable_to_pseudoregister: HashMap<String, Rc<Pseudoregister>>,
 }
 
 impl FunctionBody {
-    pub fn new() -> Self {
+    pub(crate)fn new() -> Self {
         FunctionBody {
             variable_count: 0,
             instructions: vec![],
@@ -61,12 +61,12 @@ impl FunctionBody {
         }
     }
 
-    pub fn add_instruction(&mut self, line_number: &Rc<Position>, instruction: TACInstructionType) {
+    pub(crate)fn add_instruction(&mut self, line_number: &Rc<Position>, instruction: TACInstructionType) {
         self.instructions
             .push(TACInstruction::new(Rc::clone(&line_number), instruction));
     }
 
-    pub fn add_default_return_to_main(&mut self, line_number: &Rc<Position>) {
+    pub(crate)fn add_default_return_to_main(&mut self, line_number: &Rc<Position>) {
         match &self.instructions.last().unwrap().kind {
             ReturnInstruction { .. } => {}
             _ => {
@@ -82,7 +82,7 @@ impl FunctionBody {
 }
 
 #[derive(Debug)]
-pub struct TACInstruction {
+pub(crate)struct TACInstruction {
     line_number: Rc<Position>,
     kind: TACInstructionType,
 }
@@ -92,7 +92,7 @@ impl TACInstruction {
         Self { line_number, kind }
     }
 
-    pub fn make_assembly(&self, out: &mut String, function_body: &FunctionBody) {
+    pub(crate)fn make_assembly(&self, out: &mut String, function_body: &FunctionBody) {
         match &self.kind {
             TACInstructionType::FunctionInstruction { name } => {
                 *out += &format!(

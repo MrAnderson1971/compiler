@@ -2,22 +2,22 @@ use std::fmt::Display;
 use std::rc::Rc;
 use crate::lexer::Number;
 
-pub type Position = (i32, String);
+pub(crate)type Position = (i32, String);
 
 #[derive(Debug)]
-pub struct Pseudoregister {
+pub(crate)struct Pseudoregister {
     name: String,
     size: i32,
 }
 
 impl Pseudoregister {
-    pub fn new(name: String, size: i32) -> Self {
+    pub(crate)fn new(name: String, size: i32) -> Self {
         Self { name, size }
     }
 }
 
 #[derive(Debug)]
-pub enum Operand {
+pub(crate)enum Operand {
     Register(Rc<Pseudoregister>),
     Immediate(Number),
     None,

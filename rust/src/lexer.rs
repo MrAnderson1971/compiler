@@ -2,7 +2,7 @@ use crate::lexer::Symbol::{Ambiguous, Binary, Unary};
 use std::collections::VecDeque;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BinaryOperator {
+pub(crate) enum BinaryOperator {
     Addition,
     Subtraction,
 
@@ -27,7 +27,7 @@ pub enum BinaryOperator {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum UnaryOperator {
+pub(crate) enum UnaryOperator {
     Increment,
     Decrement,
     LogicalNot,
@@ -37,13 +37,13 @@ pub enum UnaryOperator {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum UnaryOrBinaryOp {
+pub(crate) enum UnaryOrBinaryOp {
     Addition,
     Subtraction,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Symbol {
+pub(crate) enum Symbol {
     Binary(BinaryOperator),
     Unary(UnaryOperator),
     Ambiguous(UnaryOrBinaryOp),
@@ -56,7 +56,7 @@ pub enum Symbol {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Keyword {
+pub(crate) enum Keyword {
     Return,
     Int,
     If,
@@ -68,10 +68,10 @@ pub enum Keyword {
     Break,
 }
 
-pub type Number = u64;
+pub(crate) type Number = u64;
 
 #[derive(Debug, Clone, PartialEq)] // String prevents Copy. PartialEq is useful for tests.
-pub enum Token {
+pub(crate) enum Token {
     Keyword(Keyword),
     Symbol(Symbol),
     Identifier(String),
@@ -95,7 +95,7 @@ fn match_keyword(string: &str) -> Option<Keyword> {
     }
 }
 
-pub fn lex(source: String) -> VecDeque<Token> {
+pub(crate) fn lex(source: String) -> VecDeque<Token> {
     let mut tokens: VecDeque<Token> = VecDeque::new();
     let mut chars = source.chars().peekable();
     while let Some(c) = chars.next() {
