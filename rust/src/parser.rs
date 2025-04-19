@@ -106,6 +106,7 @@ impl Parser {
         loop {
             match next_token {
                 Token::Symbol(Symbol::CloseBrace) => break,
+                Token::EOF => return Err(SyntaxError("Unexpected EOF".to_string())),
                 _ => {
                     if let Some(item) = self.parse_block_item()? {
                         if let BlockNode { ref mut body } = function_body.kind {
@@ -196,7 +197,7 @@ impl Parser {
                 expression
             }
             Token::Identifier(identifier) => Ok(self.make_node(VariableNode { identifier: Rc::from(identifier) })),
-            _ => Err(SemanticError(format!(
+            _ => Err(SyntaxError(format!(
                 "Unexpected token {:?} at {:?}",
                 token, self.line_number
             ))),
@@ -386,6 +387,7 @@ impl Parser {
                 match keyword {
                     Keyword::Return => {
                         let expression = self.parse_expression()?;
+                        self.end_line()?;
                         Ok(Some(self.make_node(ReturnNode {
                             expression: Some(expression),
                         })))

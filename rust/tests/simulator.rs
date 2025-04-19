@@ -12,7 +12,8 @@ use winapi::um::processthreadsapi::GetCurrentProcessId;
 use winapi::um::fileapi::GetTempPathA;
 use winapi::shared::minwindef::{DWORD, HMODULE};
 use winapi::um::errhandlingapi::GetLastError;
-use rust::{compile, CompilerError};
+use compiler::{compile, CompilerError};
+use uuid::Uuid;
 
 const MAX_PATH: usize = 260; // Windows MAX_PATH constant
 
@@ -27,7 +28,7 @@ pub struct Simulator {
 impl Simulator {
     pub fn new() -> Self {
         // Create unique filenames using process ID
-        let pid = unsafe { GetCurrentProcessId() };
+        let pid = Uuid::new_v4().to_string();
 
         // Get Windows temp path
         let mut temp_path_buf = [0u8; MAX_PATH];

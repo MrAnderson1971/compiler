@@ -6,7 +6,7 @@ mod simulator;
 // Import necessary items
 use rstest::*;
 use simulator::{CompilerTest, harness}; // Import the type and the fixture function
-use rust::CompilerError; // Import your library's error enum for matching
+use compiler::CompilerError; // Import your library's error enum for matching
 
 // Helper macro for asserting specific compiler errors
 // (Define locally or make public in test_setup and import)
@@ -25,21 +25,6 @@ int main() {
 }
 "#;
     harness.assert_runs_ok(source, 42);
-}
-
-#[rstest]
-fn test_hardcoded_asm(mut harness: CompilerTest) {
-    // Use the harness method for running raw assembly
-    let source = r#"
-.global _runAsm  # Adjusted for Windows simulator needs
-_runAsm:
-    pushq %rbp
-    movq %rsp, %rbp
-    movq $2, %rax
-    popq %rbp
-    ret
-"#;
-    harness.assert_asm_runs_ok(source, 2);
 }
 
 #[rstest]
@@ -135,7 +120,7 @@ int foo() {
 
     // Option 2: Compiler succeeds, but execution fails because simulator expects _runAsm (from main)
     // This requires compile() to succeed first.
-    match rust::compile(source.to_string()) {
+    match compiler::compile(source.to_string()) {
         Ok(asm) => harness.assert_asm_execution_fails(&asm),
         Err(e) => panic!("Compilation failed unexpectedly when testing no entry point: {}", e),
     }

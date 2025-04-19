@@ -1,7 +1,7 @@
 use std::{env, fs, process};
 use std::io::Write;
 use std::path::Path;
-use rust::compile;
+use compiler::compile;
 
 fn main() {
     // Get command line arguments

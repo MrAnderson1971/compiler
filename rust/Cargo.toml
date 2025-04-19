@@ -1,5 +1,5 @@
 [package]
-name = "rust"
+name = "compiler"
 version = "0.1.0"
 edition = "2024"
 
@@ -12,6 +12,7 @@ winapi = { version = "0.3", features = [
     "errhandlingapi",
     "minwindef"
 ]}
+uuid = { version = "1.16.0", features = ["v4"] }
 
 [dev-dependencies]
 rstest = "0.18"
