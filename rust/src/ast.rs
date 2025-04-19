@@ -303,7 +303,7 @@ fn generate_function_node(out: &mut String, this: &mut ASTNode) -> Result<(), Co
         function_body.add_default_return_to_main();
     }
 
-    println!("{:?}", function_body);
+    println!("{:#?}", function_body);
 
     for instruction in &function_body.instructions {
         instruction.make_assembly(out, &function_body);

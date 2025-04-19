@@ -7,6 +7,7 @@ use crate::ast::{ASTNode, ASTNodeType, extract_base_variable, is_lvalue_node};
 use crate::common::Position;
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::{SemanticError, SyntaxError};
+use crate::lexer::BinaryOperator::Assign;
 use crate::lexer::Symbol::{Ambiguous, Binary};
 use crate::lexer::{BinaryOperator, Keyword, Symbol, Token, UnaryOperator, UnaryOrBinaryOp};
 use std::collections::VecDeque;
@@ -97,7 +98,7 @@ impl Parser {
         };
         self.tokens.pop_front();
         self.line_number = Rc::from((0, function_name.clone()));
-        let mut function_body = self.make_node(BlockNode { body: Vec::new() });
+        let mut block_items: Vec<Box<ASTNode>> = Vec::new();
         expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;
         expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
         expect_token!(self, Token::Symbol(Symbol::OpenBrace))?;
@@ -109,14 +110,13 @@ impl Parser {
                 Token::EOF => return Err(SyntaxError("Unexpected EOF".to_string())),
                 _ => {
                     if let Some(item) = self.parse_block_item()? {
-                        if let BlockNode { ref mut body } = function_body.kind {
-                            body.push(item);
-                        }
+                        block_items.push(item);
                     }
                 }
             }
             next_token = self.peek_token()?;
         }
+        let function_body = self.make_node(BlockNode { body: block_items });
         expect_token!(self, Token::Symbol(Symbol::CloseBrace))?;
         Ok(self.make_node(FunctionNode {
             identifier: Rc::from(function_name),
@@ -136,20 +136,13 @@ impl Parser {
                 )));
             }
         };
-        if let Token::Symbol(symbol) = self.peek_token()? {
-            if let Binary(BinaryOperator::Assign) = symbol {
-                self.tokens.pop_front();
-                let expression = self.parse_expression()?;
-                Ok(self.make_node(DeclarationNode {
-                    identifier: Rc::from(identifier),
-                    expression: Some(expression),
-                }))
-            } else {
-                Err(SyntaxError(format!(
-                    "Expected = or ; but got {:?} at {:?}",
-                    symbol, self.line_number
-                )))
-            }
+        if let Token::Symbol(Binary(Assign)) = self.peek_token()? {
+            self.tokens.pop_front();
+            let expression = self.parse_expression()?;
+            Ok(self.make_node(DeclarationNode {
+                identifier: Rc::from(identifier),
+                expression: Some(expression),
+            }))
         } else {
             Ok(self.make_node(DeclarationNode {
                 identifier: Rc::from(identifier),
@@ -187,16 +180,23 @@ impl Parser {
 
     fn parse_primary(&mut self) -> Result<Box<ASTNode>, CompilerError> {
         let token = self.peek_token()?;
-        self.tokens.pop_front();
         match token {
-            Token::NumberLiteral(value) => Ok(self.make_node(ConstNode { value })),
+            Token::NumberLiteral(value) => {
+                self.tokens.pop_front();
+                Ok(self.make_node(ConstNode { value }))
+            }
             Token::Symbol(..) => {
                 expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;
-                let expression = self.parse_expression();
+                let expression = self.parse_expression()?;
                 expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
-                expression
+                Ok(expression)
             }
-            Token::Identifier(identifier) => Ok(self.make_node(VariableNode { identifier: Rc::from(identifier) })),
+            Token::Identifier(identifier) => {
+                self.tokens.pop_front();
+                Ok(self.make_node(VariableNode {
+                    identifier: Rc::from(identifier),
+                }))
+            }
             _ => Err(SyntaxError(format!(
                 "Unexpected token {:?} at {:?}",
                 token, self.line_number
@@ -211,7 +211,6 @@ impl Parser {
                 self.tokens.pop_front();
                 return match op {
                     UnaryOperator::Increment | UnaryOperator::Decrement => {
-                        self.tokens.pop_front();
                         let expression = self.parse_unary_or_primary()?;
                         self.parse_increment_decrement(expression, op, true)
                     }
@@ -222,6 +221,7 @@ impl Parser {
                 };
             }
             Token::Symbol(Ambiguous(UnaryOrBinaryOp::Addition)) => {
+                self.tokens.pop_front();
                 let expression = self.parse_unary_or_primary()?;
                 return Ok(self.make_node(UnaryNode {
                     op: UnaryOperator::UnaryAdd,
@@ -229,6 +229,7 @@ impl Parser {
                 }));
             }
             Token::Symbol(Ambiguous(UnaryOrBinaryOp::Subtraction)) => {
+                self.tokens.pop_front();
                 let expression = self.parse_unary_or_primary()?;
                 return Ok(self.make_node(UnaryNode {
                     op: UnaryOperator::Negate,
@@ -283,94 +284,108 @@ impl Parser {
     */
     fn parse_binary_op(&mut self, min_precedence: i32) -> Result<Box<ASTNode>, CompilerError> {
         let mut left = self.parse_unary_or_primary()?;
-        let mut token = self.peek_token()?;
         loop {
-            match token {
-                Token::Symbol(symbol @ Binary(op)) => {
-                    if get_precedence(symbol) < min_precedence {
-                        break;
-                    }
-                    self.tokens.pop_front();
-                    match symbol {
-                        Binary(BinaryOperator::Assign) => {
-                            if !is_lvalue_node(&left.kind) {
-                                return Err(SemanticError(format!(
-                                    "Expected lvalue node at {:?}",
-                                    self.line_number
-                                )));
-                            }
-                            let right = self.parse_binary_op(get_precedence(symbol))?;
-                            left = self.make_node(AssignmentNode { left, right });
-                        }
-                        Binary(BinaryOperator::Ternary) => {
-                            let middle = self.parse_condition()?;
-                            let right = self.parse_binary_op(get_precedence(symbol))?;
-                            left = self.make_node(ConditionNode {
-                                condition: left,
-                                if_true: Some(middle),
-                                if_false: Some(right),
-                                is_ternary: true,
-                            });
-                        }
-
-                        _ => {
-                            if let Token::Symbol(Binary(BinaryOperator::Assign)) =
-                                self.peek_token()?
-                            {
-                                // compound assignment
-                                if is_lvalue_node(&left.kind) {
-                                    self.tokens.pop_front();
-                                    let right = self.parse_binary_op(get_precedence(symbol))?;
-                                    let left_variable = self.make_node(VariableNode {
-                                        identifier: extract_base_variable(&left.kind).unwrap(),
-                                    });
-                                    let binary = self.make_node(BinaryNode {
-                                        op,
-                                        left: left_variable,
-                                        right,
-                                    });
-                                    left = self.make_node(AssignmentNode {
-                                        left,
-                                        right: binary,
-                                    });
-                                } else {
-                                    return Err(SemanticError(format!(
-                                        "Expected lvalue at {:?}",
-                                        self.line_number
-                                    )));
-                                }
-                            } else {
-                                let right = self.parse_binary_op(get_precedence(symbol) + 1)?;
-                                left = self.make_node(BinaryNode { op, left, right });
-                            }
-                        }
-                    }
+            let token = self.peek_token()?;
+            if !matches!(token, Token::Symbol(_)) {
+                return Err(SyntaxError(format!(
+                    "Unexpected token {:?} at {:?}",
+                    token, self.line_number
+                )));
+            }
+            let token = if let Token::Symbol(token @ (Binary(_) | Ambiguous(_))) = token {
+                token
+            } else {
+                break;
+            };
+            if get_precedence(token) < min_precedence {
+                break;
+            }
+            self.tokens.pop_front();
+            if let Token::Symbol(Binary(Assign)) = self.peek_token()? {
+                // compound assignment
+                if is_lvalue_node(&left.kind) {
+                    /*
+                    Turn x ?= rhs into x = (x ? rhs)
+                    */
+                    self.tokens.pop_front(); // remove the = operator
+                    let right = self.parse_binary_op(get_precedence(Binary(Assign)))?;
+                    let left_variable = self.make_node(VariableNode {
+                        identifier: extract_base_variable(&left.kind).unwrap(),
+                    });
+                    let op = if let Binary(op) = token {
+                        op
+                    } else if token == Ambiguous(UnaryOrBinaryOp::Addition) {
+                        BinaryOperator::Addition
+                    } else {
+                        BinaryOperator::Subtraction
+                    };
+                    let binary = self.make_node(BinaryNode {
+                        op,
+                        left: left_variable,
+                        right,
+                    });
+                    left = self.make_node(AssignmentNode {
+                        left,
+                        right: binary,
+                    });
+                    continue;
+                } else {
+                    return Err(SemanticError(format!(
+                        "Expected lvalue at {:?}",
+                        self.line_number
+                    )));
                 }
-                Token::Symbol(symbol @ Ambiguous(UnaryOrBinaryOp::Addition)) => {
-                    let right = self.parse_binary_op(get_precedence(symbol) + 1)?;
+            }
+            match token {
+                Binary(symbol) => match symbol {
+                    BinaryOperator::Assign => {
+                        if !is_lvalue_node(&left.kind) {
+                            return Err(SemanticError(format!(
+                                "Expected lvalue node at {:?}",
+                                self.line_number
+                            )));
+                        }
+                        let right = self.parse_binary_op(get_precedence(token))?;
+                        left = self.make_node(AssignmentNode { left, right });
+                    }
+                    BinaryOperator::Ternary => {
+                        let middle = self.parse_condition()?;
+                        let right = self.parse_binary_op(get_precedence(token))?;
+                        left = self.make_node(ConditionNode {
+                            condition: left,
+                            if_true: Some(middle),
+                            if_false: Some(right),
+                            is_ternary: true,
+                        });
+                    }
+
+                    _ => {
+                        let right = self.parse_binary_op(get_precedence(token) + 1)?;
+                        left = self.make_node(BinaryNode {
+                            op: symbol,
+                            left,
+                            right,
+                        });
+                    }
+                },
+                Ambiguous(UnaryOrBinaryOp::Addition) => {
+                    let right = self.parse_binary_op(get_precedence(token) + 1)?;
                     left = self.make_node(BinaryNode {
                         op: BinaryOperator::Addition,
                         left,
                         right,
                     });
                 }
-                Token::Symbol(symbol @ Ambiguous(UnaryOrBinaryOp::Subtraction)) => {
-                    let right = self.parse_binary_op(get_precedence(symbol) + 1)?;
+                Ambiguous(UnaryOrBinaryOp::Subtraction) => {
+                    let right = self.parse_binary_op(get_precedence(token) + 1)?;
                     left = self.make_node(BinaryNode {
                         op: BinaryOperator::Subtraction,
                         left,
                         right,
                     });
                 }
-                Token::Symbol(..) => break,
-                _ => {
-                    return Err(SyntaxError(format!(
-                        "Unexpected token {:?} at {:?}",
-                        token, self.line_number
-                    )));
-                }
+                _ => unreachable!(),
             }
-            token = self.peek_token()?;
         }
         Ok(left)
     }
@@ -437,7 +452,6 @@ impl Parser {
                         let node = self.make_node(BreakNode {
                             label: Rc::from("".to_string()),
                         });
-                        self.end_line()?;
                         Ok(Some(node))
                     }
                     Keyword::Continue => {
@@ -445,7 +459,6 @@ impl Parser {
                             label: Rc::from("".to_string()),
                             is_for: false,
                         });
-                        self.end_line()?;
                         Ok(Some(node))
                     }
                     Keyword::Do => {
@@ -512,7 +525,6 @@ impl Parser {
             }
             _ => {
                 let out = self.parse_expression()?;
-                self.end_line()?;
                 Ok(Some(out))
             }
         }
@@ -525,6 +537,7 @@ impl Parser {
                 Keyword::Int => {
                     self.tokens.pop_front();
                     let out = self.parse_declaration()?;
+                    self.end_line()?;
                     Ok(Some(out))
                 }
                 _ => self.parse_statement(),

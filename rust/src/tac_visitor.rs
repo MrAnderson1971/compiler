@@ -85,10 +85,10 @@ impl<'a> Visitor for TacVisitor<'a> {
         left: &mut Box<ASTNode>,
         right: &mut Box<ASTNode>,
     ) -> Result<(), CompilerError> {
-        right.accept(self)?;
-        let src = Rc::clone(&self.result);
         left.accept(self)?;
         let dest = Rc::clone(&self.result);
+        right.accept(self)?;
+        let src = Rc::clone(&self.result);
         match dest.as_ref() {
             Operand::Register(variable) => {
                 let dest_registry: Rc<Pseudoregister> = Rc::clone(variable);
@@ -611,15 +611,6 @@ impl<'a> Visitor for TacVisitor<'a> {
             op: binary_operator,
             left: Rc::clone(&self.result),
             right: Rc::from(Operand::Immediate(1)),
-        });
-        let temp2 = Rc::new(Pseudoregister::new(
-            (*self.name).clone(),
-            self.body.variable_count,
-        ));
-        self.body.variable_count += 1;
-        self.body.add_instruction(StoreValueInstruction {
-            dest,
-            src: Rc::from(Operand::Register(temp2)),
         });
         self.result = Rc::from(Operand::Register(temp1));
         Ok(())
