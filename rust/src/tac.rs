@@ -55,7 +55,7 @@ pub(crate) struct FunctionBody {
 impl FunctionBody {
     pub(crate) fn new() -> Self {
         FunctionBody {
-            variable_count: 0,
+            variable_count: 1,
             instructions: vec![],
             variable_to_pseudoregister: HashMap::new(),
         }
@@ -90,8 +90,8 @@ impl TACInstruction {
                 );
             }
             TACInstruction::UnaryOpInstruction { dest, op, operand } => {
-                *out += &format!("movl {}, %r10\n", operand);
-                *out += &format!("movl %r10, {}\n", dest);
+                *out += &format!("movl {}, %r10d\n", operand);
+                *out += &format!("movl %r10d, {}\n", dest);
                 match op {
                     UnaryOperator::LogicalNot => {
                         *out += &format!("cmpl $0, {}\n", dest);
@@ -125,8 +125,8 @@ impl TACInstruction {
             TACInstruction::Jump { label } => *out += &format!("jmp {}\n", label),
             TACInstruction::Label { label } => *out += &format!("{}:\n", label),
             TACInstruction::StoreValueInstruction { dest, src } => {
-                *out += &format!("movl {}, %r10\n", src);
-                *out += &format!("movl %r10, {}\n", dest);
+                *out += &format!("movl {}, %r10d\n", src);
+                *out += &format!("movl %r10d, {}\n", dest);
             }
             TACInstruction::ReturnInstruction { val } => {
                 *out += &format!("movl {}, %eax\n", val);
@@ -161,7 +161,7 @@ fn make_binary_op_instruction(
         | BinaryOperator::BitwiseAnd
         | BinaryOperator::BitwiseOr
         | BinaryOperator::BitwiseXor => {
-            *out += &format!("movl {}, %r10\n", src1);
+            *out += &format!("movl {}, %r10d\n", src1);
             if *op == BitwiseShiftLeft || *op == BitwiseShiftRight {
                 let shift_op = if *op == BitwiseShiftLeft {
                     "shll"
