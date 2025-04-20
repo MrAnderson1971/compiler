@@ -1,4 +1,4 @@
-use crate::ast::{ASTNode, Visitor};
+use crate::ast::{ASTNode, Expression, Visitor};
 use crate::common::{Operand, Position, Pseudoregister};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
@@ -58,7 +58,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         &mut self,
         _line_number: &Rc<Position>,
         identifier: &mut Rc<String>,
-        expression: &mut Option<Box<ASTNode>>,
+        expression: &mut Option<Box<ASTNode<Expression>>>,
     ) -> Result<(), CompilerError> {
         let pseudoregister = Rc::new(Pseudoregister::new(
             (*self.name).clone(),

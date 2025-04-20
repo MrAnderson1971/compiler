@@ -1,3 +1,4 @@
+use crate::ast::BlockItem::{D, S};
 use crate::ast::Expression::{Assignment, Condition, Constant, Postfix, Prefix, Unary, Variable};
 use crate::ast::ForInit::{InitDecl, InitExp};
 use crate::ast::Statement::{Compound, For, If, Null, Return, While};
@@ -12,9 +13,7 @@ use crate::lexer::BinaryOperator::Assign;
 use crate::lexer::Symbol::{Ambiguous, Binary};
 use crate::lexer::{BinaryOperator, Keyword, Symbol, Token, UnaryOperator, UnaryOrBinaryOp};
 use std::collections::VecDeque;
-use std::ops::Deref;
 use std::rc::Rc;
-use crate::ast::BlockItem::{D, S};
 
 macro_rules! expect_token {
     ($parser:expr, $expected_token:expr) => {{
@@ -102,9 +101,8 @@ impl Parser {
                 Token::Symbol(Symbol::CloseBrace) => break,
                 Token::EOF => return Err(SyntaxError("Unexpected EOF".to_string())),
                 _ => {
-                    if let Some(item) = self.parse_block_item()? {
-                        block_items.push(item);
-                    }
+                    let item = self.parse_block_item()?;
+                    block_items.push(item);
                 }
             }
             next_token = self.peek_token();
@@ -112,7 +110,7 @@ impl Parser {
         let function_body = self.make_node::<Block>(block_items);
         expect_token!(self, Token::Symbol(Symbol::CloseBrace))?;
         Ok(self.make_node(FunctionDeclaration {
-            identifier: Rc::from(function_name),
+            name: Rc::from(function_name),
             params: vec![],
             body: function_body,
         }))
@@ -134,12 +132,12 @@ impl Parser {
             self.tokens.pop_front();
             let expression = self.parse_binary_op(0)?;
             Ok(self.make_node(VariableDeclaration {
-                identifier: Rc::from(identifier),
+                name: Rc::from(identifier),
                 init: Some(expression),
             }))
         } else {
             Ok(self.make_node(VariableDeclaration {
-                identifier: Rc::from(identifier),
+                name: Rc::from(identifier),
                 init: None,
             }))
         }
@@ -509,9 +507,8 @@ impl Parser {
                             break;
                         }
                         _ => {
-                            if let Some(block) = self.parse_block_item()? {
-                                block_items.push(block);
-                            }
+                            let block = self.parse_block_item()?;
+                            block_items.push(block);
                         }
                     }
                     next_token = self.peek_token();
@@ -540,9 +537,15 @@ impl Parser {
                     self.end_line()?;
                     Ok(self.make_node(D(self.make_node(Declaration::VariableDeclaration(out)))))
                 }
-                _ => Ok(self.make_node(S(Box::from(self.parse_statement()?)))),
+                _ => {
+                    let statement = self.parse_statement()?;
+                    Ok(self.make_node(S(Box::from(statement))))
+                },
             },
-            _ => Ok(self.make_node(S(Box::from(self.parse_statement()?)))),
+            _ => {
+                let statement = self.parse_statement()?;
+                Ok(self.make_node(S(Box::from(statement))))
+            },
         }
     }
 
