@@ -1,5 +1,5 @@
-use crate::ast::{ASTNode, Expression, Visitor};
-use crate::common::{Operand, Position, Pseudoregister};
+use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Program, Statement, Visitor};
+use crate::common::{Identifier, Operand, Position, Pseudoregister};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{BinaryOperator, Number, UnaryOperator};
@@ -32,7 +32,7 @@ impl<'a> Visitor for TacVisitor<'a> {
     fn visit_program(
         &mut self,
         _line_number: &Rc<Position>,
-        _function_declaration: &mut Box<ASTNode>,
+        _function_declaration: &mut Program,
     ) -> Result<(), CompilerError> {
         panic!("Should not be called")
     }
@@ -40,50 +40,52 @@ impl<'a> Visitor for TacVisitor<'a> {
     fn visit_function(
         &mut self,
         _line_number: &Rc<Position>,
-        identifier: &mut Rc<String>,
-        body: &mut Option<Box<ASTNode>>,
+        identifier: &mut Rc<Identifier>,
+        _params: &mut Vec<Rc<Identifier>>,
+        body: &mut ASTNode<Block>,
     ) -> Result<(), CompilerError> {
         self.body.add_instruction(FunctionInstruction {
             name: Rc::clone(&identifier),
         });
         self.body.add_instruction(AllocateStackInstruction);
-        if let Some(body) = body {
-            body.accept(self)
-        } else {
-            Ok(())
-        }
+        body.accept(self)
     }
 
     fn visit_declaration(
         &mut self,
         _line_number: &Rc<Position>,
-        identifier: &mut Rc<String>,
-        expression: &mut Option<Box<ASTNode<Expression>>>,
+        declaration: &mut Declaration,
     ) -> Result<(), CompilerError> {
-        let pseudoregister = Rc::new(Pseudoregister::new(
-            (*self.name).clone(),
-            self.body.variable_count,
-        ));
-        self.body.variable_to_pseudoregister.insert(
-            (*Rc::clone(&identifier)).clone(),
-            Rc::clone(&pseudoregister),
-        );
-        if let Some(expression) = expression {
-            expression.accept(self)?;
-            self.body.add_instruction(StoreValueInstruction {
-                dest: Rc::clone(&pseudoregister),
-                src: Rc::clone(&self.result),
-            });
+        match declaration {
+            Declaration::VariableDeclaration(v) => {
+                let (identifier, expression) = (&v.kind.name, &mut v.kind.init);
+                let pseudoregister = Rc::new(Pseudoregister::new(
+                    (*self.name).clone(),
+                    self.body.variable_count,
+                ));
+                self.body.variable_to_pseudoregister.insert(
+                    (*Rc::clone(&identifier)).clone(),
+                    Rc::clone(&pseudoregister),
+                );
+                if let Some(expression) = expression {
+                    expression.accept(self)?;
+                    self.body.add_instruction(StoreValueInstruction {
+                        dest: Rc::clone(&pseudoregister),
+                        src: Rc::clone(&self.result),
+                    });
+                }
+                self.body.variable_count += 1;
+                Ok(())
+            }
+            Declaration::FunctionDeclaration(_) => todo!(),
         }
-        self.body.variable_count += 1;
-        Ok(())
     }
 
     fn visit_assignment(
         &mut self,
         line_number: &Rc<Position>,
-        left: &mut Box<ASTNode>,
-        right: &mut Box<ASTNode>,
+        left: &mut Box<ASTNode<Expression>>,
+        right: &mut Box<ASTNode<Expression>>,
     ) -> Result<(), CompilerError> {
         left.accept(self)?;
         let dest = Rc::clone(&self.result);
@@ -108,25 +110,19 @@ impl<'a> Visitor for TacVisitor<'a> {
     fn visit_return(
         &mut self,
         _line_number: &Rc<Position>,
-        expression: &mut Option<Box<ASTNode>>,
+        expression: &mut ASTNode<Expression>,
     ) -> Result<(), CompilerError> {
-        if let Some(expression) = expression {
-            expression.accept(self)?;
-            self.body.add_instruction(ReturnInstruction {
-                val: Rc::clone(&self.result),
-            });
-        } else {
-            self.body.add_instruction(ReturnInstruction {
-                val: Rc::new(Operand::None),
-            });
-        }
+        expression.accept(self)?;
+        self.body.add_instruction(ReturnInstruction {
+            val: Rc::clone(&self.result),
+        });
         Ok(())
     }
 
     fn visit_block(
         &mut self,
         _line_number: &Rc<Position>,
-        body: &mut Vec<Box<ASTNode>>,
+        body: &mut Block,
     ) -> Result<(), CompilerError> {
         for item in body {
             item.accept(self)?;
@@ -138,7 +134,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         &mut self,
         _line_number: &Rc<Position>,
         op: &mut UnaryOperator,
-        expression: &mut Box<ASTNode>,
+        expression: &mut Box<ASTNode<Expression>>,
     ) -> Result<(), CompilerError> {
         expression.accept(self)?;
         if *op == UnaryOperator::UnaryAdd {
@@ -163,8 +159,8 @@ impl<'a> Visitor for TacVisitor<'a> {
         &mut self,
         _line_number: &Rc<Position>,
         op: &mut BinaryOperator,
-        left: &mut Box<ASTNode>,
-        right: &mut Box<ASTNode>,
+        left: &mut Box<ASTNode<Expression>>,
+        right: &mut Box<ASTNode<Expression>>,
     ) -> Result<(), CompilerError> {
         match op {
             BinaryOperator::LogicalAnd => {
@@ -298,109 +294,52 @@ impl<'a> Visitor for TacVisitor<'a> {
     fn visit_condition(
         &mut self,
         _line_number: &Rc<Position>,
-        condition: &mut Box<ASTNode>,
-        if_true: &mut Option<Box<ASTNode>>,
-        if_false: &mut Option<Box<ASTNode>>,
-        is_ternary: &mut bool,
+        condition: &mut Box<ASTNode<Expression>>,
+        if_true: &mut Box<ASTNode<Expression>>,
+        if_false: &mut Box<ASTNode<Expression>>,
     ) -> Result<(), CompilerError> {
-        if *is_ternary {
-            condition.accept(self)?;
-            let else_label: Rc<String> =
-                Rc::from(format!(".{}{}_else", self.name, self.label_count));
-            self.label_count += 1;
-            let end_label: Rc<String> = Rc::from(format!(".{}{}_end", self.name, self.label_count));
-            self.label_count += 1;
-            let dest = Rc::new(Pseudoregister::new(
-                (*self.name).clone(),
-                self.body.variable_count,
-            ));
-            self.body.add_instruction(JumpIfZero {
-                // if false goto else
-                label: Rc::clone(&else_label),
-                operand: Rc::clone(&self.result),
-            });
-            if let Some(if_true) = if_true {
-                if_true.accept(self)?;
-            }
-            self.body.add_instruction(StoreValueInstruction {
-                dest: Rc::clone(&dest),
-                src: Rc::clone(&self.result),
-            });
-            self.body.add_instruction(Jump {
-                label: Rc::clone(&end_label),
-            }); // goto end
-            self.body.add_instruction(Label {
-                label: Rc::clone(&else_label),
-            }); // else
-            if let Some(if_false) = if_false {
-                if_false.accept(self)?;
-            }
-            self.body.add_instruction(StoreValueInstruction {
-                dest: Rc::clone(&dest),
-                src: Rc::clone(&self.result),
-            });
-            self.body.add_instruction(Label {
-                label: Rc::clone(&end_label),
-            });
-            self.result = Rc::from(Operand::Register(dest));
-            return Ok(());
-        }
-        match if_false {
-            None => {
-                condition.accept(self)?;
-                let end_label: Rc<String> =
-                    Rc::from(format!(".{}{}_end", self.name, self.label_count));
-                self.label_count += 1;
-                self.body.add_instruction(JumpIfZero {
-                    // if false goto end
-                    label: Rc::clone(&end_label),
-                    operand: Rc::clone(&self.result),
-                });
-                if let Some(if_true) = if_true {
-                    if_true.accept(self)?;
-                }
-                self.body.add_instruction(Label {
-                    label: Rc::clone(&end_label),
-                });
-            }
-            Some(if_false) => {
-                condition.accept(self)?;
-                let else_label: Rc<String> =
-                    Rc::from(format!(".{}{}_else", self.name, self.label_count));
-                self.label_count += 1;
-                let end_label: Rc<String> =
-                    Rc::from(format!(".{}{}_end", self.name, self.label_count));
-                self.label_count += 1;
-                self.body.add_instruction(JumpIfZero {
-                    // if false goto else
-                    label: Rc::clone(&else_label),
-                    operand: Rc::clone(&self.result),
-                });
-                if let Some(if_true) = if_true {
-                    if_true.accept(self)?;
-                }
-
-                self.body.add_instruction(Jump {
-                    label: Rc::clone(&end_label),
-                }); // goto end
-                self.body.add_instruction(Label {
-                    label: Rc::clone(&else_label),
-                }); // else
-                if_false.accept(self)?;
-                self.body.add_instruction(Label {
-                    label: Rc::clone(&end_label),
-                });
-            }
-        };
-        self.result = Rc::from(Operand::None);
+        condition.accept(self)?;
+        let else_label: Rc<String> = Rc::from(format!(".{}{}_else", self.name, self.label_count));
+        self.label_count += 1;
+        let end_label: Rc<String> = Rc::from(format!(".{}{}_end", self.name, self.label_count));
+        self.label_count += 1;
+        let dest = Rc::new(Pseudoregister::new(
+            (*self.name).clone(),
+            self.body.variable_count,
+        ));
+        self.body.add_instruction(JumpIfZero {
+            // if false goto else
+            label: Rc::clone(&else_label),
+            operand: Rc::clone(&self.result),
+        });
+        if_true.accept(self)?;
+        self.body.add_instruction(StoreValueInstruction {
+            dest: Rc::clone(&dest),
+            src: Rc::clone(&self.result),
+        });
+        self.body.add_instruction(Jump {
+            label: Rc::clone(&end_label),
+        }); // goto end
+        self.body.add_instruction(Label {
+            label: Rc::clone(&else_label),
+        }); // else
+        if_false.accept(self)?;
+        self.body.add_instruction(StoreValueInstruction {
+            dest: Rc::clone(&dest),
+            src: Rc::clone(&self.result),
+        });
+        self.body.add_instruction(Label {
+            label: Rc::clone(&end_label),
+        });
+        self.result = Rc::from(Operand::Register(dest));
         Ok(())
     }
 
     fn visit_while(
         &mut self,
         _line_number: &Rc<Position>,
-        condition: &mut Box<ASTNode>,
-        body: &mut Option<Box<ASTNode>>,
+        condition: &mut ASTNode<Expression>,
+        body: &mut Box<ASTNode<Statement>>,
         label: &mut Rc<String>,
         is_do_while: &mut bool,
     ) -> Result<(), CompilerError> {
@@ -419,9 +358,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 label: Rc::clone(&end_label),
                 operand: Rc::clone(&self.result),
             });
-            if let Some(body) = body {
-                body.accept(self)?;
-            }
+            body.accept(self)?;
             self.body.add_instruction(Jump {
                 label: Rc::clone(&start_label),
             }); // goto start
@@ -433,13 +370,11 @@ impl<'a> Visitor for TacVisitor<'a> {
             self.body.add_instruction(Label {
                 label: Rc::clone(&start_label),
             }); // start
-            if let Some(body) = body {
-                body.accept(self)?;
-            }
+            body.accept(self)?;
             condition.accept(self)?;
             self.body.add_instruction(JumpIfZero {
                 label: Rc::clone(&end_label),
-                operand: Rc::clone(&self.result)
+                operand: Rc::clone(&self.result),
             }); // if false goto end
             self.body.add_instruction(Jump {
                 label: Rc::clone(&start_label),
@@ -485,19 +420,17 @@ impl<'a> Visitor for TacVisitor<'a> {
     fn visit_for(
         &mut self,
         _line_number: &Rc<Position>,
-        init: &mut Option<Box<ASTNode>>,
-        condition: &mut Option<Box<ASTNode>>,
-        increment: &mut Option<Box<ASTNode>>,
-        body: &mut Option<Box<ASTNode>>,
+        init: &mut ASTNode<ForInit>,
+        condition: &mut Option<ASTNode<Expression>>,
+        increment: &mut Option<ASTNode<Expression>>,
+        body: &mut Box<ASTNode<Statement>>,
         label: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
         let start_label: Rc<String> = Rc::from(format!(".{}{}_start.loop", self.name, label));
         let end_label: Rc<String> = Rc::from(format!(".{}{}_end.loop", self.name, label));
         let increment_label: Rc<String> =
             Rc::from(format!(".{}{}_increment.loop", self.name, label));
-        if let Some(init) = init {
-            init.accept(self)?;
-        }
+        init.accept(self)?;
         self.body.add_instruction(
             // start
             Label {
@@ -512,9 +445,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 operand: Rc::clone(&self.result),
             });
         }
-        if let Some(body) = body {
-            body.accept(self)?;
-        }
+        body.accept(self)?;
         self.body.add_instruction(Label {
             label: Rc::clone(&increment_label),
         }); // increment
@@ -542,30 +473,22 @@ impl<'a> Visitor for TacVisitor<'a> {
 
     fn visit_variable(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         identifier: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
-        match self
+        let pseudoregister = self
             .body
             .variable_to_pseudoregister
             .get(&(*Rc::clone(&identifier)).clone())
-        {
-            None => Err(SemanticError(format!(
-                "Variable {:?} at {} not found",
-                line_number, identifier
-            ))
-            .into()),
-            Some(pseudoregister) => {
-                self.result = Rc::from(Operand::Register(pseudoregister.clone()));
-                Ok(())
-            }
-        }
+            .unwrap();
+        self.result = Rc::from(Operand::Register(pseudoregister.clone()));
+        Ok(())
     }
 
     fn visit_prefix(
         &mut self,
         line_number: &Rc<Position>,
-        variable: &mut Box<ASTNode>,
+        variable: &mut Box<ASTNode<Expression>>,
         operator: &mut UnaryOperator,
     ) -> Result<(), CompilerError> {
         let binary_operator = if *operator == UnaryOperator::Increment {
@@ -595,7 +518,7 @@ impl<'a> Visitor for TacVisitor<'a> {
     fn visit_postfix(
         &mut self,
         line_number: &Rc<Position>,
-        variable: &mut Box<ASTNode>,
+        variable: &mut Box<ASTNode<Expression>>,
         operator: &mut UnaryOperator,
     ) -> Result<(), CompilerError> {
         let binary_operator = if *operator == UnaryOperator::Increment {
@@ -629,6 +552,60 @@ impl<'a> Visitor for TacVisitor<'a> {
             right: Rc::from(Operand::Immediate(1)),
         });
         self.result = Rc::from(Operand::Register(temp1));
+        Ok(())
+    }
+
+    fn visit_if_else(
+        &mut self,
+        _line_number: &Rc<Position>,
+        condition: &mut ASTNode<Expression>,
+        if_true: &mut Box<ASTNode<Statement>>,
+        if_false: &mut Option<Box<ASTNode<Statement>>>,
+    ) -> Result<(), CompilerError> {
+        match if_false {
+            None => {
+                condition.accept(self)?;
+                let end_label: Rc<String> =
+                    Rc::from(format!(".{}{}_end", self.name, self.label_count));
+                self.label_count += 1;
+                self.body.add_instruction(JumpIfZero {
+                    // if false goto end
+                    label: Rc::clone(&end_label),
+                    operand: Rc::clone(&self.result),
+                });
+                if_true.accept(self)?;
+                self.body.add_instruction(Label {
+                    label: Rc::clone(&end_label),
+                });
+            }
+            Some(if_false) => {
+                condition.accept(self)?;
+                let else_label: Rc<String> =
+                    Rc::from(format!(".{}{}_else", self.name, self.label_count));
+                self.label_count += 1;
+                let end_label: Rc<String> =
+                    Rc::from(format!(".{}{}_end", self.name, self.label_count));
+                self.label_count += 1;
+                self.body.add_instruction(JumpIfZero {
+                    // if false goto else
+                    label: Rc::clone(&else_label),
+                    operand: Rc::clone(&self.result),
+                });
+                if_true.accept(self)?;
+
+                self.body.add_instruction(Jump {
+                    label: Rc::clone(&end_label),
+                }); // goto end
+                self.body.add_instruction(Label {
+                    label: Rc::clone(&else_label),
+                }); // else
+                if_false.accept(self)?;
+                self.body.add_instruction(Label {
+                    label: Rc::clone(&end_label),
+                });
+            }
+        };
+        self.result = Rc::from(Operand::None);
         Ok(())
     }
 }

@@ -1,6 +1,4 @@
-use crate::ast::{
-    ASTNode, Block, BlockItem, Declaration, Expression, ForInit, Program, Statement, Visitor,
-};
+use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Program, Statement, Visitor};
 use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
@@ -116,7 +114,7 @@ impl Visitor for VariableResolutionVisitor {
     fn visit_block(
         &mut self,
         _line_number: &Rc<Position>,
-        body: &mut Vec<ASTNode<BlockItem>>,
+        body: &mut Block,
     ) -> Result<(), CompilerError> {
         self.layer += 1;
         for node in body {
@@ -298,10 +296,11 @@ impl Visitor for VariableResolutionVisitor {
     fn visit_if_else(
         &mut self,
         _line_number: &Rc<Position>,
-        _expression: &mut ASTNode<Expression>,
+        expression: &mut ASTNode<Expression>,
         if_true: &mut Box<ASTNode<Statement>>,
         if_false: &mut Option<Box<ASTNode<Statement>>>,
     ) -> Result<(), CompilerError> {
+        expression.accept(self)?;
         if let Some(if_false) = if_false {
             if_false.accept(self)?;
         }

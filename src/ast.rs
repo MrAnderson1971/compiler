@@ -1,6 +1,9 @@
 use crate::CompilerError;
 use crate::common::{Identifier, Position};
 use crate::lexer::{BinaryOperator, Number, UnaryOperator};
+use crate::tac::FunctionBody;
+use crate::tac_visitor::TacVisitor;
+use crate::variable_resolution::VariableResolutionVisitor;
 use std::ops::DerefMut;
 use std::rc::Rc;
 
@@ -36,7 +39,7 @@ pub(crate) trait Visitor {
     fn visit_block(
         &mut self,
         line_number: &Rc<Position>,
-        body: &mut Vec<ASTNode<BlockItem>>,
+        body: &mut Block,
     ) -> Result<(), CompilerError>;
     fn visit_unary(
         &mut self,
@@ -135,11 +138,32 @@ impl ASTNode<Program> {
 
 impl ASTNode<FunctionDeclaration> {
     fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
-        self.kind.body.accept(visitor)
+        let f = &mut self.kind;
+        visitor.visit_function(&self.line_number, &mut f.name, &mut f.params, &mut f.body)
     }
-    
+
     pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
-        
+        let identifier = Rc::clone(&self.kind.name);
+        let mut variable_resolution_visitor =
+            VariableResolutionVisitor::new(Rc::clone(&identifier));
+        self.accept(&mut variable_resolution_visitor as &mut dyn Visitor)?;
+
+        let mut function_body = FunctionBody::new();
+
+        let mut tac_visitor = TacVisitor::new(Rc::clone(&identifier), &mut function_body);
+        self.accept(&mut tac_visitor as &mut dyn Visitor)?;
+
+        // Default return statement in the main method
+        if identifier.as_str() == "main" {
+            function_body.add_default_return_to_main();
+        }
+
+        println!("{:#?}", function_body);
+
+        for instruction in &function_body.instructions {
+            instruction.make_assembly(out, &function_body);
+        }
+        Ok(())
     }
 }
 
@@ -151,6 +175,7 @@ pub(crate) struct ASTNode<T> {
 
 pub(crate) type Program = Vec<ASTNode<FunctionDeclaration>>;
 
+#[derive(Debug)]
 pub(crate) struct FunctionDeclaration {
     pub(crate) name: Rc<Identifier>,
     pub(crate) params: Vec<Rc<Identifier>>,
@@ -168,6 +193,7 @@ impl ASTNode<Block> {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum BlockItem {
     D(ASTNode<Declaration>),
     S(Box<ASTNode<Statement>>),
@@ -182,6 +208,7 @@ impl ASTNode<BlockItem> {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum Declaration {
     FunctionDeclaration(ASTNode<FunctionDeclaration>),
     VariableDeclaration(ASTNode<VariableDeclaration>),
@@ -193,6 +220,7 @@ impl ASTNode<Declaration> {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct VariableDeclaration {
     pub(crate) name: Rc<Identifier>,
     pub(crate) init: Option<ASTNode<Expression>>,
@@ -239,13 +267,14 @@ impl ASTNode<Expression> {
                 if_true,
                 if_false,
             } => visitor.visit_condition(&self.line_number, condition, if_true, if_false),
-            Expression::FunctionCall(..) => Ok(()),
+            Expression::FunctionCall(..) => todo!(),
             Expression::Prefix(op, exp) => visitor.visit_prefix(&self.line_number, exp, op),
             Expression::Postfix(op, exp) => visitor.visit_postfix(&self.line_number, exp, op),
         }
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum Statement {
     Return(ASTNode<Expression>),
     Expression(ASTNode<Expression>),
@@ -286,7 +315,7 @@ impl ASTNode<Statement> {
                 if_true,
                 if_false,
             } => visitor.visit_if_else(&self.line_number, condition, if_true, if_false),
-            Statement::Compound(block) => block.accept(visitor),
+            Statement::Compound(block) => visitor.visit_block(&self.line_number, &mut block.kind),
             Statement::Break(label) => visitor.visit_break(&self.line_number, label),
             Statement::Continue { label, is_for } => {
                 visitor.visit_continue(&self.line_number, label, is_for)
@@ -309,6 +338,7 @@ impl ASTNode<Statement> {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum ForInit {
     InitDecl(ASTNode<Declaration>),
     InitExp(Option<ASTNode<Expression>>),
