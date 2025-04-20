@@ -1,16 +1,19 @@
 use crate::ast::BlockItem::{D, S};
-use crate::ast::Expression::{Assignment, Condition, Constant, Postfix, Prefix, Unary, Variable};
+use crate::ast::Expression::{
+    Assignment, Condition, Constant, FunctionCall, Postfix, Prefix, Unary, Variable,
+};
 use crate::ast::ForInit::{InitDecl, InitExp};
 use crate::ast::Statement::{Compound, For, If, Null, Return, While};
 use crate::ast::{
     ASTNode, Block, BlockItem, Declaration, Expression, ForInit, FunctionDeclaration, Program,
     Statement, VariableDeclaration, extract_base_variable, is_lvalue_node,
 };
-use crate::common::Position;
+use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::{SemanticError, SyntaxError};
 use crate::lexer::BinaryOperator::Assign;
 use crate::lexer::Symbol::{Ambiguous, Binary};
+use crate::lexer::Token::Name;
 use crate::lexer::{BinaryOperator, Keyword, Symbol, Token, UnaryOperator, UnaryOrBinaryOp};
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -74,13 +77,64 @@ impl Parser {
         }
     }
 
+    #[allow(unused_variables)]
+    fn parse_params(&mut self) -> Result<Vec<Rc<Identifier>>, CompilerError> {
+        expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;
+        let mut params: Vec<Rc<Identifier>> = vec![];
+
+        let next = self.tokens.pop_front().unwrap();
+        match next {
+            Token::Symbol(Symbol::CloseParenthesis) => return Ok(params),
+            Token::Keyword(Keyword::Int) => {
+                if let Name(name) = self.tokens.pop_front().unwrap() {
+                    params.push(Rc::from(name));
+                } else {
+                    return Err(SyntaxError(format!(
+                        "Expected identifier but got {:?}",
+                        next
+                    )));
+                }
+            }
+            _ => {
+                return Err(SyntaxError(format!(
+                    "Expected identifier but got {:?}",
+                    next
+                )));
+            }
+        }
+
+        loop {
+            let next = self.tokens.pop_front().unwrap();
+            match next {
+                Token::Symbol(Symbol::CloseParenthesis) => return Ok(params),
+                Token::Symbol(Symbol::Comma) => {
+                    expect_token!(self, Token::Keyword(Keyword::Int))?;
+                    if let Name(name) = self.tokens.pop_front().unwrap() {
+                        params.push(Rc::from(name));
+                    } else {
+                        return Err(SyntaxError(format!(
+                            "Expected identifier but got {:?}",
+                            next
+                        )));
+                    }
+                }
+                _ => {
+                    return Err(SyntaxError(format!(
+                        "Expected identifier but got {:?}",
+                        next
+                    )));
+                }
+            }
+        }
+    }
+
     fn parse_function_declaration(
         &mut self,
     ) -> Result<ASTNode<FunctionDeclaration>, CompilerError> {
         expect_token!(self, Token::Keyword(Keyword::Int))?;
         let current = self.peek_token();
         let function_name = match current {
-            Token::Identifier(name) => name,
+            Token::Name(name) => name,
             _ => {
                 return Err(SyntaxError(format!(
                     "Expected identifier but got {:?} at {:?}",
@@ -91,8 +145,7 @@ impl Parser {
         self.tokens.pop_front();
         self.line_number = Rc::from((0, function_name.clone()));
         let mut block_items: Vec<ASTNode<BlockItem>> = Vec::new();
-        expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;
-        expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
+        self.parse_params()?;
         expect_token!(self, Token::Symbol(Symbol::OpenBrace))?;
 
         let mut next_token = self.peek_token();
@@ -120,7 +173,7 @@ impl Parser {
         let current = self.peek_token();
         self.tokens.pop_front();
         let identifier = match current {
-            Token::Identifier(name) => name,
+            Token::Name(name) => name,
             _ => {
                 return Err(SyntaxError(format!(
                     "Expected identifier but got {:?} at {:?}",
@@ -164,6 +217,29 @@ impl Parser {
         }
     }
 
+    fn parse_arguments(&mut self) -> Result<Box<Vec<ASTNode<Expression>>>, CompilerError> {
+        let mut params = vec![];
+        let next = self.tokens.pop_front().unwrap();
+
+        match next {
+            Token::Symbol(Symbol::CloseParenthesis) => return Ok(Box::new(params)),
+            _ => {
+                params.push(self.parse_binary_op(0)?);
+            }
+        }
+
+        loop {
+            let next = self.tokens.pop_front().unwrap();
+            match next {
+                Token::Symbol(Symbol::CloseParenthesis) => return Ok(Box::new(params)),
+                _ => {
+                    expect_token!(self, Token::Symbol(Symbol::Comma))?;
+                    params.push(self.parse_binary_op(0)?);
+                }
+            }
+        }
+    }
+
     fn parse_primary(&mut self) -> Result<ASTNode<Expression>, CompilerError> {
         let token = self.peek_token();
         match token {
@@ -177,9 +253,14 @@ impl Parser {
                 expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
                 Ok(expression)
             }
-            Token::Identifier(identifier) => {
+            Token::Name(identifier) => {
                 self.tokens.pop_front();
-                Ok(self.make_node(Variable(Rc::from(identifier))))
+                if let Token::Symbol(Symbol::OpenParenthesis) = self.peek_token() {
+                    let params = self.parse_arguments()?;
+                    Ok(self.make_node(FunctionCall(Rc::from(identifier), params)))
+                } else {
+                    Ok(self.make_node(Variable(Rc::from(identifier))))
+                }
             }
             _ => Err(SyntaxError(format!(
                 "Unexpected token {:?} at {:?}",
@@ -376,7 +457,8 @@ impl Parser {
             Token::Keyword(Keyword::Int) => {
                 self.tokens.pop_front();
                 let variable_declaration = self.parse_declaration()?;
-                let declaration = self.make_node(Declaration::VariableDeclaration(variable_declaration));
+                let declaration =
+                    self.make_node(Declaration::VariableDeclaration(variable_declaration));
                 Ok(self.make_node(InitDecl(declaration)))
             }
             Token::Symbol(Symbol::Semicolon) => Ok(self.make_node(InitExp(None))),

@@ -245,7 +245,7 @@ pub(crate) enum Expression {
         if_true: Box<ASTNode<Expression>>,
         if_false: Box<ASTNode<Expression>>,
     },
-    FunctionCall(Rc<Identifier>, Vec<Box<ASTNode<Expression>>>),
+    FunctionCall(Rc<Identifier>, Box<Vec<ASTNode<Expression>>>),
     Prefix(UnaryOperator, Box<ASTNode<Expression>>),
     Postfix(UnaryOperator, Box<ASTNode<Expression>>),
 }
