@@ -38,3 +38,5 @@ impl Display for Pseudoregister {
         write!(f, "-{}(%rbp)", 4 * self.size)
     }
 }
+
+pub(crate) type Identifier = String;

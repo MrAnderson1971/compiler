@@ -1,12 +1,12 @@
-use crate::ast::{ASTNode, Visitor};
+use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Program, Statement, Visitor};
+use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{BinaryOperator, Number, UnaryOperator};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
-use crate::common::Position;
 
-pub(crate)struct VariableResolutionVisitor {
+pub(crate) struct VariableResolutionVisitor {
     layer: i32,
     function: Rc<String>,
     variable_map: HashMap<String, VecDeque<i32>>,
@@ -14,7 +14,7 @@ pub(crate)struct VariableResolutionVisitor {
 }
 
 impl VariableResolutionVisitor {
-    pub(crate)fn new(function: Rc<String>) -> Self {
+    pub(crate) fn new(function: Rc<String>) -> Self {
         Self {
             layer: 0,
             function,
@@ -38,7 +38,7 @@ impl Visitor for VariableResolutionVisitor {
     fn visit_program(
         &mut self,
         _line_number: &Rc<Position>,
-        _function_declaration: &mut Box<ASTNode>,
+        _function_declaration: &mut Program,
     ) -> Result<(), CompilerError> {
         panic!("Should not be called")
     }
@@ -46,49 +46,58 @@ impl Visitor for VariableResolutionVisitor {
     fn visit_function(
         &mut self,
         _line_number: &Rc<Position>,
-        _identifier: &mut Rc<String>,
-        body: &mut Option<Box<ASTNode>>,
+        _identifier: &mut Rc<Identifier>,
+        _params: &mut Vec<Rc<Identifier>>,
+        body: &mut ASTNode<Block>,
     ) -> Result<(), CompilerError> {
-        if let Some(body) = body {
-            body.accept(self)
-        } else {
-            Ok(())
-        }
+        body.accept(self)
     }
 
     fn visit_declaration(
         &mut self,
         line_number: &Rc<Position>,
-        identifier: &mut Rc<String>,
-        expression: &mut Option<Box<ASTNode>>,
+        declaration: &mut Declaration,
     ) -> Result<(), CompilerError> {
-        if !self.variable_map.contains_key(&(*Rc::clone(&identifier)).clone()) {
-            let mut stack = VecDeque::new();
-            stack.push_back(self.layer);
-            self.variable_map.insert((*Rc::clone(&identifier)).clone(), stack);
-        } else {
-            let stack = self.variable_map.get_mut(&(*Rc::clone(&identifier)).clone()).unwrap();
-            if !stack.is_empty() && *stack.back().unwrap() == self.layer {
-                return Err(SemanticError(format!(
-                    "Duplicate variable declaration {} at {:?}",
-                    identifier, line_number
-                )));
+        match declaration {
+            Declaration::VariableDeclaration(d) => {
+                let (identifier, expression) = (&mut d.kind.name, &mut d.kind.init);
+                if !self
+                    .variable_map
+                    .contains_key(&(*Rc::clone(&identifier)).clone())
+                {
+                    let mut stack = VecDeque::new();
+                    stack.push_back(self.layer);
+                    self.variable_map
+                        .insert((*Rc::clone(&identifier)).clone(), stack);
+                } else {
+                    let stack = self
+                        .variable_map
+                        .get_mut(&(*Rc::clone(&identifier)).clone())
+                        .unwrap();
+                    if !stack.is_empty() && *stack.back().unwrap() == self.layer {
+                        return Err(SemanticError(format!(
+                            "Duplicate variable declaration {} at {:?}",
+                            identifier, line_number
+                        )));
+                    }
+                    stack.push_back(self.layer);
+                }
+                *identifier = Rc::new(format!("{}::{}::{}", self.function, identifier, self.layer));
+                if let Some(expression) = expression {
+                    expression.accept(self)
+                } else {
+                    Ok(())
+                }
             }
-            stack.push_back(self.layer);
-        }
-        *identifier = Rc::new(format!("{}::{}::{}", self.function, identifier, self.layer));
-        if let Some(expression) = expression {
-            expression.accept(self)
-        } else {
-            Ok(())
+            Declaration::FunctionDeclaration(_) => todo!(),
         }
     }
 
     fn visit_assignment(
         &mut self,
         _line_number: &Rc<Position>,
-        left: &mut Box<ASTNode>,
-        right: &mut Box<ASTNode>,
+        left: &mut Box<ASTNode<Expression>>,
+        right: &mut Box<ASTNode<Expression>>,
     ) -> Result<(), CompilerError> {
         left.accept(self)?;
         right.accept(self)
@@ -97,19 +106,15 @@ impl Visitor for VariableResolutionVisitor {
     fn visit_return(
         &mut self,
         _line_number: &Rc<Position>,
-        expression: &mut Option<Box<ASTNode>>,
+        expression: &mut ASTNode<Expression>,
     ) -> Result<(), CompilerError> {
-        if let Some(expression) = expression {
-            expression.accept(self)
-        } else {
-            Ok(())
-        }
+        expression.accept(self)
     }
 
     fn visit_block(
         &mut self,
         _line_number: &Rc<Position>,
-        body: &mut Vec<Box<ASTNode>>,
+        body: &mut Block,
     ) -> Result<(), CompilerError> {
         self.layer += 1;
         for node in body {
@@ -124,7 +129,7 @@ impl Visitor for VariableResolutionVisitor {
         &mut self,
         _line_number: &Rc<Position>,
         _op: &mut UnaryOperator,
-        expression: &mut Box<ASTNode>,
+        expression: &mut Box<ASTNode<Expression>>,
     ) -> Result<(), CompilerError> {
         expression.accept(self)
     }
@@ -133,8 +138,8 @@ impl Visitor for VariableResolutionVisitor {
         &mut self,
         _line_number: &Rc<Position>,
         _op: &mut BinaryOperator,
-        left: &mut Box<ASTNode>,
-        right: &mut Box<ASTNode>,
+        left: &mut Box<ASTNode<Expression>>,
+        right: &mut Box<ASTNode<Expression>>,
     ) -> Result<(), CompilerError> {
         left.accept(self)?;
         right.accept(self)
@@ -143,34 +148,27 @@ impl Visitor for VariableResolutionVisitor {
     fn visit_condition(
         &mut self,
         _line_number: &Rc<Position>,
-        condition: &mut Box<ASTNode>,
-        if_true: &mut Option<Box<ASTNode>>,
-        if_false: &mut Option<Box<ASTNode>>,
-        _is_ternary: &mut bool,
+        condition: &mut Box<ASTNode<Expression>>,
+        if_true: &mut Box<ASTNode<Expression>>,
+        if_false: &mut Box<ASTNode<Expression>>,
     ) -> Result<(), CompilerError> {
         condition.accept(self)?;
-        if let Some(if_true) = if_true {
-            if_true.accept(self)?;
-        }
-        if let Some(if_false) = if_false {
-            if_false.accept(self)?;
-        }
+        if_true.accept(self)?;
+        if_false.accept(self)?;
         Ok(())
     }
 
     fn visit_while(
         &mut self,
         _line_number: &Rc<Position>,
-        condition: &mut Box<ASTNode>,
-        body: &mut Option<Box<ASTNode>>,
+        condition: &mut ASTNode<Expression>,
+        body: &mut Box<ASTNode<Statement>>,
         label: &mut Rc<String>,
         _is_do_while: &mut bool,
     ) -> Result<(), CompilerError> {
         self.loop_labels.push_back((Rc::clone(&label), false));
         condition.accept(self)?;
-        if let Some(body) = body {
-            body.accept(self)?;
-        }
+        body.accept(self)?;
         self.loop_labels.pop_back();
         Ok(())
     }
@@ -181,7 +179,10 @@ impl Visitor for VariableResolutionVisitor {
         label: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
         if self.loop_labels.is_empty() {
-            Err(SemanticError(format!("Break outside loop at {:?}", line_number)))
+            Err(SemanticError(format!(
+                "Break outside loop at {:?}",
+                line_number
+            )))
         } else {
             *label = Rc::clone(&self.loop_labels.back().unwrap().0);
             Ok(())
@@ -195,7 +196,10 @@ impl Visitor for VariableResolutionVisitor {
         is_for: &mut bool,
     ) -> Result<(), CompilerError> {
         if self.loop_labels.is_empty() {
-            Err(SemanticError(format!("Continue outside loop at {:?}", line_number)))
+            Err(SemanticError(format!(
+                "Continue outside loop at {:?}",
+                line_number
+            )))
         } else {
             *label = Rc::clone(&self.loop_labels.back().unwrap().0);
             *is_for = self.loop_labels.back().unwrap().1;
@@ -206,13 +210,14 @@ impl Visitor for VariableResolutionVisitor {
     fn visit_for(
         &mut self,
         _line_number: &Rc<Position>,
-        init: &mut Option<Box<ASTNode>>,
-        condition: &mut Option<Box<ASTNode>>,
-        increment: &mut Option<Box<ASTNode>>,
-        body: &mut Option<Box<ASTNode>>,
+        init: &mut ASTNode<ForInit>,
+        condition: &mut Option<ASTNode<Expression>>,
+        increment: &mut Option<ASTNode<Expression>>,
+        body: &mut Box<ASTNode<Statement>>,
         label: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
-        if let Some(init) = init { // the init adds a scope
+        if !matches!(init.kind, ForInit::InitExp(None)) {
+            // the init adds a scope
             self.layer += 1;
             init.accept(self)?;
         }
@@ -223,11 +228,10 @@ impl Visitor for VariableResolutionVisitor {
         if let Some(increment) = increment {
             increment.accept(self)?;
         }
-        if let Some(body) = body {
-            body.accept(self)?;
-        }
+        body.accept(self)?;
+
         self.loop_labels.pop_back();
-        if let Some(..) = init {
+        if !matches!(init.kind, ForInit::InitExp(None)) {
             self.pop_stack();
             self.layer -= 1;
         }
@@ -247,14 +251,24 @@ impl Visitor for VariableResolutionVisitor {
         line_number: &Rc<Position>,
         identifier: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
-        match self.variable_map.get_mut(&(*Rc::clone(&identifier)).clone()) {
-            None => Err(SemanticError(format!("Undefined variable {} at {:?}", identifier, line_number))),
+        match self
+            .variable_map
+            .get_mut(&(*Rc::clone(&identifier)).clone())
+        {
+            None => Err(SemanticError(format!(
+                "Undefined variable {} at {:?}",
+                identifier, line_number
+            ))),
             Some(stack) => {
                 if stack.is_empty() {
-                    Err(SemanticError(format!("Variable {} at {:?} out of scope", identifier, line_number)))
+                    Err(SemanticError(format!(
+                        "Variable {} at {:?} out of scope",
+                        identifier, line_number
+                    )))
                 } else {
                     let variable = stack.back().unwrap();
-                    *identifier = Rc::new(format!("{}::{}::{}", self.function, identifier, variable));
+                    *identifier =
+                        Rc::new(format!("{}::{}::{}", self.function, identifier, variable));
                     Ok(())
                 }
             }
@@ -264,7 +278,7 @@ impl Visitor for VariableResolutionVisitor {
     fn visit_prefix(
         &mut self,
         _line_number: &Rc<Position>,
-        variable: &mut Box<ASTNode>,
+        variable: &mut Box<ASTNode<Expression>>,
         _operator: &mut UnaryOperator,
     ) -> Result<(), CompilerError> {
         variable.accept(self)
@@ -273,10 +287,24 @@ impl Visitor for VariableResolutionVisitor {
     fn visit_postfix(
         &mut self,
         _line_number: &Rc<Position>,
-        variable: &mut Box<ASTNode>,
+        variable: &mut Box<ASTNode<Expression>>,
         _operator: &mut UnaryOperator,
     ) -> Result<(), CompilerError> {
         variable.accept(self)
+    }
+
+    fn visit_if_else(
+        &mut self,
+        _line_number: &Rc<Position>,
+        expression: &mut ASTNode<Expression>,
+        if_true: &mut Box<ASTNode<Statement>>,
+        if_false: &mut Option<Box<ASTNode<Statement>>>,
+    ) -> Result<(), CompilerError> {
+        expression.accept(self)?;
+        if let Some(if_false) = if_false {
+            if_false.accept(self)?;
+        }
+        if_true.accept(self)
     }
 }
 
