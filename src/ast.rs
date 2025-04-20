@@ -17,7 +17,11 @@ pub(crate) trait Visitor {
         params: &mut Vec<Rc<Identifier>>,
         body: &mut ASTNode<Block>,
     ) -> Result<(), CompilerError>;
-    fn visit_declaration(&mut self, declaration: &mut Declaration) -> Result<(), CompilerError>;
+    fn visit_declaration(
+        &mut self,
+        line_number: &Rc<Position>,
+        declaration: &mut Declaration,
+    ) -> Result<(), CompilerError>;
     fn visit_assignment(
         &mut self,
         line_number: &Rc<Position>,
@@ -53,7 +57,6 @@ pub(crate) trait Visitor {
         condition: &mut Box<ASTNode<Expression>>,
         if_true: &mut Box<ASTNode<Expression>>,
         if_false: &mut Box<ASTNode<Expression>>,
-        is_ternary: bool,
     ) -> Result<(), CompilerError>;
     fn visit_while(
         &mut self,
@@ -121,11 +124,22 @@ impl ASTNode<Program> {
         }
         Ok(())
     }
+
+    pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
+        for function_declaration in &mut self.kind {
+            function_declaration.generate(out)?;
+        }
+        Ok(())
+    }
 }
 
 impl ASTNode<FunctionDeclaration> {
     fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
         self.kind.body.accept(visitor)
+    }
+    
+    pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
+        
     }
 }
 
@@ -146,7 +160,7 @@ pub(crate) struct FunctionDeclaration {
 pub(crate) type Block = Vec<ASTNode<BlockItem>>;
 
 impl ASTNode<Block> {
-    fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
+    pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
         for block_item in &mut self.kind {
             block_item.accept(visitor)?;
         }
@@ -160,7 +174,7 @@ pub(crate) enum BlockItem {
 }
 
 impl ASTNode<BlockItem> {
-    fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
+    pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
         match &mut self.kind {
             BlockItem::D(declaration) => declaration.accept(visitor),
             BlockItem::S(statement) => statement.deref_mut().accept(visitor),
@@ -175,26 +189,13 @@ pub(crate) enum Declaration {
 
 impl ASTNode<Declaration> {
     fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
-        match &mut self.kind {
-            Declaration::FunctionDeclaration(f) => f.accept(visitor),
-            Declaration::VariableDeclaration(v) => v.accept(visitor),
-        }
+        visitor.visit_declaration(&self.line_number, &mut self.kind)
     }
 }
 
 pub(crate) struct VariableDeclaration {
     pub(crate) name: Rc<Identifier>,
     pub(crate) init: Option<ASTNode<Expression>>,
-}
-
-impl ASTNode<VariableDeclaration> {
-    fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
-        if let Some(init) = &mut self.kind.init {
-            Ok(init.accept(visitor)?)
-        } else {
-            Ok(())
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -222,7 +223,7 @@ pub(crate) enum Expression {
 }
 
 impl ASTNode<Expression> {
-    fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
+    pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
         match &mut self.kind {
             Expression::Constant(value) => visitor.visit_const(&self.line_number, value),
             Expression::Variable(v) => visitor.visit_variable(&self.line_number, v),
@@ -237,7 +238,7 @@ impl ASTNode<Expression> {
                 condition,
                 if_true,
                 if_false,
-            } => visitor.visit_condition(&self.line_number, condition, if_true, if_false, true),
+            } => visitor.visit_condition(&self.line_number, condition, if_true, if_false),
             Expression::FunctionCall(..) => Ok(()),
             Expression::Prefix(op, exp) => visitor.visit_prefix(&self.line_number, exp, op),
             Expression::Postfix(op, exp) => visitor.visit_postfix(&self.line_number, exp, op),
@@ -276,7 +277,7 @@ pub(crate) enum Statement {
 }
 
 impl ASTNode<Statement> {
-    fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
+    pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
         match &mut self.kind {
             Statement::Return(val) => visitor.visit_return(&self.line_number, val),
             Statement::Expression(exp) => exp.accept(visitor),
@@ -303,14 +304,26 @@ impl ASTNode<Statement> {
                 body,
                 label,
             } => visitor.visit_for(&self.line_number, init, condition, increment, body, label),
-            Statement::Null => {Ok(())}
+            Statement::Null => Ok(()),
         }
     }
 }
 
 pub(crate) enum ForInit {
-    InitDecl(ASTNode<VariableDeclaration>),
+    InitDecl(ASTNode<Declaration>),
     InitExp(Option<ASTNode<Expression>>),
+}
+
+impl ASTNode<ForInit> {
+    pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
+        match &mut self.kind {
+            ForInit::InitDecl(v) => visitor.visit_declaration(&self.line_number, &mut v.kind),
+            ForInit::InitExp(v) => match v {
+                Some(e) => e.accept(visitor),
+                None => Ok(()),
+            },
+        }
+    }
 }
 
 pub(crate) fn is_lvalue_node(node: &Expression) -> bool {

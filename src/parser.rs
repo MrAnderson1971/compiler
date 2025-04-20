@@ -374,8 +374,9 @@ impl Parser {
     fn parse_for_init(&mut self) -> Result<ASTNode<ForInit>, CompilerError> {
         match self.peek_token() {
             Token::Keyword(Keyword::Int) => {
-                let declaration = self.parse_declaration()?;
-                Ok(self.make_node(InitDecl(self.make_node(declaration.kind))))
+                let variable_declaration = self.parse_declaration()?;
+                let declaration = self.make_node(Declaration::VariableDeclaration(variable_declaration));
+                Ok(self.make_node(InitDecl(declaration)))
             }
             Token::Symbol(Symbol::Semicolon) => Ok(self.make_node(InitExp(None))),
             _ => {
@@ -540,12 +541,12 @@ impl Parser {
                 _ => {
                     let statement = self.parse_statement()?;
                     Ok(self.make_node(S(Box::from(statement))))
-                },
+                }
             },
             _ => {
                 let statement = self.parse_statement()?;
                 Ok(self.make_node(S(Box::from(statement))))
-            },
+            }
         }
     }
 
