@@ -4,13 +4,15 @@ use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{BinaryOperator, Number, UnaryOperator};
 use std::collections::{HashMap, VecDeque};
+use std::ops::Deref;
 use std::rc::Rc;
 
 pub(crate) struct VariableResolutionVisitor {
     layer: i32,
     function: Rc<String>,
-    variable_map: HashMap<String, VecDeque<i32>>,
+    variable_map: HashMap<Identifier, VecDeque<i32>>,
     loop_labels: VecDeque<(Rc<String>, bool)>,
+    functions_map: HashMap<(Identifier, usize), bool>,
 }
 
 impl VariableResolutionVisitor {
@@ -20,6 +22,7 @@ impl VariableResolutionVisitor {
             function,
             variable_map: HashMap::new(),
             loop_labels: VecDeque::new(),
+            functions_map: HashMap::new(),
         }
     }
 }
@@ -41,16 +44,6 @@ impl Visitor for VariableResolutionVisitor {
         _function_declaration: &mut Program,
     ) -> Result<(), CompilerError> {
         panic!("Should not be called")
-    }
-
-    fn visit_function(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _identifier: &mut Rc<Identifier>,
-        _params: &mut Vec<Rc<Identifier>>,
-        body: &mut ASTNode<Block>,
-    ) -> Result<(), CompilerError> {
-        body.accept(self)
     }
 
     fn visit_declaration(
@@ -89,7 +82,40 @@ impl Visitor for VariableResolutionVisitor {
                     Ok(())
                 }
             }
-            Declaration::FunctionDeclaration(_) => todo!(),
+            Declaration::FunctionDeclaration(f) => {
+                if self.layer != 0 {
+                    return Err(SemanticError(format!(
+                        "Inner function definition of {} at {:?}",
+                        f.kind.name, line_number
+                    )));
+                }
+                let (identifier, params) = (Rc::clone(&f.kind.name), &f.kind.params);
+                if let Some(is_defined) = self
+                    .functions_map
+                    .get(&((*identifier).clone(), params.len()))
+                {
+                    if *is_defined {
+                        return Err(SemanticError(format!(
+                            "Duplicate definition of {} at {:?}",
+                            identifier, line_number
+                        )));
+                    }
+                }
+                self.functions_map
+                    .insert(((*identifier).clone(), params.len()), true);
+                self.layer += 1;
+                for param in &mut f.kind.params {
+                    let original_name = param.clone();  // Store original name
+                    *param = format!("{}::{}::{}", self.function, param, self.layer);
+                    let mut stack = VecDeque::new();
+                    stack.push_back(self.layer);
+                    self.variable_map.insert(original_name, stack);  // Use original name as key
+                }
+                f.kind.body.accept(self)?;
+                self.variable_map.clear();
+                self.layer -= 1;
+                Ok(())
+            }
         }
     }
 
@@ -273,6 +299,27 @@ impl Visitor for VariableResolutionVisitor {
                 }
             }
         }
+    }
+
+    fn visit_function_call(
+        &mut self,
+        line_number: &Rc<Position>,
+        identifier: &mut Rc<Identifier>,
+        arguments: &mut Box<Vec<ASTNode<Expression>>>,
+    ) -> Result<(), CompilerError> {
+        if !self
+            .functions_map
+            .contains_key(&((*identifier).deref().clone(), arguments.len()))
+        {
+            return Err(SemanticError(format!(
+                "Unknown function {} called at {:?}",
+                identifier, line_number
+            )));
+        }
+        for arg in (*arguments).iter_mut() {
+            arg.accept(self)?;
+        }
+        Ok(())
     }
 
     fn visit_prefix(

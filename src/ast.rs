@@ -13,13 +13,6 @@ pub(crate) trait Visitor {
         line_number: &Rc<Position>,
         function_declaration: &mut Program,
     ) -> Result<(), CompilerError>;
-    fn visit_function(
-        &mut self,
-        line_number: &Rc<Position>,
-        identifier: &mut Rc<Identifier>,
-        params: &mut Vec<Rc<Identifier>>,
-        body: &mut ASTNode<Block>,
-    ) -> Result<(), CompilerError>;
     fn visit_declaration(
         &mut self,
         line_number: &Rc<Position>,
@@ -99,6 +92,12 @@ pub(crate) trait Visitor {
         line_number: &Rc<Position>,
         identifier: &mut Rc<Identifier>,
     ) -> Result<(), CompilerError>;
+    fn visit_function_call(
+        &mut self,
+        line_number: &Rc<Position>,
+        identifier: &mut Rc<Identifier>,
+        arguments: &mut Box<Vec<ASTNode<Expression>>>,
+    ) -> Result<(), CompilerError>;
     fn visit_prefix(
         &mut self,
         line_number: &Rc<Position>,
@@ -129,41 +128,39 @@ impl ASTNode<Program> {
     }
 
     pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
-        for function_declaration in &mut self.kind {
-            function_declaration.generate(out)?;
+        for d in &mut self.kind {
+            d.generate(out)?;
         }
         Ok(())
     }
 }
 
-impl ASTNode<FunctionDeclaration> {
-    fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
-        let f = &mut self.kind;
-        visitor.visit_function(&self.line_number, &mut f.name, &mut f.params, &mut f.body)
-    }
-
+impl ASTNode<Declaration> {
     pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
-        let identifier = Rc::clone(&self.kind.name);
-        let mut variable_resolution_visitor =
-            VariableResolutionVisitor::new(Rc::clone(&identifier));
-        self.accept(&mut variable_resolution_visitor as &mut dyn Visitor)?;
+        if let Declaration::FunctionDeclaration(func) = &mut self.kind {
+            let identifier = Rc::clone(&func.kind.name);
+            let mut variable_resolution_visitor =
+                VariableResolutionVisitor::new(Rc::clone(&identifier));
+            self.accept(&mut variable_resolution_visitor as &mut dyn Visitor)?;
 
-        let mut function_body = FunctionBody::new();
+            let mut function_body = FunctionBody::new();
 
-        let mut tac_visitor = TacVisitor::new(Rc::clone(&identifier), &mut function_body);
-        self.accept(&mut tac_visitor as &mut dyn Visitor)?;
+            let mut tac_visitor = TacVisitor::new(Rc::clone(&identifier), &mut function_body);
+            self.accept(&mut tac_visitor as &mut dyn Visitor)?;
 
-        // Default return statement in the main method
-        if identifier.as_str() == "main" {
-            function_body.add_default_return_to_main();
+            // Default return statement in the main method
+            if identifier.as_str() == "main" {
+                function_body.add_default_return_to_main();
+            }
+
+            println!("{:#?}", function_body);
+
+            for instruction in &function_body.instructions {
+                instruction.make_assembly(out, &function_body);
+            }
+            return Ok(());
         }
-
-        println!("{:#?}", function_body);
-
-        for instruction in &function_body.instructions {
-            instruction.make_assembly(out, &function_body);
-        }
-        Ok(())
+        unimplemented!();
     }
 }
 
@@ -173,12 +170,12 @@ pub(crate) struct ASTNode<T> {
     pub(crate) kind: T,
 }
 
-pub(crate) type Program = Vec<ASTNode<FunctionDeclaration>>;
+pub(crate) type Program = Vec<ASTNode<Declaration>>;
 
 #[derive(Debug)]
 pub(crate) struct FunctionDeclaration {
     pub(crate) name: Rc<Identifier>,
-    pub(crate) params: Vec<Rc<Identifier>>,
+    pub(crate) params: Vec<Identifier>,
     pub(crate) body: ASTNode<Block>,
 }
 
@@ -267,7 +264,9 @@ impl ASTNode<Expression> {
                 if_true,
                 if_false,
             } => visitor.visit_condition(&self.line_number, condition, if_true, if_false),
-            Expression::FunctionCall(..) => todo!(),
+            Expression::FunctionCall(identifier, arguments) => {
+                visitor.visit_function_call(&self.line_number, identifier, arguments)
+            }
             Expression::Prefix(op, exp) => visitor.visit_prefix(&self.line_number, exp, op),
             Expression::Postfix(op, exp) => visitor.visit_postfix(&self.line_number, exp, op),
         }

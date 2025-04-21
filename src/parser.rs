@@ -78,16 +78,16 @@ impl Parser {
     }
 
     #[allow(unused_variables)]
-    fn parse_params(&mut self) -> Result<Vec<Rc<Identifier>>, CompilerError> {
+    fn parse_params(&mut self) -> Result<Vec<Identifier>, CompilerError> {
         expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;
-        let mut params: Vec<Rc<Identifier>> = vec![];
+        let mut params = vec![];
 
         let next = self.tokens.pop_front().unwrap();
         match next {
             Token::Symbol(Symbol::CloseParenthesis) => return Ok(params),
             Token::Keyword(Keyword::Int) => {
                 if let Name(name) = self.tokens.pop_front().unwrap() {
-                    params.push(Rc::from(name));
+                    params.push(name);
                 } else {
                     return Err(SyntaxError(format!(
                         "Expected identifier but got {:?}",
@@ -110,7 +110,7 @@ impl Parser {
                 Token::Symbol(Symbol::Comma) => {
                     expect_token!(self, Token::Keyword(Keyword::Int))?;
                     if let Name(name) = self.tokens.pop_front().unwrap() {
-                        params.push(Rc::from(name));
+                        params.push(name);
                     } else {
                         return Err(SyntaxError(format!(
                             "Expected identifier but got {:?}",
@@ -145,7 +145,7 @@ impl Parser {
         self.tokens.pop_front();
         self.line_number = Rc::from((0, function_name.clone()));
         let mut block_items: Vec<ASTNode<BlockItem>> = Vec::new();
-        self.parse_params()?;
+        let params = self.parse_params()?;
         expect_token!(self, Token::Symbol(Symbol::OpenBrace))?;
 
         let mut next_token = self.peek_token();
@@ -164,7 +164,7 @@ impl Parser {
         expect_token!(self, Token::Symbol(Symbol::CloseBrace))?;
         Ok(self.make_node(FunctionDeclaration {
             name: Rc::from(function_name),
-            params: vec![],
+            params,
             body: function_body,
         }))
     }
@@ -635,15 +635,21 @@ impl Parser {
     }
 
     pub(crate) fn parse_program(&mut self) -> Result<ASTNode<Program>, CompilerError> {
-        let function_declaration = self.parse_function_declaration()?;
-        if !matches!(self.tokens.front().unwrap(), Token::EOF) {
-            Err(SyntaxError(format!(
-                "Expected EOF but got {:?}",
-                self.peek_token()
-            )))
-        } else {
-            Ok(self.make_node(vec![function_declaration]))
+        let mut declarations = Vec::new();
+
+        while !matches!(self.tokens.front().unwrap(), Token::EOF) {
+            let function_declaration = self.parse_function_declaration()?;
+
+            let declaration = Declaration::FunctionDeclaration(function_declaration);
+
+            let declaration_node = self.make_node(declaration);
+
+            declarations.push(declaration_node);
         }
+
+        expect_token!(self, Token::EOF)?;
+
+        Ok(self.make_node(declarations))
     }
 
     fn peek_token(&self) -> Token {

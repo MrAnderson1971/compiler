@@ -37,20 +37,6 @@ impl<'a> Visitor for TacVisitor<'a> {
         panic!("Should not be called")
     }
 
-    fn visit_function(
-        &mut self,
-        _line_number: &Rc<Position>,
-        identifier: &mut Rc<Identifier>,
-        _params: &mut Vec<Rc<Identifier>>,
-        body: &mut ASTNode<Block>,
-    ) -> Result<(), CompilerError> {
-        self.body.add_instruction(FunctionInstruction {
-            name: Rc::clone(&identifier),
-        });
-        self.body.add_instruction(AllocateStackInstruction);
-        body.accept(self)
-    }
-
     fn visit_declaration(
         &mut self,
         _line_number: &Rc<Position>,
@@ -77,7 +63,13 @@ impl<'a> Visitor for TacVisitor<'a> {
                 self.body.variable_count += 1;
                 Ok(())
             }
-            Declaration::FunctionDeclaration(_) => todo!(),
+            Declaration::FunctionDeclaration(func) => {
+                self.body.add_instruction(FunctionInstruction {
+                    name: Rc::clone(&func.kind.name),
+                });
+                self.body.add_instruction(AllocateStackInstruction);
+                func.kind.body.accept(self)
+            }
         }
     }
 
@@ -483,6 +475,15 @@ impl<'a> Visitor for TacVisitor<'a> {
             .unwrap();
         self.result = Rc::from(Operand::Register(pseudoregister.clone()));
         Ok(())
+    }
+
+    fn visit_function_call(
+        &mut self,
+        line_number: &Rc<Position>,
+        identifier: &mut Rc<Identifier>,
+        arguments: &mut Box<Vec<ASTNode<Expression>>>,
+    ) -> Result<(), CompilerError> {
+        todo!()
     }
 
     fn visit_prefix(
