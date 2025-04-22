@@ -9,11 +9,6 @@ use std::ops::DerefMut;
 use std::rc::Rc;
 
 pub(crate) trait Visitor {
-    fn visit_program(
-        &mut self,
-        line_number: &Rc<Position>,
-        function_declaration: &mut Program,
-    ) -> Result<(), CompilerError>;
     fn visit_declaration(
         &mut self,
         line_number: &Rc<Position>,
@@ -121,13 +116,6 @@ pub(crate) trait Visitor {
 }
 
 impl ASTNode<Program> {
-    fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
-        for function_declaration in &mut self.kind {
-            function_declaration.accept(visitor)?;
-        }
-        Ok(())
-    }
-
     pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
         let mut shared_functions_map: HashMap<(Identifier, usize), bool> = HashMap::new();
 

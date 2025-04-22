@@ -1,10 +1,14 @@
-use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Program, Statement, Visitor};
+use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Statement, Visitor};
 use crate::common::{Identifier, Operand, Position, Pseudoregister};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{BinaryOperator, Number, UnaryOperator};
 use crate::tac::FunctionBody;
-use crate::tac::TACInstruction::{AdjustStack, AllocateStackInstruction, BinaryOpInstruction, DeallocateStackInstruction, FunctionCall, FunctionInstruction, Jump, JumpIfNotZero, JumpIfZero, Label, PushArgument, ReturnInstruction, StoreValueInstruction, UnaryOpInstruction};
+use crate::tac::TACInstruction::{
+    AdjustStack, AllocateStackInstruction, BinaryOpInstruction, DeallocateStackInstruction,
+    FunctionCall, FunctionInstruction, Jump, JumpIfNotZero, JumpIfZero, Label, PushArgument,
+    ReturnInstruction, StoreValueInstruction, UnaryOpInstruction,
+};
 use std::rc::Rc;
 
 const FIRST_SIX_REGISTERS: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
@@ -28,14 +32,6 @@ impl<'a> TacVisitor<'a> {
 }
 
 impl<'a> Visitor for TacVisitor<'a> {
-    fn visit_program(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _function_declaration: &mut Program,
-    ) -> Result<(), CompilerError> {
-        panic!("Should not be called")
-    }
-
     fn visit_declaration(
         &mut self,
         _line_number: &Rc<Position>,
@@ -531,7 +527,8 @@ impl<'a> Visitor for TacVisitor<'a> {
     ) -> Result<(), CompilerError> {
         for i in (6..arguments.len()).rev() {
             arguments[i].accept(self)?;
-            self.body.add_instruction(PushArgument(Rc::clone(&self.result)));
+            self.body
+                .add_instruction(PushArgument(Rc::clone(&self.result)));
         }
 
         for i in 0..arguments.len().min(6) {
@@ -542,7 +539,8 @@ impl<'a> Visitor for TacVisitor<'a> {
             });
         }
 
-        self.body.add_instruction(FunctionCall(Rc::clone(identifier)));
+        self.body
+            .add_instruction(FunctionCall(Rc::clone(identifier)));
 
         if arguments.len() > 6 {
             let stack_cleanup_size = (arguments.len() - 6) * 4; // 4 bytes per arg
@@ -554,7 +552,9 @@ impl<'a> Visitor for TacVisitor<'a> {
 
         self.body.add_instruction(StoreValueInstruction {
             dest: Rc::clone(&result_register),
-            src: Rc::from(Operand::Register(Pseudoregister::Register("eax".to_string()))),
+            src: Rc::from(Operand::Register(Pseudoregister::Register(
+                "eax".to_string(),
+            ))),
         });
 
         self.result = Rc::from(Operand::Register((*result_register).clone()));

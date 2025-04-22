@@ -1,4 +1,4 @@
-use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Program, Statement, Visitor};
+use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Statement, Visitor};
 use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
@@ -44,14 +44,6 @@ init = resolve_exp(init, variable_map)
 4 return Declaration(unique_name, init)
 */
 impl<'map> Visitor for VariableResolutionVisitor<'map> {
-    fn visit_program(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _function_declaration: &mut Program,
-    ) -> Result<(), CompilerError> {
-        panic!("Should not be called")
-    }
-
     fn visit_declaration(
         &mut self,
         line_number: &Rc<Position>,
