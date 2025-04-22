@@ -660,7 +660,7 @@ impl Parser {
         let current = self.peek_token();
         match current {
             Token::Symbol(Symbol::Semicolon) => {
-                self.line_number = Rc::from((self.line_number.0 + 1, "".to_string()));
+                self.line_number = Rc::from((self.line_number.0 + 1, self.line_number.1.clone()));
                 self.tokens.pop_front();
                 Ok(())
             }
