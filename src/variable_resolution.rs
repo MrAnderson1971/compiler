@@ -7,22 +7,28 @@ use std::collections::{HashMap, VecDeque};
 use std::ops::Deref;
 use std::rc::Rc;
 
-pub(crate) struct VariableResolutionVisitor {
+pub(crate) struct VariableResolutionVisitor<'map> {
     layer: i32,
     function: Rc<String>,
     variable_map: HashMap<Identifier, VecDeque<i32>>,
     loop_labels: VecDeque<(Rc<String>, bool)>,
-    functions_map: HashMap<(Identifier, usize), bool>,
+    functions_map: &'map mut HashMap<(Identifier, usize), bool>,
+    is_processing: bool,
 }
 
-impl VariableResolutionVisitor {
-    pub(crate) fn new(function: Rc<String>) -> Self {
+impl<'map> VariableResolutionVisitor<'map> {
+    pub(crate) fn new(
+        function: Rc<String>,
+        functions_map: &'map mut HashMap<(Identifier, usize), bool>,
+        is_processing: bool,
+    ) -> Self {
         Self {
             layer: 0,
             function,
             variable_map: HashMap::new(),
             loop_labels: VecDeque::new(),
-            functions_map: HashMap::new(),
+            functions_map,
+            is_processing,
         }
     }
 }
@@ -37,7 +43,7 @@ unique_name = make_temporary()
 init = resolve_exp(init, variable_map)
 4 return Declaration(unique_name, init)
 */
-impl Visitor for VariableResolutionVisitor {
+impl<'map> Visitor for VariableResolutionVisitor<'map> {
     fn visit_program(
         &mut self,
         _line_number: &Rc<Position>,
@@ -90,26 +96,28 @@ impl Visitor for VariableResolutionVisitor {
                     )));
                 }
                 let (identifier, params) = (Rc::clone(&f.kind.name), &f.kind.params);
-                if let Some(is_defined) = self
-                    .functions_map
-                    .get(&((*identifier).clone(), params.len()))
-                {
-                    if *is_defined {
-                        return Err(SemanticError(format!(
-                            "Duplicate definition of {} at {:?}",
-                            identifier, line_number
-                        )));
+                if !self.is_processing {
+                    if let Some(is_defined) = self
+                        .functions_map
+                        .get(&((*identifier).clone(), params.len()))
+                    {
+                        if *is_defined {
+                            return Err(SemanticError(format!(
+                                "Duplicate definition of {} at {:?}",
+                                identifier, line_number
+                            )));
+                        }
                     }
                 }
                 self.functions_map
                     .insert(((*identifier).clone(), params.len()), true);
                 self.layer += 1;
                 for param in &mut f.kind.params {
-                    let original_name = param.clone();  // Store original name
+                    let original_name = param.clone(); // Store original name
                     *param = format!("{}::{}::{}", self.function, param, self.layer);
                     let mut stack = VecDeque::new();
                     stack.push_back(self.layer);
-                    self.variable_map.insert(original_name, stack);  // Use original name as key
+                    self.variable_map.insert(original_name, stack); // Use original name as key
                 }
                 f.kind.body.accept(self)?;
                 self.variable_map.clear();
@@ -355,7 +363,7 @@ impl Visitor for VariableResolutionVisitor {
     }
 }
 
-impl VariableResolutionVisitor {
+impl<'map> VariableResolutionVisitor<'map> {
     fn pop_stack(&mut self) {
         for stack in self.variable_map.values_mut() {
             if !stack.is_empty() && stack.back().unwrap() == &self.layer {

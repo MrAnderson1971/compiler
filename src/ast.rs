@@ -4,6 +4,7 @@ use crate::lexer::{BinaryOperator, Number, UnaryOperator};
 use crate::tac::FunctionBody;
 use crate::tac_visitor::TacVisitor;
 use crate::variable_resolution::VariableResolutionVisitor;
+use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::rc::Rc;
 
@@ -128,38 +129,55 @@ impl ASTNode<Program> {
     }
 
     pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
-        for d in &mut self.kind {
-            d.generate(out)?;
+        let mut shared_functions_map: HashMap<(Identifier, usize), bool> = HashMap::new();
+
+        for declaration in &mut self.kind {
+            if let Declaration::FunctionDeclaration(func) = &mut declaration.kind {
+                let func_name = Rc::clone(&func.kind.name);
+                let mut visitor =
+                    VariableResolutionVisitor::new(func_name, &mut shared_functions_map, false);
+                visitor.visit_declaration(&declaration.line_number, &mut declaration.kind)?;
+            }
         }
+
+        for declaration in &mut self.kind {
+            declaration.generate(out, &mut shared_functions_map)?;
+        }
+
         Ok(())
     }
 }
 
 impl ASTNode<Declaration> {
-    pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
+    pub(crate) fn generate(
+        &mut self,
+        out: &mut String,
+        shared_functions_map: &mut HashMap<(Identifier, usize), bool>,
+    ) -> Result<(), CompilerError> {
         if let Declaration::FunctionDeclaration(func) = &mut self.kind {
             let identifier = Rc::clone(&func.kind.name);
+
             let mut variable_resolution_visitor =
-                VariableResolutionVisitor::new(Rc::clone(&identifier));
+                VariableResolutionVisitor::new(Rc::clone(&identifier), shared_functions_map, true);
+
             self.accept(&mut variable_resolution_visitor as &mut dyn Visitor)?;
 
             let mut function_body = FunctionBody::new();
-
             let mut tac_visitor = TacVisitor::new(Rc::clone(&identifier), &mut function_body);
             self.accept(&mut tac_visitor as &mut dyn Visitor)?;
+            println!("{:#?}", function_body);
 
-            // Default return statement in the main method
             if identifier.as_str() == "main" {
                 function_body.add_default_return_to_main();
             }
 
-            println!("{:#?}", function_body);
-
             for instruction in &function_body.instructions {
                 instruction.make_assembly(out, &function_body);
             }
+
             return Ok(());
         }
+
         unimplemented!();
     }
 }

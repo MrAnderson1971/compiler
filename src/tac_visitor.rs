@@ -4,11 +4,7 @@ use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{BinaryOperator, Number, UnaryOperator};
 use crate::tac::FunctionBody;
-use crate::tac::TACInstruction::{
-    AdjustStack, AllocateStackInstruction, BinaryOpInstruction, FunctionCall, FunctionInstruction,
-    Jump, JumpIfNotZero, JumpIfZero, Label, PushArgument, ReturnInstruction, StoreValueInstruction,
-    UnaryOpInstruction,
-};
+use crate::tac::TACInstruction::{AdjustStack, AllocateStackInstruction, BinaryOpInstruction, DeallocateStackInstruction, FunctionCall, FunctionInstruction, Jump, JumpIfNotZero, JumpIfZero, Label, PushArgument, ReturnInstruction, StoreValueInstruction, UnaryOpInstruction};
 use std::rc::Rc;
 
 const FIRST_SIX_REGISTERS: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
@@ -67,32 +63,24 @@ impl<'a> Visitor for TacVisitor<'a> {
                 Ok(())
             }
             Declaration::FunctionDeclaration(func) => {
-                // Register this function in a global function table or symbol table
-                // This is key - we need to make the function name visible globally
-
                 self.body.add_instruction(FunctionInstruction {
                     name: Rc::clone(&func.kind.name),
                 });
                 self.body.add_instruction(AllocateStackInstruction);
 
-                // Register function parameters in the variable_to_pseudoregister map
                 for (i, param) in func.kind.params.iter().enumerate() {
                     let param_name = (*param).clone();
 
-                    // Create a pseudoregister for this parameter
                     let param_register =
                         Rc::new(Pseudoregister::Pseudoregister(self.body.variable_count));
                     self.body.variable_count += 1;
 
-                    // Use a unique key that combines function name and parameter name to avoid conflicts
                     let unique_key = format!("{}::{}::{}", self.name, param_name, i);
 
-                    // Add the parameter to the map
                     self.body
                         .variable_to_pseudoregister
                         .insert(unique_key, Rc::clone(&param_register));
 
-                    // If this is one of the first 6 parameters, copy from the register to our local var
                     if i < 6 {
                         self.body.add_instruction(StoreValueInstruction {
                             dest: Rc::clone(&param_register),
@@ -101,8 +89,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                             ))),
                         });
                     } else {
-                        // For parameters beyond the 6th, they're on the stack
-                        let stack_offset = 16 + (i - 6) * 8; // Adjust based on your calling convention
+                        let stack_offset = 16 + (i - 6) * 8;
                         self.body.add_instruction(StoreValueInstruction {
                             dest: Rc::clone(&param_register),
                             src: Rc::from(Operand::Register(Pseudoregister::Register(format!(
@@ -113,8 +100,9 @@ impl<'a> Visitor for TacVisitor<'a> {
                     }
                 }
 
-                // Visit the function body
-                func.kind.body.accept(self)
+                func.kind.body.accept(self)?;
+                self.body.add_instruction(DeallocateStackInstruction);
+                Ok(())
             }
         }
     }
@@ -514,17 +502,14 @@ impl<'a> Visitor for TacVisitor<'a> {
         _line_number: &Rc<Position>,
         identifier: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
-        // First try the exact identifier
         let param_key = (*Rc::clone(identifier)).clone();
 
-        // If not found, try with function-scoped keys
         if let Some(pseudoregister) = self.body.variable_to_pseudoregister.get(&param_key) {
             self.result = Rc::from(Operand::Register((**pseudoregister).clone()));
             return Ok(());
         }
 
-        // Try different formats for function parameters
-        for i in 0..10 { // Try reasonable number of potential parameters
+        for i in 0..10 {
             let scoped_key = format!("{}::{}::{}", self.name, param_key, i);
             if let Some(pseudoregister) = self.body.variable_to_pseudoregister.get(&scoped_key) {
                 self.result = Rc::from(Operand::Register((**pseudoregister).clone()));
@@ -532,26 +517,23 @@ impl<'a> Visitor for TacVisitor<'a> {
             }
         }
 
-        // If we get here, the variable wasn't found
-        return Err(SemanticError(format!(
+        Err(SemanticError(format!(
             "Variable {} not found in scope {}",
             param_key, self.name
-        )));
+        )))
     }
 
     fn visit_function_call(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         identifier: &mut Rc<Identifier>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
     ) -> Result<(), CompilerError> {
-        // Push arguments beyond the 6th onto the stack in reverse order
         for i in (6..arguments.len()).rev() {
             arguments[i].accept(self)?;
             self.body.add_instruction(PushArgument(Rc::clone(&self.result)));
         }
 
-        // Process the first 6 arguments
         for i in 0..arguments.len().min(6) {
             arguments[i].accept(self)?;
             self.body.add_instruction(StoreValueInstruction {
@@ -560,16 +542,13 @@ impl<'a> Visitor for TacVisitor<'a> {
             });
         }
 
-        // Call the function
         self.body.add_instruction(FunctionCall(Rc::clone(identifier)));
 
-        // Clean up the stack if we pushed arguments
         if arguments.len() > 6 {
             let stack_cleanup_size = (arguments.len() - 6) * 4; // 4 bytes per arg
             self.body.add_instruction(AdjustStack(stack_cleanup_size));
         }
 
-        // Capture the return value
         let result_register = Rc::new(Pseudoregister::Pseudoregister(self.body.variable_count));
         self.body.variable_count += 1;
 

@@ -37,7 +37,7 @@ impl Display for Pseudoregister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Pseudoregister::Pseudoregister(size) => write!(f, "-{}(%rbp)", 4 * size),
-            Pseudoregister::Register(s) => write!(f, "{}", s),
+            Pseudoregister::Register(s) => write!(f, "%{}", s),
         }
     }
 }
