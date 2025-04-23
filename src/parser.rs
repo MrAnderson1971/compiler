@@ -13,7 +13,6 @@ use crate::errors::CompilerError;
 use crate::errors::CompilerError::{SemanticError, SyntaxError};
 use crate::lexer::BinaryOperator::Assign;
 use crate::lexer::Symbol::{Ambiguous, Binary};
-use crate::lexer::Token::Name;
 use crate::lexer::{BinaryOperator, Keyword, Symbol, Token, UnaryOperator, UnaryOrBinaryOp};
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -86,7 +85,7 @@ impl Parser {
         match next {
             Token::Symbol(Symbol::CloseParenthesis) => return Ok(params),
             Token::Keyword(Keyword::Int) => {
-                if let Name(name) = self.tokens.pop_front().unwrap() {
+                if let Token::Name(name) = self.tokens.pop_front().unwrap() {
                     params.push(name);
                 } else {
                     return Err(SyntaxError(format!(
@@ -109,7 +108,7 @@ impl Parser {
                 Token::Symbol(Symbol::CloseParenthesis) => return Ok(params),
                 Token::Symbol(Symbol::Comma) => {
                     expect_token!(self, Token::Keyword(Keyword::Int))?;
-                    if let Name(name) = self.tokens.pop_front().unwrap() {
+                    if let Token::Name(name) = self.tokens.pop_front().unwrap() {
                         params.push(name);
                     } else {
                         return Err(SyntaxError(format!(
@@ -219,19 +218,25 @@ impl Parser {
 
     fn parse_arguments(&mut self) -> Result<Box<Vec<ASTNode<Expression>>>, CompilerError> {
         let mut params = vec![];
-        let next = self.tokens.pop_front().unwrap();
+        let next = self.peek_token();
 
         match next {
-            Token::Symbol(Symbol::CloseParenthesis) => return Ok(Box::new(params)),
+            Token::Symbol(Symbol::CloseParenthesis) => {
+                self.tokens.pop_front();
+                return Ok(Box::new(params));
+            }
             _ => {
                 params.push(self.parse_binary_op(0)?);
             }
         }
 
         loop {
-            let next = self.tokens.pop_front().unwrap();
+            let next = self.peek_token();
             match next {
-                Token::Symbol(Symbol::CloseParenthesis) => return Ok(Box::new(params)),
+                Token::Symbol(Symbol::CloseParenthesis) => {
+                    self.tokens.pop_front();
+                    return Ok(Box::new(params));
+                }
                 _ => {
                     expect_token!(self, Token::Symbol(Symbol::Comma))?;
                     params.push(self.parse_binary_op(0)?);
@@ -256,6 +261,7 @@ impl Parser {
             Token::Name(identifier) => {
                 self.tokens.pop_front();
                 if let Token::Symbol(Symbol::OpenParenthesis) = self.peek_token() {
+                    self.tokens.pop_front();
                     let params = self.parse_arguments()?;
                     Ok(self.make_node(FunctionCall(Rc::from(identifier), params)))
                 } else {

@@ -20,6 +20,7 @@ impl Pseudoregister {
 pub(crate) enum Operand {
     Register(Pseudoregister),
     Immediate(Number),
+    MemoryReference(usize, String),
     None,
 }
 
@@ -29,6 +30,7 @@ impl Display for Operand {
             Operand::Immediate(i) => write!(f, "${}", i),
             Operand::None => write!(f, ""),
             Operand::Register(r) => r.fmt(f),
+            Operand::MemoryReference(offset, reg) => write!(f, "{}(%{})", offset, reg),
         }
     }
 }

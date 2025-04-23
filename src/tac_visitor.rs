@@ -86,12 +86,13 @@ impl<'a> Visitor for TacVisitor<'a> {
                         });
                     } else {
                         let stack_offset = 16 + (i - 6) * 8;
+                        // Option 1: Create a new MemoryReference variant
                         self.body.add_instruction(StoreValueInstruction {
                             dest: Rc::clone(&param_register),
-                            src: Rc::from(Operand::Register(Pseudoregister::Register(format!(
-                                "{}(%rbp)",
-                                stack_offset
-                            )))),
+                            src: Rc::from(Operand::MemoryReference(
+                                stack_offset,
+                                "rbp".to_string(),
+                            )),
                         });
                     }
                 }
