@@ -59,46 +59,48 @@ impl<'a> Visitor for TacVisitor<'a> {
                 Ok(())
             }
             Declaration::FunctionDeclaration(func) => {
-                self.body.add_instruction(FunctionInstruction {
-                    name: Rc::clone(&func.kind.name),
-                });
-                self.body.add_instruction(AllocateStackInstruction);
+                if let Some(body) = &mut func.kind.body {
+                    self.body.add_instruction(FunctionInstruction {
+                        name: Rc::clone(&func.kind.name),
+                    });
+                    self.body.add_instruction(AllocateStackInstruction);
 
-                for (i, param) in func.kind.params.iter().enumerate() {
-                    let param_name = (*param).clone();
+                    for (i, param) in func.kind.params.iter().enumerate() {
+                        let param_name = (*param).clone();
 
-                    let param_register =
-                        Rc::new(Pseudoregister::Pseudoregister(self.body.variable_count));
-                    self.body.variable_count += 1;
+                        let param_register =
+                            Rc::new(Pseudoregister::Pseudoregister(self.body.variable_count));
+                        self.body.variable_count += 1;
 
-                    let unique_key = format!("{}::{}::{}", self.name, param_name, i);
+                        let unique_key = format!("{}::{}::{}", self.name, param_name, i);
 
-                    self.body
-                        .variable_to_pseudoregister
-                        .insert(unique_key, Rc::clone(&param_register));
+                        self.body
+                            .variable_to_pseudoregister
+                            .insert(unique_key, Rc::clone(&param_register));
 
-                    if i < 6 {
-                        self.body.add_instruction(StoreValueInstruction {
-                            dest: Rc::clone(&param_register),
-                            src: Rc::from(Operand::Register(Pseudoregister::Register(
-                                FIRST_SIX_REGISTERS[i].to_string(),
-                            ))),
-                        });
-                    } else {
-                        let stack_offset = 16 + (i - 6) * 8;
-                        // Option 1: Create a new MemoryReference variant
-                        self.body.add_instruction(StoreValueInstruction {
-                            dest: Rc::clone(&param_register),
-                            src: Rc::from(Operand::MemoryReference(
-                                stack_offset,
-                                "rbp".to_string(),
-                            )),
-                        });
+                        if i < 6 {
+                            self.body.add_instruction(StoreValueInstruction {
+                                dest: Rc::clone(&param_register),
+                                src: Rc::from(Operand::Register(Pseudoregister::Register(
+                                    FIRST_SIX_REGISTERS[i].to_string(),
+                                ))),
+                            });
+                        } else {
+                            let stack_offset = 16 + (i - 6) * 8;
+                            // Option 1: Create a new MemoryReference variant
+                            self.body.add_instruction(StoreValueInstruction {
+                                dest: Rc::clone(&param_register),
+                                src: Rc::from(Operand::MemoryReference(
+                                    stack_offset,
+                                    "rbp".to_string(),
+                                )),
+                            });
+                        }
                     }
-                }
 
-                func.kind.body.accept(self)?;
-                self.body.add_instruction(DeallocateStackInstruction);
+                    body.accept(self)?;
+                    self.body.add_instruction(DeallocateStackInstruction);
+                }
                 Ok(())
             }
         }

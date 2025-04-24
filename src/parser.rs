@@ -145,6 +145,18 @@ impl Parser {
         self.line_number = Rc::from((0, function_name.clone()));
         let mut block_items: Vec<ASTNode<BlockItem>> = Vec::new();
         let params = self.parse_params()?;
+
+        // function prototype
+        if let Token::Symbol(Symbol::Semicolon) = self.peek_token() {
+            self.tokens.pop_front(); // consume semicolon
+            return Ok(self.make_node(FunctionDeclaration {
+                name: Rc::from(function_name),
+                params,
+                body: None,
+            }));
+        }
+
+        // full definition
         expect_token!(self, Token::Symbol(Symbol::OpenBrace))?;
 
         let mut next_token = self.peek_token();
@@ -164,7 +176,7 @@ impl Parser {
         Ok(self.make_node(FunctionDeclaration {
             name: Rc::from(function_name),
             params,
-            body: function_body,
+            body: Some(function_body),
         }))
     }
 
@@ -625,6 +637,12 @@ impl Parser {
                 Keyword::Int => {
                     self.tokens.pop_front();
                     let out = self.parse_declaration()?;
+                    if let Token::Symbol(Symbol::OpenParenthesis) = self.peek_token() {
+                        return Err(SemanticError(format!(
+                            "Inner function declaration of {} at {:?}",
+                            out.kind.name, self.line_number
+                        )));
+                    }
                     self.end_line()?;
                     Ok(self.make_node(D(self.make_node(Declaration::VariableDeclaration(out)))))
                 }

@@ -119,17 +119,30 @@ impl ASTNode<Program> {
     pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
         let mut shared_functions_map: HashMap<(Identifier, usize), bool> = HashMap::new();
 
+        // first pass: register declarations
+        for declaration in self.kind.iter_mut() {
+            if let Declaration::FunctionDeclaration(func) = &mut declaration.kind {
+                let name = Rc::clone(&func.kind.name);
+                let param_count = func.kind.params.len();
+                let has_body = func.kind.body.is_some();
+                let identifier = ((*name).clone(), param_count);
+                if shared_functions_map.contains_key(&identifier) && shared_functions_map[&identifier] && has_body {
+                    // Error if duplicate definition (duplicate prototypes are fine)
+                    return Err(CompilerError::SemanticError(format!("Duplicate definition of {}", name)));
+                }
+                shared_functions_map.insert(identifier, func.kind.body.is_some());
+            }
+        }
+
+        // second: regular
         for declaration in &mut self.kind {
             if let Declaration::FunctionDeclaration(func) = &mut declaration.kind {
                 let func_name = Rc::clone(&func.kind.name);
                 let mut visitor =
-                    VariableResolutionVisitor::new(func_name, &mut shared_functions_map, false);
+                    VariableResolutionVisitor::new(func_name, &mut shared_functions_map);
                 visitor.visit_declaration(&declaration.line_number, &mut declaration.kind)?;
+                declaration.generate(out, &mut shared_functions_map)?;
             }
-        }
-
-        for declaration in &mut self.kind {
-            declaration.generate(out, &mut shared_functions_map)?;
         }
 
         Ok(())
@@ -146,7 +159,7 @@ impl ASTNode<Declaration> {
             let identifier = Rc::clone(&func.kind.name);
 
             let mut variable_resolution_visitor =
-                VariableResolutionVisitor::new(Rc::clone(&identifier), shared_functions_map, true);
+                VariableResolutionVisitor::new(Rc::clone(&identifier), shared_functions_map);
 
             self.accept(&mut variable_resolution_visitor as &mut dyn Visitor)?;
 
@@ -182,7 +195,7 @@ pub(crate) type Program = Vec<ASTNode<Declaration>>;
 pub(crate) struct FunctionDeclaration {
     pub(crate) name: Rc<Identifier>,
     pub(crate) params: Vec<Identifier>,
-    pub(crate) body: ASTNode<Block>,
+    pub(crate) body: Option<ASTNode<Block>>,
 }
 
 pub(crate) type Block = Vec<ASTNode<BlockItem>>;

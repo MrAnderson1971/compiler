@@ -116,3 +116,107 @@ fn test_passing_too_many_args(harness: CompilerTest) {
 }"#;
     assert_compile_err!(harness, source, CompilerError::SemanticError(_));
 }
+
+#[rstest]
+fn test_recursion(mut harness: CompilerTest) {
+    let source = r#"
+    int factorial(int n) {
+        if (n <= 1) {
+            return 1;
+        }
+        return n * factorial(n - 1);
+    }
+
+    int main() {
+        return factorial(5);
+    }
+    "#;
+    harness.assert_runs_ok(source, 120);
+}
+
+#[rstest]
+fn test_mutual_recursion(mut harness: CompilerTest) {
+    let source = r#"
+    int is_even(int n);
+
+    int is_odd(int n) {
+        if (n == 0) return 0;
+        return is_even(n - 1);
+    }
+
+    int is_even(int n) {
+        if (n == 0) return 1;
+        return is_odd(n - 1);
+    }
+
+    int main() {
+        return is_even(10);
+    }
+    "#;
+    harness.assert_runs_ok(source, 1);
+}
+
+#[rstest]
+fn test_forward_reference(mut harness: CompilerTest) {
+    let source = r#"
+    int helper();
+
+    int main() {
+        return helper();
+    }
+
+    int helper() {
+        return 42;
+    }
+    "#;
+    harness.assert_runs_ok(source, 42);
+}
+
+#[rstest]
+fn test_inner_function(harness: CompilerTest) {
+    let source = r#"
+    int foo(int a) {
+        int bar(int b) {
+            return a + b;
+        }
+        return bar(1);
+    }
+    int main() {
+        return foo(1);
+    }
+    "#;
+    assert_compile_err!(harness, source, CompilerError::SemanticError(_));
+}
+
+#[rstest]
+fn test_duplicate_forward_reference(mut harness: CompilerTest) {
+    let source = r#"
+    int helper();
+    int helper();
+
+    int main() {
+        return helper();
+    }
+
+    int helper() {
+        return 42;
+    }
+    "#;
+    harness.assert_runs_ok(source, 42);
+}
+
+#[rstest]
+fn test_function_overloading(mut harness: CompilerTest) {
+    let source = r#"
+    int foo(int a) {
+        return 3 * a;
+    }
+    int foo(int a, int b) {
+        return a + b;
+    }
+    int main() {
+        return foo(1, 2) + foo(3);
+    }
+    "#;
+    harness.assert_runs_ok(source, 12);
+}

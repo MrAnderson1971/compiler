@@ -13,14 +13,12 @@ pub(crate) struct VariableResolutionVisitor<'map> {
     variable_map: HashMap<Identifier, VecDeque<i32>>,
     loop_labels: VecDeque<(Rc<String>, bool)>,
     functions_map: &'map mut HashMap<(Identifier, usize), bool>,
-    is_processing: bool,
 }
 
 impl<'map> VariableResolutionVisitor<'map> {
     pub(crate) fn new(
         function: Rc<String>,
         functions_map: &'map mut HashMap<(Identifier, usize), bool>,
-        is_processing: bool,
     ) -> Self {
         Self {
             layer: 0,
@@ -28,7 +26,6 @@ impl<'map> VariableResolutionVisitor<'map> {
             variable_map: HashMap::new(),
             loop_labels: VecDeque::new(),
             functions_map,
-            is_processing,
         }
     }
 }
@@ -81,26 +78,7 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
                 }
             }
             Declaration::FunctionDeclaration(f) => {
-                if self.layer != 0 {
-                    return Err(SemanticError(format!(
-                        "Inner function definition of {} at {:?}",
-                        f.kind.name, line_number
-                    )));
-                }
                 let (identifier, params) = (Rc::clone(&f.kind.name), &f.kind.params);
-                if !self.is_processing {
-                    if let Some(is_defined) = self
-                        .functions_map
-                        .get(&((*identifier).clone(), params.len()))
-                    {
-                        if *is_defined {
-                            return Err(SemanticError(format!(
-                                "Duplicate definition of {} at {:?}",
-                                identifier, line_number
-                            )));
-                        }
-                    }
-                }
                 self.functions_map
                     .insert(((*identifier).clone(), params.len()), true);
                 self.layer += 1;
@@ -111,7 +89,9 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
                     stack.push_back(self.layer);
                     self.variable_map.insert(original_name, stack); // Use original name as key
                 }
-                f.kind.body.accept(self)?;
+                if let Some(body) = &mut f.kind.body {
+                    body.accept(self)?;
+                }
                 self.variable_map.clear();
                 self.layer -= 1;
                 Ok(())
