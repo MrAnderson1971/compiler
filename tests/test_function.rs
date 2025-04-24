@@ -220,3 +220,40 @@ fn test_function_overloading(mut harness: CompilerTest) {
     "#;
     harness.assert_runs_ok(source, 12);
 }
+
+#[rstest]
+fn test_function_declaration_in_for_loop(harness: CompilerTest) {
+    let source = r#"
+int main() {
+    for (int f(); ; ) {
+        return 0;
+    }"#;
+    assert_compile_err!(harness, source, CompilerError::SyntaxError(_));
+}
+
+#[rstest]
+fn test_assign_variable_to_function(harness: CompilerTest) {
+    let source = r#"
+            int f() {
+            return 0;
+        }
+    int main() {
+
+        f = 1;
+        return 0;
+    }"#;
+    assert_compile_err!(harness, source, CompilerError::SemanticError(_));
+}
+
+#[rstest]
+fn test_assignment_in_param(harness: CompilerTest) {
+    let source = r#"
+    int foo(int a = 2) {
+        a = 1;
+        return a;
+    }
+    int main() {
+        return foo(1);
+    }"#;
+    assert_compile_err!(harness, source, CompilerError::SyntaxError(_));
+}
