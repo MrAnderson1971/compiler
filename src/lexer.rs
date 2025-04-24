@@ -53,6 +53,7 @@ pub(crate) enum Symbol {
     CloseBrace,
     Colon,
     Semicolon,
+    Comma,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -74,7 +75,7 @@ pub(crate) type Number = u64;
 pub(crate) enum Token {
     Keyword(Keyword),
     Symbol(Symbol),
-    Identifier(String),
+    Name(String),
     NumberLiteral(Number),
     Invalid,
     EOF,
@@ -196,6 +197,7 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
                     Token::Symbol(Binary(BinaryOperator::BitwiseAnd))
                 }
             }
+            ',' => Token::Symbol(Symbol::Comma),
             '0'..='9' => {
                 let mut number_string = String::new();
                 number_string.push(c);
@@ -225,7 +227,7 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
                 }
                 match match_keyword(identifier.as_str()) {
                     Some(key) => Token::Keyword(key),
-                    None => Token::Identifier(identifier),
+                    None => Token::Name(identifier),
                 }
             }
             ' ' | '\n' | '\t' => continue,

@@ -1,25 +1,31 @@
-use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Program, Statement, Visitor};
+use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Statement, Visitor};
 use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{BinaryOperator, Number, UnaryOperator};
 use std::collections::{HashMap, VecDeque};
+use std::ops::Deref;
 use std::rc::Rc;
 
-pub(crate) struct VariableResolutionVisitor {
+pub(crate) struct VariableResolutionVisitor<'map> {
     layer: i32,
     function: Rc<String>,
-    variable_map: HashMap<String, VecDeque<i32>>,
+    variable_map: HashMap<Identifier, VecDeque<i32>>,
     loop_labels: VecDeque<(Rc<String>, bool)>,
+    functions_map: &'map mut HashMap<(Identifier, usize), bool>,
 }
 
-impl VariableResolutionVisitor {
-    pub(crate) fn new(function: Rc<String>) -> Self {
+impl<'map> VariableResolutionVisitor<'map> {
+    pub(crate) fn new(
+        function: Rc<String>,
+        functions_map: &'map mut HashMap<(Identifier, usize), bool>,
+    ) -> Self {
         Self {
             layer: 0,
             function,
             variable_map: HashMap::new(),
             loop_labels: VecDeque::new(),
+            functions_map,
         }
     }
 }
@@ -34,25 +40,7 @@ unique_name = make_temporary()
 init = resolve_exp(init, variable_map)
 4 return Declaration(unique_name, init)
 */
-impl Visitor for VariableResolutionVisitor {
-    fn visit_program(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _function_declaration: &mut Program,
-    ) -> Result<(), CompilerError> {
-        panic!("Should not be called")
-    }
-
-    fn visit_function(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _identifier: &mut Rc<Identifier>,
-        _params: &mut Vec<Rc<Identifier>>,
-        body: &mut ASTNode<Block>,
-    ) -> Result<(), CompilerError> {
-        body.accept(self)
-    }
-
+impl<'map> Visitor for VariableResolutionVisitor<'map> {
     fn visit_declaration(
         &mut self,
         line_number: &Rc<Position>,
@@ -89,7 +77,25 @@ impl Visitor for VariableResolutionVisitor {
                     Ok(())
                 }
             }
-            Declaration::FunctionDeclaration(_) => todo!(),
+            Declaration::FunctionDeclaration(f) => {
+                let (identifier, params) = (Rc::clone(&f.kind.name), &f.kind.params);
+                self.functions_map
+                    .insert(((*identifier).clone(), params.len()), true);
+                self.layer += 1;
+                for param in &mut f.kind.params {
+                    let original_name = param.clone(); // Store original name
+                    *param = format!("{}::{}::{}", self.function, param, self.layer);
+                    let mut stack = VecDeque::new();
+                    stack.push_back(self.layer);
+                    self.variable_map.insert(original_name, stack); // Use original name as key
+                }
+                if let Some(body) = &mut f.kind.body {
+                    body.accept(self)?;
+                }
+                self.variable_map.clear();
+                self.layer -= 1;
+                Ok(())
+            }
         }
     }
 
@@ -275,6 +281,27 @@ impl Visitor for VariableResolutionVisitor {
         }
     }
 
+    fn visit_function_call(
+        &mut self,
+        line_number: &Rc<Position>,
+        identifier: &mut Rc<Identifier>,
+        arguments: &mut Box<Vec<ASTNode<Expression>>>,
+    ) -> Result<(), CompilerError> {
+        if !self
+            .functions_map
+            .contains_key(&((*identifier).deref().clone(), arguments.len()))
+        {
+            return Err(SemanticError(format!(
+                "Unknown function {} called at {:?}",
+                identifier, line_number
+            )));
+        }
+        for arg in (*arguments).iter_mut() {
+            arg.accept(self)?;
+        }
+        Ok(())
+    }
+
     fn visit_prefix(
         &mut self,
         _line_number: &Rc<Position>,
@@ -308,7 +335,7 @@ impl Visitor for VariableResolutionVisitor {
     }
 }
 
-impl VariableResolutionVisitor {
+impl<'map> VariableResolutionVisitor<'map> {
     fn pop_stack(&mut self) {
         for stack in self.variable_map.values_mut() {
             if !stack.is_empty() && stack.back().unwrap() == &self.layer {

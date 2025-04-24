@@ -1,4 +1,4 @@
-use crate::common::{Operand, Pseudoregister};
+use crate::common::{Identifier, Operand, Pseudoregister};
 use crate::lexer::BinaryOperator::{BitwiseShiftLeft, BitwiseShiftRight};
 use crate::lexer::{BinaryOperator, UnaryOperator};
 use crate::tac::TACInstruction::ReturnInstruction;
@@ -43,6 +43,10 @@ pub(crate) enum TACInstruction {
         val: Rc<Operand>,
     },
     AllocateStackInstruction,
+    DeallocateStackInstruction,
+    FunctionCall(Rc<Identifier>),
+    PushArgument(Rc<Operand>),
+    AdjustStack(usize),
 }
 
 #[derive(Debug)]
@@ -135,7 +139,22 @@ popq %rbp\n\
 ret\n";
             }
             TACInstruction::AllocateStackInstruction => {
-                *out += &format!("subq ${}, %rsp\n", function_body.variable_count * 4)
+                let allocate = ((function_body.variable_count * 4) + 15) & !15;
+                *out += &format!("subq ${}, %rsp\n", allocate)
+            }
+            TACInstruction::DeallocateStackInstruction => {
+                let allocate = ((function_body.variable_count * 4) + 15) & !15;
+                *out += &format!("addq ${}, %rsp\n", allocate)
+            }
+            TACInstruction::FunctionCall(name) => {
+                *out += &format!("call {}\n", name);
+            }
+            TACInstruction::PushArgument(value) => {
+                *out += &format!("movl {}, %r10d\n", value);
+                *out += "pushq %r10\n";
+            }
+            TACInstruction::AdjustStack(size) => {
+                *out += &format!("addq ${}, %rsp\n", size);
             }
         }
     }
