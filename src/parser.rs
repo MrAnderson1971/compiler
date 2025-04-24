@@ -13,25 +13,31 @@ use crate::errors::CompilerError;
 use crate::errors::CompilerError::{SemanticError, SyntaxError};
 use crate::lexer::BinaryOperator::Assign;
 use crate::lexer::Symbol::{Ambiguous, Binary};
-use crate::lexer::{BinaryOperator, Keyword, Symbol, Token, UnaryOperator, UnaryOrBinaryOp};
+use crate::lexer::{
+    BinaryOperator, Keyword, StorageClass, Symbol, Token, Type, UnaryOperator, UnaryOrBinaryOp,
+};
 use std::collections::VecDeque;
 use std::rc::Rc;
 
 macro_rules! expect_token {
-    ($parser:expr, $expected_token:expr) => {{
-        let expected = $expected_token; // Evaluate expected token once
-        // Peek first to check without consuming
-        let peeked_token = $parser.peek_token();
-        // Check if peek succeeded AND the token matches
-        if peeked_token == expected {
-            $parser.tokens.pop_front();
-            Ok(())
+    ($parser:expr, $expected_token:pat) => {{
+        // Use a pattern instead of an expression
+        if let Some(token) = $parser.tokens.front() {
+            if matches!(token, $expected_token) {
+                $parser.tokens.pop_front();
+                Ok(())
+            } else {
+                let line = Rc::clone(&$parser.line_number);
+                Err(CompilerError::SyntaxError(format!(
+                    "Expected token matching pattern but got {:?} at {:?}",
+                    token, line
+                )))
+            }
         } else {
-            // Peeked successfully, but the token doesn't match.
             let line = Rc::clone(&$parser.line_number);
             Err(CompilerError::SyntaxError(format!(
-                "Expected {:?} but got {:?} at {:?}",
-                expected, peeked_token, line
+                "Unexpected end of tokens at {:?}",
+                line
             )))
         }
     }};
@@ -84,7 +90,7 @@ impl Parser {
         let next = self.tokens.pop_front().unwrap();
         match next {
             Token::Symbol(Symbol::CloseParenthesis) => return Ok(params),
-            Token::Keyword(Keyword::Int) => {
+            Token::Keyword(Keyword::Type(_)) => {
                 if let Token::Name(name) = self.tokens.pop_front().unwrap() {
                     params.push(name);
                 } else {
@@ -107,7 +113,7 @@ impl Parser {
             match next {
                 Token::Symbol(Symbol::CloseParenthesis) => return Ok(params),
                 Token::Symbol(Symbol::Comma) => {
-                    expect_token!(self, Token::Keyword(Keyword::Int))?;
+                    expect_token!(self, Token::Keyword(Keyword::Type(..)))?;
                     if let Token::Name(name) = self.tokens.pop_front().unwrap() {
                         params.push(name);
                     } else {
@@ -127,10 +133,76 @@ impl Parser {
         }
     }
 
+    /*
+    parse_type_and_storage_class(specifier_list):
+         types = []
+         storage_classes = []
+         1 for specifier in specifier_list:
+            if specifier is "int":
+                types.append(specifier)
+            else:
+                storage_classes.append(specifier)
+         if length(types) != 1:
+            fail("Invalid type specifier")
+         if length(storage_classes) > 1:
+            fail("Invalid storage class")
+
+         2 type = Int
+
+        if length(storage_classes) == 1:
+            3 storage_class = parse_storage_class(storage_classes[0])
+        else:
+            storage_class = null
+         return (type, storage_class)
+     */
+    fn parse_type_and_storage_class(
+        &mut self,
+        specifier_list: Vec<Keyword>,
+    ) -> Result<(Type, Option<StorageClass>), CompilerError> {
+        let mut types = vec![];
+        let mut storage_classes = vec![];
+        for specifier in specifier_list.iter() {
+            if matches!(specifier, Keyword::Type(Type::Int)) {
+                types.push(specifier);
+            } else if let Keyword::StorageClass(class) = specifier {
+                storage_classes.push(class);
+            }
+        }
+
+        if types.len() != 1 {
+            return Err(SyntaxError(format!(
+                "Invalid type specifier {:?} at {:?}",
+                types, self.line_number
+            )));
+        }
+        if storage_classes.len() > 1 {
+            return Err(SyntaxError(format!(
+                "Invalid storage class {:?} at {:?}",
+                storage_classes, self.line_number
+            )));
+        }
+
+        let type_ = Type::Int;
+
+        let storage_class = if storage_classes.len() == 1 {
+            Some(*storage_classes[0])
+        } else {
+            None
+        };
+        Ok((type_, storage_class))
+    }
+
     fn parse_function_declaration(
         &mut self,
     ) -> Result<ASTNode<FunctionDeclaration>, CompilerError> {
-        expect_token!(self, Token::Keyword(Keyword::Int))?;
+        let mut specifiers = vec![];
+        while let Token::Keyword(spec @ (Keyword::Type(..) | Keyword::StorageClass(..))) =
+            self.peek_token()
+        {
+            self.tokens.pop_front();
+            specifiers.push(spec);
+        }
+        let (type_, storage_class) = self.parse_type_and_storage_class(specifiers)?;
         let current = self.peek_token();
         let function_name = match current {
             Token::Name(name) => name,
@@ -153,6 +225,8 @@ impl Parser {
                 name: Rc::from(function_name),
                 params,
                 body: None,
+                storage_class,
+                type_,
             }));
         }
 
@@ -177,10 +251,15 @@ impl Parser {
             name: Rc::from(function_name),
             params,
             body: Some(function_body),
+            storage_class,
+            type_,
         }))
     }
 
-    fn parse_declaration(&mut self) -> Result<ASTNode<VariableDeclaration>, CompilerError> {
+    fn parse_declaration(
+        &mut self,
+        specifiers: (Type, Option<StorageClass>),
+    ) -> Result<ASTNode<VariableDeclaration>, CompilerError> {
         let current = self.peek_token();
         self.tokens.pop_front();
         let identifier = match current {
@@ -198,11 +277,15 @@ impl Parser {
             Ok(self.make_node(VariableDeclaration {
                 name: Rc::from(identifier),
                 init: Some(expression),
+                storage_class: specifiers.1,
+                type_: specifiers.0,
             }))
         } else {
             Ok(self.make_node(VariableDeclaration {
                 name: Rc::from(identifier),
                 init: None,
+                storage_class: specifiers.1,
+                type_: specifiers.0,
             }))
         }
     }
@@ -472,9 +555,17 @@ impl Parser {
 
     fn parse_for_init(&mut self) -> Result<ASTNode<ForInit>, CompilerError> {
         match self.peek_token() {
-            Token::Keyword(Keyword::Int) => {
+            Token::Keyword(spec @ (Keyword::Type(_) | Keyword::StorageClass(_))) => {
+                let mut specifiers = vec![spec];
                 self.tokens.pop_front();
-                let variable_declaration = self.parse_declaration()?;
+                while let Token::Keyword(spec @ (Keyword::Type(_) | Keyword::StorageClass(_))) =
+                    self.peek_token()
+                {
+                    specifiers.push(spec);
+                    self.tokens.pop_front();
+                }
+                let (type_, storage_class) = self.parse_type_and_storage_class(specifiers)?;
+                let variable_declaration = self.parse_declaration((type_, storage_class))?;
                 let declaration =
                     self.make_node(Declaration::VariableDeclaration(variable_declaration));
                 Ok(self.make_node(InitDecl(declaration)))
@@ -634,9 +725,17 @@ impl Parser {
         let token = self.peek_token();
         match token {
             Token::Keyword(keyword) => match keyword {
-                Keyword::Int => {
+                spec @ (Keyword::Type(_) | Keyword::StorageClass(_)) => {
+                    let mut specifiers = vec![spec];
                     self.tokens.pop_front();
-                    let out = self.parse_declaration()?;
+                    while let Token::Keyword(spec @ (Keyword::Type(_) | Keyword::StorageClass(_))) =
+                        self.peek_token()
+                    {
+                        self.tokens.pop_front();
+                        specifiers.push(spec);
+                    }
+                    let (type_, storage_class) = self.parse_type_and_storage_class(specifiers)?;
+                    let out = self.parse_declaration((type_, storage_class))?;
                     if let Token::Symbol(Symbol::OpenParenthesis) = self.peek_token() {
                         return Err(SemanticError(format!(
                             "Inner function declaration of {} at {:?}",

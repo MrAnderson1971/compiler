@@ -1,24 +1,23 @@
-use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Statement, Visitor};
+use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, FunAttr, Statement, Visitor};
 use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
-use crate::lexer::{BinaryOperator, Number, UnaryOperator};
+use crate::lexer::{BinaryOperator, Number, StorageClass, UnaryOperator};
 use std::collections::{HashMap, VecDeque};
-use std::ops::Deref;
 use std::rc::Rc;
 
 pub(crate) struct VariableResolutionVisitor<'map> {
     layer: i32,
     function: Rc<String>,
-    variable_map: HashMap<Identifier, VecDeque<i32>>,
+    variable_map: HashMap<Identifier, VecDeque<(i32, bool)>>, // (layer, has_linkage)
     loop_labels: VecDeque<(Rc<String>, bool)>,
-    functions_map: &'map mut HashMap<(Identifier, usize), bool>,
+    functions_map: &'map mut HashMap<Identifier, FunAttr>, // (has_body, is_global)
 }
 
 impl<'map> VariableResolutionVisitor<'map> {
     pub(crate) fn new(
         function: Rc<String>,
-        functions_map: &'map mut HashMap<(Identifier, usize), bool>,
+        functions_map: &'map mut HashMap<Identifier, FunAttr>,
     ) -> Self {
         Self {
             layer: 0,
@@ -54,7 +53,10 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
                     .contains_key(&(*Rc::clone(&identifier)).clone())
                 {
                     let mut stack = VecDeque::new();
-                    stack.push_back(self.layer);
+                    stack.push_back((
+                        self.layer,
+                        d.kind.storage_class == Some(StorageClass::Extern),
+                    ));
                     self.variable_map
                         .insert((*Rc::clone(&identifier)).clone(), stack);
                 } else {
@@ -62,13 +64,16 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
                         .variable_map
                         .get_mut(&(*Rc::clone(&identifier)).clone())
                         .unwrap();
-                    if !stack.is_empty() && *stack.back().unwrap() == self.layer {
+                    if !stack.is_empty() && (*stack.back().unwrap()).0 == self.layer {
                         return Err(SemanticError(format!(
                             "Duplicate variable declaration {} at {:?}",
                             identifier, line_number
                         )));
                     }
-                    stack.push_back(self.layer);
+                    stack.push_back((
+                        self.layer,
+                        d.kind.storage_class == Some(StorageClass::Extern),
+                    ));
                 }
                 *identifier = Rc::new(format!("{}::{}::{}", self.function, identifier, self.layer));
                 if let Some(expression) = expression {
@@ -78,15 +83,22 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
                 }
             }
             Declaration::FunctionDeclaration(f) => {
+                let global = f.kind.storage_class != Some(StorageClass::Static);
                 let (identifier, params) = (Rc::clone(&f.kind.name), &f.kind.params);
-                self.functions_map
-                    .insert(((*identifier).clone(), params.len()), true);
+                self.functions_map.insert(
+                    (*identifier).clone(),
+                    FunAttr {
+                        defined: true,
+                        global,
+                        param_count: params.len(),
+                    },
+                );
                 self.layer += 1;
                 for param in &mut f.kind.params {
                     let original_name = param.clone(); // Store original name
                     *param = format!("{}::{}::{}", self.function, param, self.layer);
                     let mut stack = VecDeque::new();
-                    stack.push_back(self.layer);
+                    stack.push_back((self.layer, false));
                     self.variable_map.insert(original_name, stack); // Use original name as key
                 }
                 if let Some(body) = &mut f.kind.body {
@@ -274,7 +286,7 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
                 } else {
                     let variable = stack.back().unwrap();
                     *identifier =
-                        Rc::new(format!("{}::{}::{}", self.function, identifier, variable));
+                        Rc::new(format!("{}::{}::{}", self.function, identifier, variable.0));
                     Ok(())
                 }
             }
@@ -287,19 +299,26 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         identifier: &mut Rc<Identifier>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
     ) -> Result<(), CompilerError> {
-        if !self
-            .functions_map
-            .contains_key(&((*identifier).deref().clone(), arguments.len()))
-        {
-            return Err(SemanticError(format!(
-                "Unknown function {} called at {:?}",
+        if let Some(func) = self.functions_map.get(&(*Rc::clone(&identifier)).clone()) {
+            if arguments.len() != func.param_count {
+                return Err(SemanticError(format!(
+                    "Function {} called with {} parameters but expected {} at {:?}",
+                    identifier,
+                    arguments.len(),
+                    func.param_count,
+                    line_number
+                )));
+            }
+            for arg in (*arguments).iter_mut() {
+                arg.accept(self)?;
+            }
+            Ok(())
+        } else {
+            Err(SemanticError(format!(
+                "Undefined function {} called at {:?}",
                 identifier, line_number
-            )));
+            )))
         }
-        for arg in (*arguments).iter_mut() {
-            arg.accept(self)?;
-        }
-        Ok(())
     }
 
     fn visit_prefix(
@@ -338,7 +357,7 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
 impl<'map> VariableResolutionVisitor<'map> {
     fn pop_stack(&mut self) {
         for stack in self.variable_map.values_mut() {
-            if !stack.is_empty() && stack.back().unwrap() == &self.layer {
+            if !stack.is_empty() && stack.back().unwrap().0 == self.layer {
                 stack.pop_back();
             }
         }

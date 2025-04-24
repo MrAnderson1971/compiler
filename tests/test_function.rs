@@ -206,22 +206,6 @@ fn test_duplicate_forward_reference(mut harness: CompilerTest) {
 }
 
 #[rstest]
-fn test_function_overloading(mut harness: CompilerTest) {
-    let source = r#"
-    int foo(int a) {
-        return 3 * a;
-    }
-    int foo(int a, int b) {
-        return a + b;
-    }
-    int main() {
-        return foo(1, 2) + foo(3);
-    }
-    "#;
-    harness.assert_runs_ok(source, 12);
-}
-
-#[rstest]
 fn test_function_declaration_in_for_loop(harness: CompilerTest) {
     let source = r#"
 int main() {

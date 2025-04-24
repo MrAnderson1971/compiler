@@ -13,13 +13,6 @@ use std::rc::Rc;
 
 const FIRST_SIX_REGISTERS: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
 
-fn get_function_identifier(name: &Rc<Identifier>, param_count: usize) -> Rc<String> {
-    if **name == "main" && param_count == 0 {
-        return Rc::from("main".to_string());
-    }
-    Rc::new(format!("{}.{}", name, param_count))
-}
-
 pub(crate) struct TacVisitor<'a> {
     name: Rc<String>,
     body: &'a mut FunctionBody,
@@ -68,7 +61,7 @@ impl<'a> Visitor for TacVisitor<'a> {
             Declaration::FunctionDeclaration(func) => {
                 if let Some(body) = &mut func.kind.body {
                     self.body.add_instruction(FunctionInstruction {
-                        name: get_function_identifier(&func.kind.name, func.kind.params.len()),
+                        name: Rc::clone(&func.kind.name),
                     });
                     self.body.add_instruction(AllocateStackInstruction);
 
@@ -550,10 +543,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         }
 
         self.body
-            .add_instruction(FunctionCall(get_function_identifier(
-                &identifier,
-                arguments.len(),
-            )));
+            .add_instruction(FunctionCall(Rc::clone(&identifier)));
 
         if arguments.len() > 6 {
             let stack_cleanup_size = (arguments.len() - 6) * 4; // 4 bytes per arg
