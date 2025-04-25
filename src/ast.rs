@@ -116,6 +116,149 @@ pub(crate) trait Visitor {
     ) -> Result<(), CompilerError>;
 }
 
+pub(crate) struct FunAttr {
+    pub(crate) defined: bool,
+    pub(crate) global: bool,
+    pub(crate) param_count: usize,
+}
+
+pub(crate) struct StaticAttr {
+    pub(crate) init: InitialValue,
+    pub(crate) global: bool,
+    pub(crate) type_: Type,
+}
+
+#[derive(Debug)]
+pub(crate) enum InitialValue {
+    Tentative,
+    Initial(Number),
+    NoInitializer,
+}
+
+#[derive(Debug)]
+pub(crate) enum ASTType {
+    Type(Type),
+    FuncType {
+        params: Box<Vec<ASTType>>,
+        ret: Box<ASTType>,
+    },
+}
+
+#[derive(Debug)]
+pub(crate) struct ASTNode<T> {
+    pub(crate) line_number: Rc<Position>,
+    pub(crate) kind: T,
+}
+
+pub(crate) type Program = Vec<ASTNode<Declaration>>;
+
+#[derive(Debug)]
+pub(crate) struct FunctionDeclaration {
+    pub(crate) name: Rc<Identifier>,
+    pub(crate) params: Vec<Identifier>,
+    pub(crate) body: Option<ASTNode<Block>>,
+    pub(crate) storage_class: Option<StorageClass>,
+    pub(crate) type_: Rc<ASTType>,
+}
+
+pub(crate) type Block = Vec<ASTNode<BlockItem>>;
+
+#[derive(Debug)]
+pub(crate) enum BlockItem {
+    D(ASTNode<Declaration>),
+    S(Box<ASTNode<Statement>>),
+}
+
+#[derive(Debug)]
+pub(crate) enum Declaration {
+    FunctionDeclaration(FunctionDeclaration),
+    VariableDeclaration(VariableDeclaration),
+}
+
+#[derive(Debug)]
+pub(crate) struct VariableDeclaration {
+    pub(crate) name: Rc<Identifier>,
+    pub(crate) init: Option<ASTNode<Expression>>,
+    pub(crate) storage_class: Option<StorageClass>,
+    pub(crate) type_: Rc<ASTType>,
+}
+
+#[derive(Debug)]
+pub(crate) enum Expression {
+    Constant(Number),
+    Variable(Rc<Identifier>),
+    Unary(UnaryOperator, Box<ASTNode<Expression>>),
+    Binary {
+        op: BinaryOperator,
+        left: Box<ASTNode<Expression>>,
+        right: Box<ASTNode<Expression>>,
+    },
+    Assignment {
+        left: Box<ASTNode<Expression>>,
+        right: Box<ASTNode<Expression>>,
+    },
+    Condition {
+        condition: Box<ASTNode<Expression>>,
+        if_true: Box<ASTNode<Expression>>,
+        if_false: Box<ASTNode<Expression>>,
+    },
+    FunctionCall(Rc<Identifier>, Box<Vec<ASTNode<Expression>>>),
+    Prefix(UnaryOperator, Box<ASTNode<Expression>>),
+    Postfix(UnaryOperator, Box<ASTNode<Expression>>),
+}
+
+#[derive(Debug)]
+pub(crate) enum Statement {
+    Return(ASTNode<Expression>),
+    Expression(ASTNode<Expression>),
+    If {
+        condition: ASTNode<Expression>,
+        if_true: Box<ASTNode<Statement>>,
+        if_false: Option<Box<ASTNode<Statement>>>,
+    },
+    Compound(ASTNode<Block>),
+    Break(Rc<String>),
+    Continue {
+        label: Rc<String>,
+        is_for: bool,
+    },
+    While {
+        condition: ASTNode<Expression>,
+        body: Box<ASTNode<Statement>>,
+        label: Rc<String>,
+        is_do_while: bool,
+    },
+    For {
+        init: ASTNode<ForInit>,
+        condition: Option<ASTNode<Expression>>,
+        increment: Option<ASTNode<Expression>>,
+        body: Box<ASTNode<Statement>>,
+        label: Rc<String>,
+    },
+    Null,
+}
+
+#[derive(Debug)]
+pub(crate) enum ForInit {
+    InitDecl(Declaration),
+    InitExp(Option<ASTNode<Expression>>),
+}
+
+pub(crate) fn is_lvalue_node(node: &Expression) -> bool {
+    match node {
+        Expression::Prefix(_, _) | Expression::Variable(_) => true,
+        _ => false,
+    }
+}
+
+pub(crate) fn extract_base_variable(node: &Expression) -> Rc<Identifier> {
+    match node {
+        Expression::Variable(v) => Rc::clone(v),
+        Expression::Prefix(_, v) => extract_base_variable(&v.kind),
+        _ => panic!("Not a variable"),
+    }
+}
+
 impl ASTNode<Program> {
     pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
         let mut shared_functions_map: HashMap<Identifier, FunAttr> = HashMap::new();
@@ -298,25 +441,6 @@ impl ASTNode<Program> {
     }
 }
 
-pub(crate) struct FunAttr {
-    pub(crate) defined: bool,
-    pub(crate) global: bool,
-    pub(crate) param_count: usize,
-}
-
-pub(crate) struct StaticAttr {
-    pub(crate) init: InitialValue,
-    pub(crate) global: bool,
-    pub(crate) type_: Type,
-}
-
-#[derive(Debug)]
-pub(crate) enum InitialValue {
-    Tentative,
-    Initial(Number),
-    NoInitializer,
-}
-
 impl ASTNode<Declaration> {
     pub(crate) fn generate(
         &mut self,
@@ -355,25 +479,6 @@ impl ASTNode<Declaration> {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct ASTNode<T> {
-    pub(crate) line_number: Rc<Position>,
-    pub(crate) kind: T,
-}
-
-pub(crate) type Program = Vec<ASTNode<Declaration>>;
-
-#[derive(Debug)]
-pub(crate) struct FunctionDeclaration {
-    pub(crate) name: Rc<Identifier>,
-    pub(crate) params: Vec<Identifier>,
-    pub(crate) body: Option<ASTNode<Block>>,
-    pub(crate) storage_class: Option<StorageClass>,
-    pub(crate) type_: Type,
-}
-
-pub(crate) type Block = Vec<ASTNode<BlockItem>>;
-
 impl ASTNode<Block> {
     pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
         for block_item in &mut self.kind {
@@ -381,12 +486,6 @@ impl ASTNode<Block> {
         }
         Ok(())
     }
-}
-
-#[derive(Debug)]
-pub(crate) enum BlockItem {
-    D(ASTNode<Declaration>),
-    S(Box<ASTNode<Statement>>),
 }
 
 impl ASTNode<BlockItem> {
@@ -398,48 +497,10 @@ impl ASTNode<BlockItem> {
     }
 }
 
-#[derive(Debug)]
-pub(crate) enum Declaration {
-    FunctionDeclaration(FunctionDeclaration),
-    VariableDeclaration(VariableDeclaration),
-}
-
 impl ASTNode<Declaration> {
     fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
         visitor.visit_declaration(&self.line_number, &mut self.kind)
     }
-}
-
-#[derive(Debug)]
-pub(crate) struct VariableDeclaration {
-    pub(crate) name: Rc<Identifier>,
-    pub(crate) init: Option<ASTNode<Expression>>,
-    pub(crate) storage_class: Option<StorageClass>,
-    pub(crate) type_: Type,
-}
-
-#[derive(Debug)]
-pub(crate) enum Expression {
-    Constant(Number),
-    Variable(Rc<Identifier>),
-    Unary(UnaryOperator, Box<ASTNode<Expression>>),
-    Binary {
-        op: BinaryOperator,
-        left: Box<ASTNode<Expression>>,
-        right: Box<ASTNode<Expression>>,
-    },
-    Assignment {
-        left: Box<ASTNode<Expression>>,
-        right: Box<ASTNode<Expression>>,
-    },
-    Condition {
-        condition: Box<ASTNode<Expression>>,
-        if_true: Box<ASTNode<Expression>>,
-        if_false: Box<ASTNode<Expression>>,
-    },
-    FunctionCall(Rc<Identifier>, Box<Vec<ASTNode<Expression>>>),
-    Prefix(UnaryOperator, Box<ASTNode<Expression>>),
-    Postfix(UnaryOperator, Box<ASTNode<Expression>>),
 }
 
 impl ASTNode<Expression> {
@@ -466,37 +527,6 @@ impl ASTNode<Expression> {
             Expression::Postfix(op, exp) => visitor.visit_postfix(&self.line_number, exp, op),
         }
     }
-}
-
-#[derive(Debug)]
-pub(crate) enum Statement {
-    Return(ASTNode<Expression>),
-    Expression(ASTNode<Expression>),
-    If {
-        condition: ASTNode<Expression>,
-        if_true: Box<ASTNode<Statement>>,
-        if_false: Option<Box<ASTNode<Statement>>>,
-    },
-    Compound(ASTNode<Block>),
-    Break(Rc<String>),
-    Continue {
-        label: Rc<String>,
-        is_for: bool,
-    },
-    While {
-        condition: ASTNode<Expression>,
-        body: Box<ASTNode<Statement>>,
-        label: Rc<String>,
-        is_do_while: bool,
-    },
-    For {
-        init: ASTNode<ForInit>,
-        condition: Option<ASTNode<Expression>>,
-        increment: Option<ASTNode<Expression>>,
-        body: Box<ASTNode<Statement>>,
-        label: Rc<String>,
-    },
-    Null,
 }
 
 impl ASTNode<Statement> {
@@ -532,35 +562,14 @@ impl ASTNode<Statement> {
     }
 }
 
-#[derive(Debug)]
-pub(crate) enum ForInit {
-    InitDecl(ASTNode<Declaration>),
-    InitExp(Option<ASTNode<Expression>>),
-}
-
 impl ASTNode<ForInit> {
     pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
         match &mut self.kind {
-            ForInit::InitDecl(v) => visitor.visit_declaration(&self.line_number, &mut v.kind),
+            ForInit::InitDecl(v) => visitor.visit_declaration(&self.line_number, v),
             ForInit::InitExp(v) => match v {
                 Some(e) => e.accept(visitor),
                 None => Ok(()),
             },
         }
-    }
-}
-
-pub(crate) fn is_lvalue_node(node: &Expression) -> bool {
-    match node {
-        Expression::Prefix(_, _) | Expression::Variable(_) => true,
-        _ => false,
-    }
-}
-
-pub(crate) fn extract_base_variable(node: &Expression) -> Rc<Identifier> {
-    match node {
-        Expression::Variable(v) => Rc::clone(v),
-        Expression::Prefix(_, v) => extract_base_variable(&v.kind),
-        _ => panic!("Not a variable"),
     }
 }

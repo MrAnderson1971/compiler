@@ -4,10 +4,7 @@ use crate::ast::Expression::{
 };
 use crate::ast::ForInit::{InitDecl, InitExp};
 use crate::ast::Statement::{Compound, For, If, Null, Return, While};
-use crate::ast::{
-    ASTNode, Block, BlockItem, Declaration, Expression, ForInit, FunctionDeclaration, Program,
-    Statement, VariableDeclaration, extract_base_variable, is_lvalue_node,
-};
+use crate::ast::{ASTNode, Block, BlockItem, Declaration, Expression, ForInit, FunctionDeclaration, Program, Statement, VariableDeclaration, extract_base_variable, is_lvalue_node, ASTType};
 use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::{SemanticError, SyntaxError};
@@ -180,7 +177,7 @@ impl Parser {
     fn parse_type_and_storage_class(
         &mut self,
         specifier_list: Vec<Keyword>,
-    ) -> Result<(Type, Option<StorageClass>), CompilerError> {
+    ) -> Result<(Rc<ASTType>, Option<StorageClass>), CompilerError> {
         let mut types = vec![];
         let mut storage_classes = vec![];
         for specifier in specifier_list.iter() {
@@ -204,7 +201,7 @@ impl Parser {
             )));
         }
 
-        let type_ = Type::Int;
+        let type_ = Rc::from(ASTType::Type(Type::Int));
 
         let storage_class = if storage_classes.len() == 1 {
             Some(*storage_classes[0])
@@ -299,7 +296,7 @@ impl Parser {
 
     fn parse_declaration(
         &mut self,
-        specifiers: (Type, Option<StorageClass>),
+        specifiers: (Rc<ASTType>, Option<StorageClass>),
         name: Option<Identifier>,
     ) -> Result<ASTNode<VariableDeclaration>, CompilerError> {
         let identifier = if let Some(name) = name {
@@ -322,14 +319,14 @@ impl Parser {
                 name: Rc::from(identifier),
                 init: Some(expression),
                 storage_class: specifiers.1,
-                type_: specifiers.0,
+                type_: Rc::clone(&specifiers.0),
             }))
         } else {
             Ok(self.make_node(VariableDeclaration {
                 name: Rc::from(identifier),
                 init: None,
                 storage_class: specifiers.1,
-                type_: specifiers.0,
+                type_: Rc::clone(&specifiers.0),
             }))
         }
     }
@@ -589,7 +586,7 @@ impl Parser {
 
     fn parse_for_init(&mut self) -> Result<ASTNode<ForInit>, CompilerError> {
         match self.peek_token() {
-            Token::Keyword(spec @ (Keyword::Type(_))) => {
+            Token::Keyword(spec @ Keyword::Type(_)) => {
                 let mut specifiers = vec![spec];
                 self.tokens.pop_front();
                 while let Token::Keyword(spec @ (Keyword::Type(_) | Keyword::StorageClass(_))) =
@@ -602,7 +599,7 @@ impl Parser {
                 let variable_declaration = self.parse_declaration((type_, storage_class), None)?;
                 let declaration =
                     self.make_node(Declaration::VariableDeclaration(variable_declaration.kind));
-                Ok(self.make_node(InitDecl(declaration)))
+                Ok(self.make_node(InitDecl(declaration.kind)))
             }
             Token::Symbol(Symbol::Semicolon) => Ok(self.make_node(InitExp(None))),
             _ => {

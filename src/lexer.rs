@@ -65,6 +65,7 @@ pub(crate) enum StorageClass {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Type {
     Int,
+    Long,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -106,6 +107,7 @@ fn match_keyword(string: &str) -> Option<Keyword> {
         "break" => Some(Keyword::Break),
         "static" => Some(Keyword::StorageClass(StorageClass::Static)),
         "extern" => Some(Keyword::StorageClass(StorageClass::Extern)),
+        "long" => Some(Keyword::Type(Type::Long)),
         _ => None,
     }
 }
