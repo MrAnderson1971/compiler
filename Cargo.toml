@@ -15,4 +15,5 @@ winapi = { version = "0.3", features = [
     "errhandlingapi",
     "minwindef"
 ]}
+regex = "1.11.1"
 uuid = { version = "1.16.0", features = ["v4"] }

@@ -1,24 +1,17 @@
 use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Statement, Visitor};
-use crate::common::{Identifier, Operand, Position, Pseudoregister};
+use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
-use crate::lexer::{BinaryOperator, Number, UnaryOperator};
-use crate::tac::FunctionBody;
+use crate::lexer::{BinaryOperator, Number, StorageClass, UnaryOperator};
 use crate::tac::TACInstruction::{
     AdjustStack, AllocateStackInstruction, BinaryOpInstruction, DeallocateStackInstruction,
     FunctionCall, FunctionInstruction, Jump, JumpIfNotZero, JumpIfZero, Label, PushArgument,
     ReturnInstruction, StoreValueInstruction, UnaryOpInstruction,
 };
+use crate::tac::{FunctionBody, Operand, Pseudoregister};
 use std::rc::Rc;
 
 const FIRST_SIX_REGISTERS: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
-
-fn get_function_identifier(name: &Rc<Identifier>, param_count: usize) -> Rc<String> {
-    if **name == "main" && param_count == 0 {
-        return Rc::from("main".to_string());
-    }
-    Rc::new(format!("{}.{}", name, param_count))
-}
 
 pub(crate) struct TacVisitor<'a> {
     name: Rc<String>,
@@ -46,15 +39,17 @@ impl<'a> Visitor for TacVisitor<'a> {
     ) -> Result<(), CompilerError> {
         match declaration {
             Declaration::VariableDeclaration(v) => {
-                let (identifier, expression) = (&v.kind.name, &mut v.kind.init);
+                if v.storage_class.is_some() {
+                    return Ok(());
+                }
+                let (identifier, expression) = (&v.name, &mut v.init);
                 let pseudoregister = Rc::from(Pseudoregister::new(
                     (*self.name).clone(),
                     self.body.variable_count,
                 ));
-                self.body.variable_to_pseudoregister.insert(
-                    (*Rc::clone(&identifier)).clone(),
-                    Rc::clone(&pseudoregister),
-                );
+                self.body
+                    .variable_to_pseudoregister
+                    .insert(identifier.as_ref().to_string(), Rc::clone(&pseudoregister));
                 if let Some(expression) = expression {
                     expression.accept(self)?;
                     self.body.add_instruction(StoreValueInstruction {
@@ -66,24 +61,21 @@ impl<'a> Visitor for TacVisitor<'a> {
                 Ok(())
             }
             Declaration::FunctionDeclaration(func) => {
-                if let Some(body) = &mut func.kind.body {
+                if let Some(body) = &mut func.body {
                     self.body.add_instruction(FunctionInstruction {
-                        name: get_function_identifier(&func.kind.name, func.kind.params.len()),
+                        name: Rc::clone(&func.name),
+                        global: func.storage_class != Some(StorageClass::Static),
                     });
                     self.body.add_instruction(AllocateStackInstruction);
 
-                    for (i, param) in func.kind.params.iter().enumerate() {
-                        let param_name = (*param).clone();
-
+                    for (i, param) in func.params.iter().enumerate() {
                         let param_register =
                             Rc::new(Pseudoregister::Pseudoregister(self.body.variable_count));
                         self.body.variable_count += 1;
 
-                        let unique_key = format!("{}::{}::{}", self.name, param_name, i);
-
                         self.body
                             .variable_to_pseudoregister
-                            .insert(unique_key, Rc::clone(&param_register));
+                            .insert(param.to_string(), Rc::clone(&param_register));
 
                         if i < 6 {
                             self.body.add_instruction(StoreValueInstruction {
@@ -508,25 +500,16 @@ impl<'a> Visitor for TacVisitor<'a> {
         _line_number: &Rc<Position>,
         identifier: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
-        let param_key = (*Rc::clone(identifier)).clone();
-
-        if let Some(pseudoregister) = self.body.variable_to_pseudoregister.get(&param_key) {
+        if let Some(pseudoregister) = self.body.variable_to_pseudoregister.get(&identifier.to_string()) {
             self.result = Rc::from(Operand::Register((**pseudoregister).clone()));
             return Ok(());
         }
-
-        for i in 0..10 {
-            let scoped_key = format!("{}::{}::{}", self.name, param_key, i);
-            if let Some(pseudoregister) = self.body.variable_to_pseudoregister.get(&scoped_key) {
-                self.result = Rc::from(Operand::Register((**pseudoregister).clone()));
-                return Ok(());
-            }
-        }
-
-        Err(SemanticError(format!(
-            "Variable {} not found in scope {}",
-            param_key, self.name
-        )))
+        
+        // static
+        self.result = Rc::from(Operand::Register(Pseudoregister::Data(Rc::clone(
+            &identifier,
+        ))));
+        Ok(())
     }
 
     fn visit_function_call(
@@ -550,10 +533,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         }
 
         self.body
-            .add_instruction(FunctionCall(get_function_identifier(
-                &identifier,
-                arguments.len(),
-            )));
+            .add_instruction(FunctionCall(Rc::clone(&identifier)));
 
         if arguments.len() > 6 {
             let stack_cleanup_size = (arguments.len() - 6) * 4; // 4 bytes per arg

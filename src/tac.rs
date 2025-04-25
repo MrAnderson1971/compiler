@@ -1,14 +1,62 @@
-use crate::common::{Identifier, Operand, Pseudoregister};
-use crate::lexer::BinaryOperator::{BitwiseShiftLeft, BitwiseShiftRight};
-use crate::lexer::{BinaryOperator, UnaryOperator};
-use crate::tac::TACInstruction::ReturnInstruction;
+use crate::common::Identifier;
+use crate::lexer::{BinaryOperator, Number, UnaryOperator};
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::rc::Rc;
+
+#[derive(Debug, Clone)]
+pub(crate) enum Pseudoregister {
+    //name: String,
+    Pseudoregister(i32),
+    Register(String),
+    Data(Rc<String>),
+}
+
+impl Pseudoregister {
+    pub(crate) fn new(_name: String, size: i32) -> Self {
+        Pseudoregister::Pseudoregister(size)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum Operand {
+    Register(Pseudoregister),
+    Immediate(Number),
+    MemoryReference(usize, String),
+    None,
+}
+
+impl Display for Operand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Operand::Immediate(i) => write!(f, "${}", i),
+            Operand::None => write!(f, ""),
+            Operand::Register(r) => r.fmt(f),
+            Operand::MemoryReference(offset, reg) => write!(f, "{}(%{})", offset, reg),
+        }
+    }
+}
+
+impl Display for Pseudoregister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Pseudoregister::Pseudoregister(size) => write!(f, "-{}(%rbp)", 4 * size),
+            Pseudoregister::Register(s) => write!(f, "%{}", s),
+            Pseudoregister::Data(d) => write!(f, "{}(%rip)", d),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub(crate) enum TACInstruction {
     FunctionInstruction {
         name: Rc<String>,
+        global: bool,
+    },
+    StaticVariable {
+        name: Rc<String>,
+        global: bool,
+        init: Number,
     },
     UnaryOpInstruction {
         dest: Rc<Pseudoregister>,
@@ -71,9 +119,9 @@ impl FunctionBody {
 
     pub(crate) fn add_default_return_to_main(&mut self) {
         match &self.instructions.last().unwrap() {
-            ReturnInstruction { .. } => {}
+            TACInstruction::ReturnInstruction { .. } => {}
             _ => {
-                self.add_instruction(ReturnInstruction {
+                self.add_instruction(TACInstruction::ReturnInstruction {
                     val: Rc::from(Operand::Immediate(0)),
                 });
             }
@@ -84,13 +132,16 @@ impl FunctionBody {
 impl TACInstruction {
     pub(crate) fn make_assembly(&self, out: &mut String, function_body: &FunctionBody) {
         match &self {
-            TACInstruction::FunctionInstruction { name } => {
+            TACInstruction::FunctionInstruction { name, global } => {
+                if *global {
+                    *out += &format!(".global {}\n", name);
+                }
                 *out += &format!(
-                    ".global {}\n\
-                {}:\n\
+                    ".text\n\
+                    {}:\n\
                 pushq %rbp\n\
                 movq %rsp, %rbp\n",
-                    name, name
+                    name
                 );
             }
             TACInstruction::UnaryOpInstruction { dest, op, operand } => {
@@ -156,6 +207,30 @@ ret\n";
             TACInstruction::AdjustStack(size) => {
                 *out += &format!("addq ${}, %rsp\n", size);
             }
+            TACInstruction::StaticVariable { name, global, init } => {
+                if *global {
+                    *out += &format!(".global {}\n", name);
+                }
+                if *init == 0 {
+                    *out += &format!(
+                        r#".bss
+.align 4
+.zero 4
+{}:
+                    "#,
+                        name
+                    );
+                } else {
+                    *out += &format!(
+                        r#".data
+.align 4
+{}:
+.long {}
+                    "#,
+                        name, init
+                    );
+                }
+            }
         }
     }
 }
@@ -181,8 +256,8 @@ fn make_binary_op_instruction(
         | BinaryOperator::BitwiseOr
         | BinaryOperator::BitwiseXor => {
             *out += &format!("movl {}, %r10d\n", src1);
-            if *op == BitwiseShiftLeft || *op == BitwiseShiftRight {
-                let shift_op = if *op == BitwiseShiftLeft {
+            if *op == BinaryOperator::BitwiseShiftLeft || *op == BinaryOperator::BitwiseShiftRight {
+                let shift_op = if *op == BinaryOperator::BitwiseShiftLeft {
                     "shll"
                 } else {
                     "shrl"

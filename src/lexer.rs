@@ -56,10 +56,20 @@ pub(crate) enum Symbol {
     Comma,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum StorageClass {
+    Static,
+    Extern,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum Type {
+    Int,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Keyword {
     Return,
-    Int,
     If,
     Else,
     Do,
@@ -67,6 +77,8 @@ pub(crate) enum Keyword {
     For,
     Continue,
     Break,
+    Type(Type),
+    StorageClass(StorageClass),
 }
 
 pub(crate) type Number = u64;
@@ -84,7 +96,7 @@ pub(crate) enum Token {
 fn match_keyword(string: &str) -> Option<Keyword> {
     match string {
         "return" => Some(Keyword::Return),
-        "int" => Some(Keyword::Int),
+        "int" => Some(Keyword::Type(Type::Int)),
         "if" => Some(Keyword::If),
         "else" => Some(Keyword::Else),
         "do" => Some(Keyword::Do),
@@ -92,6 +104,8 @@ fn match_keyword(string: &str) -> Option<Keyword> {
         "for" => Some(Keyword::For),
         "continue" => Some(Keyword::Continue),
         "break" => Some(Keyword::Break),
+        "static" => Some(Keyword::StorageClass(StorageClass::Static)),
+        "extern" => Some(Keyword::StorageClass(StorageClass::Extern)),
         _ => None,
     }
 }

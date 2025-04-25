@@ -1,11 +1,11 @@
 use rstest::*;
 // tests/test_helpers/simulator.rs
+use regex::Regex;
 use std::ffi::CString;
 use std::fs;
 use std::io::{self};
 use std::path::PathBuf;
 use std::process::Command;
-
 // Windows-specific imports
 use compiler::{CompilerError, compile};
 use uuid::Uuid;
@@ -273,15 +273,18 @@ impl CompilerTest {
     /// Returns the exit code or TestError on compiler/simulator failure.
     pub fn compile_and_run(&mut self, source: &str) -> Result<i32, CompilerError> {
         let asm = compile(source.to_string())?;
-        match self.simulator.load_program(&asm) {
+        Ok(self.load_and_run_asm(&*asm))
+    }
+
+    pub fn load_and_run_asm(&mut self, source: &str) -> i32 {
+        match self.simulator.load_program(source) {
             Ok(_) => {}
             Err(err) => panic!("{}", err),
         }
-        let result = match self.simulator.execute() {
+        match self.simulator.execute() {
             Ok(code) => code,
             Err(err) => panic!("{}", err),
-        };
-        Ok(result)
+        }
     }
 
     /// Compiles source code and asserts that it runs successfully with the expected exit code.
@@ -354,6 +357,24 @@ impl CompilerTest {
             }
         }
     }
+
+    pub fn assert_is_global(&self, asm_source: &str, name: &str) {
+        if !Regex::new(format!("\\.global\\s+\\b{}\\b", name).as_str())
+            .unwrap()
+            .is_match(asm_source)
+        {
+            panic!("{} is not a global", name);
+        }
+    }
+
+    pub fn assert_isnt_global(&self, asm_source: &str, name: &str) {
+        if Regex::new(format!("\\.global\\s+\\b{}\\b", name).as_str())
+            .unwrap()
+            .is_match(asm_source)
+        {
+            panic!("{} is a global", name);
+        }
+    }
 }
 
 // Helper macro for asserting specific compiler errors
@@ -368,223 +389,4 @@ macro_rules! assert_compile_err {
 pub fn harness() -> CompilerTest {
     // Now calls the new() that returns Self (or panics)
     CompilerTest::new()
-}
-
-#[allow(dead_code)]
-pub fn expect_death(source: &str) {
-    use compiler::compile;
-    use std::env;
-    use std::fs;
-    use std::path::PathBuf;
-    use std::process::{Command}; // Import ExitStatus
-    use uuid::Uuid; // Ensure this is correctly imported
-
-    const CRASH_EXIT_CODE_SIM: i32 = 101; // Code if simulator catches the error/panic
-    const NORMAL_EXIT_CODE_SIM: i32 = 0; // Code if simulator runs successfully (BAD for expect_death)
-    const SETUP_ERROR_SIM: i32 = 1; // Code for simulator setup errors (e.g., read file)
-
-    // 1. Compile C to Assembly
-    let asm = match compile(source.to_string()) {
-        Ok(asm) => asm,
-        Err(e) => panic!(
-            "Compilation failed unexpectedly when generating code for death test: {}",
-            e
-        ),
-    };
-    println!("Generated Assembly for death test:\n{}", asm);
-
-    // --- Get necessary paths ---
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let simulator_source_path = manifest_dir.join("tests").join("simulator.rs");
-    if !simulator_source_path.exists() {
-        panic!(
-            "Simulator source file not found at expected path: {:?}",
-            simulator_source_path
-        );
-    }
-    let compiler_crate_root = manifest_dir.clone();
-    let simulator_path_escaped = simulator_source_path
-        .to_string_lossy()
-        .escape_default()
-        .to_string();
-
-    // --- 2. Prepare Temporary Cargo Package ---
-    let test_pkg_dir = env::temp_dir().join(format!("compiler_test_pkg_{}", Uuid::new_v4()));
-    let test_src_dir = test_pkg_dir.join("src");
-    fs::create_dir_all(&test_src_dir).expect("Failed to create temp src directory");
-    let asm_file = test_pkg_dir.join("test_code.asm");
-    fs::write(&asm_file, &asm).expect("Failed to write ASM file");
-    let asm_file_path_escaped = asm_file
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .escape_default()
-        .to_string();
-
-    // --- 3. Create src/main.rs with Revised Exit Codes ---
-    let test_main_rs = test_src_dir.join("main.rs");
-    let test_code = format!(
-        r#"
-// --- Crash Tester main.rs ---
-use std::fs;
-use std::panic::{{catch_unwind, AssertUnwindSafe}};
-
-mod simulator_code {{
-    include!("{simulator_path}");
-}}
-use simulator_code::Simulator;
-
-const EXPECTED_FAIL_CODE: i32 = {crash_code_sim}; // e.g., 101
-const UNEXPECTED_SUCCESS_CODE: i32 = {normal_code_sim}; // e.g., 0
-const SETUP_ERR_CODE: i32 = {setup_err_sim}; // e.g., 1
-
-fn main() {{
-    // We wrap the *logic* because setup errors shouldn't be caught as panics
-    match run_setup_and_test() {{
-        // Setup ok, test logic finished
-        Ok(test_result) => {{
-            match test_result {{
-                // Test logic succeeded (returned Ok(exit_code)) -> BAD for expect_death
-                Ok(exit_code) => {{
-                    eprintln!("Crash Tester ERROR: Execution succeeded unexpectedly with code {{}}.", exit_code);
-                    // Exit with a code indicating unexpected success
-                    std::process::exit(UNEXPECTED_SUCCESS_CODE);
-                }},
-                // Test logic failed (returned Err(msg)) -> GOOD for expect_death
-                Err(e) => {{
-                    eprintln!("Crash Tester SUCCESS: Execution failed as expected (simulator returned Err): {{}}", e);
-                    // Exit with the code indicating expected failure detected by simulator
-                    std::process::exit(EXPECTED_FAIL_CODE);
-                }}
-            }}
-        }},
-        // Setup itself failed (e.g. read file)
-        Err(setup_err) => {{
-             eprintln!("Crash Tester SETUP ERROR: {{}}", setup_err);
-             std::process::exit(SETUP_ERR_CODE);
-        }}
-    }}
-}}
-
-// Separated setup from the core logic prone to crashing/panicking
-fn run_setup_and_test() -> Result<Result<i32, String>, String> {{ // Outer Result for setup, Inner for test logic
-    let mut simulator = Simulator::new(); // Assume this doesn't panic
-
-    let asm = fs::read_to_string("{asm_path}").map_err(|e| format!("Failed to read ASM: {{}}", e))?;
-    simulator.load_program(&asm).map_err(|e| format!("Failed to load program: {{}}", e))?;
-
-    // Now, catch panics specifically around the execution
-    let exec_result = catch_unwind(AssertUnwindSafe(|| {{
-        simulator.execute() // This might panic or return Err/Ok
-    }}));
-
-    match exec_result {{
-        // Execution completed without Rust panic
-        Ok(Ok(exit_code)) => Ok(Ok(exit_code)), // Successful execution -> return Ok(Ok(code))
-        Ok(Err(e)) => Ok(Err(e.to_string())), // Simulator returned error -> return Ok(Err(msg))
-        // Execution caused Rust panic
-        Err(_) => Ok(Err("Execution panicked".to_string())), // Panic -> return Ok(Err(msg))
-    }}
-}}
-// --- End Crash Tester main.rs ---
-"#,
-        simulator_path = simulator_path_escaped,
-        asm_path = asm_file_path_escaped,
-        crash_code_sim = CRASH_EXIT_CODE_SIM,
-        normal_code_sim = NORMAL_EXIT_CODE_SIM,
-        setup_err_sim = SETUP_ERROR_SIM
-    );
-    fs::write(&test_main_rs, test_code).expect("Failed to write temporary main.rs");
-
-    // --- 4. Create Cargo.toml (Ensure rstest version is correct) ---
-    let test_cargo_toml = test_pkg_dir.join("Cargo.toml");
-    let compiler_crate_path_escaped = compiler_crate_root.to_string_lossy().replace(r"\", r"\\");
-
-    let cargo_toml_content = format!(
-        r#"
-[package]
-name = "crash-tester"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-uuid = {{ version = "1", features = ["v4"] }}
-winapi = {{ version = "0.3", features = ["libloaderapi", "processthreadsapi", "fileapi", "minwindef", "errhandlingapi"] }}
-compiler = {{ path = "{}" }}
-rstest = "0.25.0"
-"#,
-        compiler_crate_path_escaped,
-    );
-    fs::write(&test_cargo_toml, cargo_toml_content).expect("Failed to write temporary Cargo.toml");
-
-    // --- 5. Run the temporary package using `cargo run` ---
-    println!(
-        "Running crash test package via cargo run in {:?}",
-        test_pkg_dir
-    );
-    let run_output = Command::new("cargo")
-        .arg("run")
-        .current_dir(&test_pkg_dir)
-        // .arg("--quiet")
-        .output()
-        .expect("Failed to execute cargo run for crash tester");
-
-    println!(
-        "Crash Tester (cargo run) status: {:?}\nstdout:\n{}\nstderr:\n{}",
-        run_output.status.code(),
-        String::from_utf8_lossy(&run_output.stdout),
-        String::from_utf8_lossy(&run_output.stderr)
-    );
-
-    // --- 6. Assert the outcome (Revised Logic) ---
-    let status = run_output.status;
-    let exit_code = status.code();
-
-    let crashed_as_expected =
-            // Case 1: Simulator caught the error/panic and exited cleanly with the specific code
-            (status.success() && exit_code == Some(CRASH_EXIT_CODE_SIM)) ||
-                // Case 2: OS terminated the process abnormally (likely due to hardware exception)
-                (!status.success() && exit_code != Some(NORMAL_EXIT_CODE_SIM) && exit_code != Some(SETUP_ERROR_SIM) );
-    // Note: We exclude the "normal exit" and "setup error" codes from being considered an "abnormal termination" success.
-
-    if !crashed_as_expected {
-        // Construct a helpful failure message
-        let mut failure_reason = "Death test failed. ".to_string();
-        match exit_code {
-            Some(code) if code == NORMAL_EXIT_CODE_SIM => {
-                failure_reason
-                    .push_str("Process exited normally (code 0), but was expected to crash.");
-            }
-            Some(code) if code == SETUP_ERROR_SIM => {
-                failure_reason.push_str(&format!(
-                    "Crash tester setup failed (code {}). Check simulator/ASM loading.",
-                    code
-                ));
-            }
-            Some(code) => {
-                failure_reason
-                    .push_str(&format!("Process exited with unexpected code: {}. ", code));
-                if status.success() {
-                    failure_reason.push_str("(Process reported success status).");
-                } else {
-                    failure_reason
-                        .push_str("(Process reported failure status, but not a recognized crash).");
-                }
-            }
-            None => {
-                failure_reason.push_str("Process terminated by signal (no specific exit code).");
-                // On Unix, you could check status.signal() here.
-            }
-        }
-        failure_reason.push_str(&format!(
-            "\n--- Crash Tester Stdout:\n{}\n--- Crash Tester Stderr:\n{}",
-            String::from_utf8_lossy(&run_output.stdout),
-            String::from_utf8_lossy(&run_output.stderr)
-        ));
-        panic!("{}", failure_reason);
-    }
-
-    // --- 7. Cleanup ---
-    let _ = fs::remove_dir_all(&test_pkg_dir);
-    println!("Death test passed for source:\n{}\n", source);
 }

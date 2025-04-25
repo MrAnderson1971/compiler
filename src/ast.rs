@@ -1,7 +1,8 @@
 use crate::CompilerError;
+use crate::CompilerError::SemanticError;
 use crate::common::{Identifier, Position};
-use crate::lexer::{BinaryOperator, Number, UnaryOperator};
-use crate::tac::FunctionBody;
+use crate::lexer::{BinaryOperator, Number, StorageClass, Type, UnaryOperator};
+use crate::tac::{FunctionBody, TACInstruction};
 use crate::tac_visitor::TacVisitor;
 use crate::variable_resolution::VariableResolutionVisitor;
 use std::collections::HashMap;
@@ -117,49 +118,220 @@ pub(crate) trait Visitor {
 
 impl ASTNode<Program> {
     pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
-        let mut shared_functions_map: HashMap<(Identifier, usize), bool> = HashMap::new();
+        let mut shared_functions_map: HashMap<Identifier, FunAttr> = HashMap::new();
+        let mut shared_variables_map: HashMap<Identifier, StaticAttr> = HashMap::new();
 
         // first pass: register declarations
         for declaration in self.kind.iter_mut() {
-            if let Declaration::FunctionDeclaration(func) = &mut declaration.kind {
-                let name = Rc::clone(&func.kind.name);
-                let param_count = func.kind.params.len();
-                let has_body = func.kind.body.is_some();
-                let identifier = ((*name).clone(), param_count);
-                if shared_functions_map.contains_key(&identifier) && shared_functions_map[&identifier] && has_body {
-                    // Error if duplicate definition (duplicate prototypes are fine)
-                    return Err(CompilerError::SemanticError(format!("Duplicate definition of {}", name)));
+            match &mut declaration.kind {
+                Declaration::FunctionDeclaration(func) => {
+                    if let Some(value) = Self::typecheck_function_declaration(
+                        &mut shared_functions_map,
+                        &mut shared_variables_map,
+                        &func,
+                    ) {
+                        return value;
+                    }
                 }
-                shared_functions_map.insert(identifier, func.kind.body.is_some());
+                Declaration::VariableDeclaration(var) => {
+                    if let Some(value) = Self::typecheck_file_scope_variable_declaration(
+                        &mut shared_functions_map,
+                        &mut shared_variables_map,
+                        &var,
+                    ) {
+                        return value;
+                    }
+                }
             }
         }
 
         // second: regular
         for declaration in &mut self.kind {
-            if let Declaration::FunctionDeclaration(func) = &mut declaration.kind {
-                let func_name = Rc::clone(&func.kind.name);
-                let mut visitor =
-                    VariableResolutionVisitor::new(func_name, &mut shared_functions_map);
+            if let Declaration::FunctionDeclaration(func) = &declaration.kind {
+                let func_name = Rc::clone(&func.name);
+                let mut visitor = VariableResolutionVisitor::new(
+                    func_name,
+                    &shared_functions_map,
+                    &mut shared_variables_map,
+                );
                 visitor.visit_declaration(&declaration.line_number, &mut declaration.kind)?;
-                declaration.generate(out, &mut shared_functions_map)?;
+                declaration.generate(out, &shared_functions_map, &mut shared_variables_map)?;
             }
+        }
+
+        for (name, static_attr) in shared_variables_map.iter() {
+            let tac = match static_attr.init {
+                InitialValue::Tentative => TACInstruction::StaticVariable {
+                    name: Rc::from(name.clone()),
+                    global: static_attr.global,
+                    init: 0,
+                },
+                InitialValue::Initial(i) => TACInstruction::StaticVariable {
+                    name: Rc::from(name.clone()),
+                    global: static_attr.global,
+                    init: i,
+                },
+                InitialValue::NoInitializer => continue,
+            };
+            tac.make_assembly(out, &FunctionBody::new());
         }
 
         Ok(())
     }
+
+    fn typecheck_file_scope_variable_declaration(
+        shared_functions_map: &mut HashMap<Identifier, FunAttr>,
+        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
+        var: &&mut VariableDeclaration,
+    ) -> Option<Result<(), CompilerError>> {
+        let mut initial_value = if let Some(init) = &var.init {
+            if let Expression::Constant(i) = init.kind {
+                InitialValue::Initial(i)
+            } else {
+                return Some(Err(SemanticError(format!(
+                    "Initial value {:?} of {} is non-constant",
+                    init.kind, var.name
+                ))));
+            }
+        } else {
+            if var.storage_class == Some(StorageClass::Extern) {
+                InitialValue::NoInitializer
+            } else {
+                InitialValue::Tentative
+            }
+        };
+        let mut global = var.storage_class != Some(StorageClass::Static);
+        let identifier = (*var.name).clone();
+
+        if shared_functions_map.contains_key(&identifier) {
+            return Some(Err(SemanticError(format!(
+                "Function {} redeclared as variable",
+                identifier
+            ))));
+        }
+
+        if let Some(StaticAttr {
+            global: old_global,
+            init: old_init,
+            ..
+        }) = shared_variables_map.get(&identifier)
+        {
+            if var.storage_class == Some(StorageClass::Extern) {
+                global = *old_global;
+            } else if *old_global != global {
+                return Some(Err(SemanticError(format!(
+                    "Conflicting variable linkage of {}",
+                    identifier
+                ))));
+            }
+            if let InitialValue::Initial(i) = old_init {
+                if let Some(_) = var.init {
+                    return Some(Err(SemanticError(format!(
+                        "Conflict file scope variable definitions of {}",
+                        identifier
+                    ))));
+                } else {
+                    initial_value = InitialValue::Initial(*i);
+                }
+            } else if !matches!(initial_value, InitialValue::Initial(_))
+                && matches!(old_init, InitialValue::Tentative)
+            {
+                initial_value = InitialValue::Tentative;
+            }
+        }
+        shared_variables_map.insert(
+            identifier,
+            StaticAttr {
+                init: initial_value,
+                global,
+                type_: Type::Int,
+            },
+        );
+        None
+    }
+
+    fn typecheck_function_declaration(
+        shared_functions_map: &mut HashMap<Identifier, FunAttr>,
+        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
+        func: &&mut FunctionDeclaration,
+    ) -> Option<Result<(), CompilerError>> {
+        let name = Rc::clone(&func.name);
+        let param_count = func.params.len();
+        let has_body = func.body.is_some();
+        let identifier = (*name).clone();
+        if shared_variables_map.contains_key(&identifier) {
+            return Some(Err(SemanticError(format!(
+                "Variable {} redeclared as function",
+                identifier
+            ))));
+        }
+        if let Some(old_decl) = shared_functions_map.get(&identifier) {
+            if old_decl.defined && has_body {
+                // Error if duplicate definition (duplicate prototypes are fine)
+                return Some(Err(SemanticError(format!(
+                    "Duplicate definition of {}",
+                    name
+                ))));
+            }
+            if old_decl.global && func.storage_class == Some(StorageClass::Static) {
+                return Some(Err(SemanticError(format!(
+                    "Static function declaration of {} follows non-static",
+                    name
+                ))));
+            }
+            if old_decl.param_count != param_count {
+                return Some(Err(SemanticError(format!(
+                    "Incompatible function declaration of {}",
+                    name
+                ))));
+            }
+        }
+        shared_functions_map.insert(
+            identifier,
+            FunAttr {
+                defined: func.body.is_some(),
+                global: func.storage_class != Some(StorageClass::Static),
+                param_count,
+            },
+        );
+        None
+    }
+}
+
+pub(crate) struct FunAttr {
+    pub(crate) defined: bool,
+    pub(crate) global: bool,
+    pub(crate) param_count: usize,
+}
+
+pub(crate) struct StaticAttr {
+    pub(crate) init: InitialValue,
+    pub(crate) global: bool,
+    pub(crate) type_: Type,
+}
+
+#[derive(Debug)]
+pub(crate) enum InitialValue {
+    Tentative,
+    Initial(Number),
+    NoInitializer,
 }
 
 impl ASTNode<Declaration> {
     pub(crate) fn generate(
         &mut self,
         out: &mut String,
-        shared_functions_map: &mut HashMap<(Identifier, usize), bool>,
+        shared_functions_map: &HashMap<Identifier, FunAttr>,
+        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
     ) -> Result<(), CompilerError> {
         if let Declaration::FunctionDeclaration(func) = &mut self.kind {
-            let identifier = Rc::clone(&func.kind.name);
+            let identifier = Rc::clone(&func.name);
 
-            let mut variable_resolution_visitor =
-                VariableResolutionVisitor::new(Rc::clone(&identifier), shared_functions_map);
+            let mut variable_resolution_visitor = VariableResolutionVisitor::new(
+                Rc::clone(&identifier),
+                shared_functions_map,
+                shared_variables_map,
+            );
 
             self.accept(&mut variable_resolution_visitor as &mut dyn Visitor)?;
 
@@ -196,6 +368,8 @@ pub(crate) struct FunctionDeclaration {
     pub(crate) name: Rc<Identifier>,
     pub(crate) params: Vec<Identifier>,
     pub(crate) body: Option<ASTNode<Block>>,
+    pub(crate) storage_class: Option<StorageClass>,
+    pub(crate) type_: Type,
 }
 
 pub(crate) type Block = Vec<ASTNode<BlockItem>>;
@@ -226,8 +400,8 @@ impl ASTNode<BlockItem> {
 
 #[derive(Debug)]
 pub(crate) enum Declaration {
-    FunctionDeclaration(ASTNode<FunctionDeclaration>),
-    VariableDeclaration(ASTNode<VariableDeclaration>),
+    FunctionDeclaration(FunctionDeclaration),
+    VariableDeclaration(VariableDeclaration),
 }
 
 impl ASTNode<Declaration> {
@@ -240,6 +414,8 @@ impl ASTNode<Declaration> {
 pub(crate) struct VariableDeclaration {
     pub(crate) name: Rc<Identifier>,
     pub(crate) init: Option<ASTNode<Expression>>,
+    pub(crate) storage_class: Option<StorageClass>,
+    pub(crate) type_: Type,
 }
 
 #[derive(Debug)]
