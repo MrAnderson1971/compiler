@@ -364,6 +364,17 @@ impl<'map> VariableResolutionVisitor<'map> {
             )));
         }
 
+        let scopes = self
+            .variable_scopes
+            .entry(original_name.clone())
+            .or_insert_with(VecDeque::new);
+
+        if !scopes.is_empty() && scopes.back().unwrap().layer == self.layer {
+            return Err(SemanticError(format!(
+                "Duplicate variable declaration {} at {:?}",
+                original_name, line_number
+            )));
+        }
         match d.storage_class {
             Some(StorageClass::Extern) => {
                 if d.init.is_some() {
@@ -439,18 +450,6 @@ impl<'map> VariableResolutionVisitor<'map> {
             }
 
             None => {
-                let scopes = self
-                    .variable_scopes
-                    .entry(original_name.clone())
-                    .or_insert_with(VecDeque::new);
-
-                if !scopes.is_empty() && scopes.back().unwrap().layer == self.layer {
-                    return Err(SemanticError(format!(
-                        "Duplicate variable declaration {} at {:?}",
-                        original_name, line_number
-                    )));
-                }
-
                 let unique_name = Rc::new(format!(
                     "{}::{}::{}",
                     self.function, original_name, self.layer

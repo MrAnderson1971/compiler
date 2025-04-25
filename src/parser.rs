@@ -589,7 +589,7 @@ impl Parser {
 
     fn parse_for_init(&mut self) -> Result<ASTNode<ForInit>, CompilerError> {
         match self.peek_token() {
-            Token::Keyword(spec @ (Keyword::Type(_) | Keyword::StorageClass(_))) => {
+            Token::Keyword(spec @ (Keyword::Type(_))) => {
                 let mut specifiers = vec![spec];
                 self.tokens.pop_front();
                 while let Token::Keyword(spec @ (Keyword::Type(_) | Keyword::StorageClass(_))) =
