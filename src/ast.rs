@@ -2,7 +2,7 @@ use crate::CompilerError;
 use crate::CompilerError::SemanticError;
 use crate::common::{Identifier, Position};
 use crate::lexer::{BinaryOperator, Number, StorageClass, Type, UnaryOperator};
-use crate::tac::FunctionBody;
+use crate::tac::{FunctionBody, TACInstruction};
 use crate::tac_visitor::TacVisitor;
 use crate::variable_resolution::VariableResolutionVisitor;
 use std::collections::HashMap;
@@ -119,7 +119,7 @@ pub(crate) trait Visitor {
 impl ASTNode<Program> {
     pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
         let mut shared_functions_map: HashMap<Identifier, FunAttr> = HashMap::new();
-        let mut shared_variables_map: HashMap<Identifier, IdentifierAttr> = HashMap::new();
+        let mut shared_variables_map: HashMap<Identifier, StaticAttr> = HashMap::new();
 
         // first pass: register declarations
         for declaration in self.kind.iter_mut() {
@@ -147,7 +147,7 @@ impl ASTNode<Program> {
 
         // second: regular
         for declaration in &mut self.kind {
-            if let Declaration::FunctionDeclaration(func) = &mut declaration.kind {
+            if let Declaration::FunctionDeclaration(func) = &declaration.kind {
                 let func_name = Rc::clone(&func.kind.name);
                 let mut visitor = VariableResolutionVisitor::new(
                     func_name,
@@ -159,12 +159,29 @@ impl ASTNode<Program> {
             }
         }
 
+        for (name, static_attr) in shared_variables_map.iter() {
+            let tac = match static_attr.init {
+                InitialValue::Tentative => TACInstruction::StaticVariable {
+                    name: Rc::from(name.clone()),
+                    global: static_attr.global,
+                    init: 0,
+                },
+                InitialValue::Initial(i) => TACInstruction::StaticVariable {
+                    name: Rc::from(name.clone()),
+                    global: static_attr.global,
+                    init: i,
+                },
+                InitialValue::NoInitializer => continue,
+            };
+            tac.make_assembly(out, &FunctionBody::new());
+        }
+
         Ok(())
     }
 
     fn typecheck_file_scope_variable_declaration(
         shared_functions_map: &mut HashMap<Identifier, FunAttr>,
-        shared_variables_map: &mut HashMap<Identifier, IdentifierAttr>,
+        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
         var: &&mut ASTNode<VariableDeclaration>,
     ) -> Option<Result<(), CompilerError>> {
         let mut initial_value = if let Some(init) = &var.kind.init {
@@ -193,7 +210,7 @@ impl ASTNode<Program> {
             ))));
         }
 
-        if let Some(IdentifierAttr::StaticAttr {
+        if let Some(StaticAttr {
             global: old_global,
             init: old_init,
             ..
@@ -224,7 +241,7 @@ impl ASTNode<Program> {
         }
         shared_variables_map.insert(
             identifier,
-            IdentifierAttr::StaticAttr {
+            StaticAttr {
                 init: initial_value,
                 global,
                 type_: Type::Int,
@@ -235,7 +252,7 @@ impl ASTNode<Program> {
 
     fn typecheck_function_declaration(
         shared_functions_map: &mut HashMap<Identifier, FunAttr>,
-        shared_variables_map: &mut HashMap<Identifier, IdentifierAttr>,
+        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
         func: &&mut ASTNode<FunctionDeclaration>,
     ) -> Option<Result<(), CompilerError>> {
         let name = Rc::clone(&func.kind.name);
@@ -287,15 +304,13 @@ pub(crate) struct FunAttr {
     pub(crate) param_count: usize,
 }
 
-pub(crate) enum IdentifierAttr {
-    StaticAttr {
-        init: InitialValue,
-        global: bool,
-        type_: Type,
-    },
-    LocalAttr,
+pub(crate) struct StaticAttr {
+    pub(crate) init: InitialValue,
+    pub(crate) global: bool,
+    pub(crate) type_: Type,
 }
 
+#[derive(Debug)]
 pub(crate) enum InitialValue {
     Tentative,
     Initial(Number),
@@ -307,7 +322,7 @@ impl ASTNode<Declaration> {
         &mut self,
         out: &mut String,
         shared_functions_map: &HashMap<Identifier, FunAttr>,
-        shared_variables_map: &mut HashMap<Identifier, IdentifierAttr>,
+        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
     ) -> Result<(), CompilerError> {
         if let Declaration::FunctionDeclaration(func) = &mut self.kind {
             let identifier = Rc::clone(&func.kind.name);

@@ -1,14 +1,14 @@
 use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Statement, Visitor};
-use crate::common::{Identifier, Operand, Position, Pseudoregister};
+use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{BinaryOperator, Number, StorageClass, UnaryOperator};
-use crate::tac::FunctionBody;
 use crate::tac::TACInstruction::{
     AdjustStack, AllocateStackInstruction, BinaryOpInstruction, DeallocateStackInstruction,
     FunctionCall, FunctionInstruction, Jump, JumpIfNotZero, JumpIfZero, Label, PushArgument,
     ReturnInstruction, StoreValueInstruction, UnaryOpInstruction,
 };
+use crate::tac::{FunctionBody, Operand, Pseudoregister};
 use std::rc::Rc;
 
 const FIRST_SIX_REGISTERS: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
@@ -39,15 +39,17 @@ impl<'a> Visitor for TacVisitor<'a> {
     ) -> Result<(), CompilerError> {
         match declaration {
             Declaration::VariableDeclaration(v) => {
+                if v.kind.storage_class == Some(StorageClass::Static) {
+                    return Ok(());
+                }
                 let (identifier, expression) = (&v.kind.name, &mut v.kind.init);
                 let pseudoregister = Rc::from(Pseudoregister::new(
                     (*self.name).clone(),
                     self.body.variable_count,
                 ));
-                self.body.variable_to_pseudoregister.insert(
-                    (*Rc::clone(&identifier)).clone(),
-                    Rc::clone(&pseudoregister),
-                );
+                self.body
+                    .variable_to_pseudoregister
+                    .insert(identifier.as_ref().to_string(), Rc::clone(&pseudoregister));
                 if let Some(expression) = expression {
                     expression.accept(self)?;
                     self.body.add_instruction(StoreValueInstruction {
@@ -517,10 +519,11 @@ impl<'a> Visitor for TacVisitor<'a> {
             }
         }
 
-        Err(SemanticError(format!(
-            "Variable {} not found in scope {}",
-            param_key, self.name
-        )))
+        // static
+        self.result = Rc::from(Operand::Register(Pseudoregister::Data(Rc::clone(
+            &identifier,
+        ))));
+        Ok(())
     }
 
     fn visit_function_call(

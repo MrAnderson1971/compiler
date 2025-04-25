@@ -1,7 +1,6 @@
-use crate::ast::IdentifierAttr::StaticAttr;
 use crate::ast::{
-    ASTNode, Block, Declaration, Expression, ForInit, FunAttr, IdentifierAttr, InitialValue,
-    Statement, Visitor,
+    ASTNode, Block, Declaration, Expression, ForInit, FunAttr, InitialValue, Statement, StaticAttr,
+    Visitor,
 };
 use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
@@ -16,14 +15,14 @@ pub(crate) struct VariableResolutionVisitor<'map> {
     variable_map: HashMap<Identifier, VecDeque<(i32, bool)>>, // (layer, has_linkage)
     loop_labels: VecDeque<(Rc<String>, bool)>,
     functions_map: &'map HashMap<Identifier, FunAttr>, // (has_body, is_global)
-    global_variables_map: &'map mut HashMap<Identifier, IdentifierAttr>,
+    global_variables_map: &'map mut HashMap<Identifier, StaticAttr>,
 }
 
 impl<'map> VariableResolutionVisitor<'map> {
     pub(crate) fn new(
         function: Rc<String>,
         functions_map: &'map HashMap<Identifier, FunAttr>,
-        global_variables_map: &'map mut HashMap<Identifier, IdentifierAttr>,
+        global_variables_map: &'map mut HashMap<Identifier, StaticAttr>,
     ) -> Self {
         Self {
             layer: 0,
@@ -105,22 +104,15 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
                         Ok(())
                     }
                     None => {
-                        if !self
-                            .variable_map
-                            .contains_key(&key)
-                        {
+                        if !self.variable_map.contains_key(&key) {
                             let mut stack = VecDeque::new();
                             stack.push_back((
                                 self.layer,
                                 d.kind.storage_class == Some(StorageClass::Extern),
                             ));
-                            self.variable_map
-                                .insert(key, stack);
+                            self.variable_map.insert(key, stack);
                         } else {
-                            let stack = self
-                                .variable_map
-                                .get_mut(&key)
-                                .unwrap();
+                            let stack = self.variable_map.get_mut(&key).unwrap();
                             if !stack.is_empty() && (*stack.back().unwrap()).0 == self.layer {
                                 return Err(SemanticError(format!(
                                     "Duplicate variable declaration {} at {:?}",
@@ -319,16 +311,10 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         line_number: &Rc<Position>,
         identifier: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
-        match self
-            .variable_map
-            .get_mut(&(*Rc::clone(&identifier)).clone())
-        {
-            None => Err(SemanticError(format!(
-                "Undefined variable {} at {:?}",
-                identifier, line_number
-            ))),
+        match self.variable_map.get_mut(identifier.as_ref()) {
+            None => {}
             Some(stack) => {
-                if stack.is_empty() {
+                return if stack.is_empty() {
                     Err(SemanticError(format!(
                         "Variable {} at {:?} out of scope",
                         identifier, line_number
@@ -338,8 +324,15 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
                     *identifier =
                         Rc::new(format!("{}::{}::{}", self.function, identifier, variable.0));
                     Ok(())
-                }
+                };
             }
+        }
+        match self.global_variables_map.get(identifier.as_ref()) {
+            None => Err(SemanticError(format!(
+                "Undefined variable {} at {:?}",
+                identifier, line_number
+            ))),
+            Some(_) => Ok(()),
         }
     }
 
