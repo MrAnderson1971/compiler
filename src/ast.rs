@@ -1,7 +1,6 @@
 use crate::CompilerError;
 use crate::CompilerError::SemanticError;
 use crate::common::{Identifier, Position};
-use crate::lexer::StorageClass::Static;
 use crate::lexer::{BinaryOperator, Number, StorageClass, Type, UnaryOperator};
 use crate::tac::FunctionBody;
 use crate::tac_visitor::TacVisitor;
@@ -120,7 +119,7 @@ pub(crate) trait Visitor {
 impl ASTNode<Program> {
     pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
         let mut shared_functions_map: HashMap<Identifier, FunAttr> = HashMap::new();
-        let mut shared_variables_map: HashMap<Identifier, StaticAttr> = HashMap::new();
+        let mut shared_variables_map: HashMap<Identifier, IdentifierAttr> = HashMap::new();
 
         // first pass: register declarations
         for declaration in self.kind.iter_mut() {
@@ -150,10 +149,13 @@ impl ASTNode<Program> {
         for declaration in &mut self.kind {
             if let Declaration::FunctionDeclaration(func) = &mut declaration.kind {
                 let func_name = Rc::clone(&func.kind.name);
-                let mut visitor =
-                    VariableResolutionVisitor::new(func_name, &mut shared_functions_map);
+                let mut visitor = VariableResolutionVisitor::new(
+                    func_name,
+                    &shared_functions_map,
+                    &mut shared_variables_map,
+                );
                 visitor.visit_declaration(&declaration.line_number, &mut declaration.kind)?;
-                declaration.generate(out, &mut shared_functions_map)?;
+                declaration.generate(out, &shared_functions_map, &mut shared_variables_map)?;
             }
         }
 
@@ -162,7 +164,7 @@ impl ASTNode<Program> {
 
     fn typecheck_file_scope_variable_declaration(
         shared_functions_map: &mut HashMap<Identifier, FunAttr>,
-        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
+        shared_variables_map: &mut HashMap<Identifier, IdentifierAttr>,
         var: &&mut ASTNode<VariableDeclaration>,
     ) -> Option<Result<(), CompilerError>> {
         let mut initial_value = if let Some(init) = &var.kind.init {
@@ -191,35 +193,41 @@ impl ASTNode<Program> {
             ))));
         }
 
-        if let Some(old) = shared_variables_map.get(&identifier) {
+        if let Some(IdentifierAttr::StaticAttr {
+            global: old_global,
+            init: old_init,
+            ..
+        }) = shared_variables_map.get(&identifier)
+        {
             if var.kind.storage_class == Some(StorageClass::Extern) {
-                global = old.global;
-            } else if old.global != global {
+                global = *old_global;
+            } else if *old_global != global {
                 return Some(Err(SemanticError(format!(
                     "Conflicting variable linkage of {}",
                     identifier
                 ))));
             }
-            if let InitialValue::Initial(i) = old.init {
+            if let InitialValue::Initial(i) = old_init {
                 if let Some(_) = var.kind.init {
                     return Some(Err(SemanticError(format!(
                         "Conflict file scope variable definitions of {}",
                         identifier
                     ))));
                 } else {
-                    initial_value = InitialValue::Initial(i);
+                    initial_value = InitialValue::Initial(*i);
                 }
             } else if !matches!(initial_value, InitialValue::Initial(_))
-                && matches!(old.init, InitialValue::Tentative)
+                && matches!(old_init, InitialValue::Tentative)
             {
                 initial_value = InitialValue::Tentative;
             }
         }
         shared_variables_map.insert(
             identifier,
-            StaticAttr {
+            IdentifierAttr::StaticAttr {
                 init: initial_value,
                 global,
+                type_: Type::Int,
             },
         );
         None
@@ -227,7 +235,7 @@ impl ASTNode<Program> {
 
     fn typecheck_function_declaration(
         shared_functions_map: &mut HashMap<Identifier, FunAttr>,
-        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
+        shared_variables_map: &mut HashMap<Identifier, IdentifierAttr>,
         func: &&mut ASTNode<FunctionDeclaration>,
     ) -> Option<Result<(), CompilerError>> {
         let name = Rc::clone(&func.kind.name);
@@ -279,12 +287,16 @@ pub(crate) struct FunAttr {
     pub(crate) param_count: usize,
 }
 
-pub(crate) struct StaticAttr {
-    init: InitialValue,
-    global: bool,
+pub(crate) enum IdentifierAttr {
+    StaticAttr {
+        init: InitialValue,
+        global: bool,
+        type_: Type,
+    },
+    LocalAttr,
 }
 
-enum InitialValue {
+pub(crate) enum InitialValue {
     Tentative,
     Initial(Number),
     NoInitializer,
@@ -294,13 +306,17 @@ impl ASTNode<Declaration> {
     pub(crate) fn generate(
         &mut self,
         out: &mut String,
-        shared_functions_map: &mut HashMap<Identifier, FunAttr>,
+        shared_functions_map: &HashMap<Identifier, FunAttr>,
+        shared_variables_map: &mut HashMap<Identifier, IdentifierAttr>,
     ) -> Result<(), CompilerError> {
         if let Declaration::FunctionDeclaration(func) = &mut self.kind {
             let identifier = Rc::clone(&func.kind.name);
 
-            let mut variable_resolution_visitor =
-                VariableResolutionVisitor::new(Rc::clone(&identifier), shared_functions_map);
+            let mut variable_resolution_visitor = VariableResolutionVisitor::new(
+                Rc::clone(&identifier),
+                shared_functions_map,
+                shared_variables_map,
+            );
 
             self.accept(&mut variable_resolution_visitor as &mut dyn Visitor)?;
 

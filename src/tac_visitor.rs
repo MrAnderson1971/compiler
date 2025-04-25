@@ -2,7 +2,7 @@ use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Statement, Vi
 use crate::common::{Identifier, Operand, Position, Pseudoregister};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
-use crate::lexer::{BinaryOperator, Number, UnaryOperator};
+use crate::lexer::{BinaryOperator, Number, StorageClass, UnaryOperator};
 use crate::tac::FunctionBody;
 use crate::tac::TACInstruction::{
     AdjustStack, AllocateStackInstruction, BinaryOpInstruction, DeallocateStackInstruction,
@@ -62,6 +62,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 if let Some(body) = &mut func.kind.body {
                     self.body.add_instruction(FunctionInstruction {
                         name: Rc::clone(&func.kind.name),
+                        global: func.kind.storage_class != Some(StorageClass::Static),
                     });
                     self.body.add_instruction(AllocateStackInstruction);
 

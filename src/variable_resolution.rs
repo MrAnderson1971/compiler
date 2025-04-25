@@ -1,8 +1,12 @@
-use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, FunAttr, Statement, Visitor};
+use crate::ast::IdentifierAttr::StaticAttr;
+use crate::ast::{
+    ASTNode, Block, Declaration, Expression, ForInit, FunAttr, IdentifierAttr, InitialValue,
+    Statement, Visitor,
+};
 use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
-use crate::lexer::{BinaryOperator, Number, StorageClass, UnaryOperator};
+use crate::lexer::{BinaryOperator, Number, StorageClass, Type, UnaryOperator};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
@@ -11,13 +15,15 @@ pub(crate) struct VariableResolutionVisitor<'map> {
     function: Rc<String>,
     variable_map: HashMap<Identifier, VecDeque<(i32, bool)>>, // (layer, has_linkage)
     loop_labels: VecDeque<(Rc<String>, bool)>,
-    functions_map: &'map mut HashMap<Identifier, FunAttr>, // (has_body, is_global)
+    functions_map: &'map HashMap<Identifier, FunAttr>, // (has_body, is_global)
+    global_variables_map: &'map mut HashMap<Identifier, IdentifierAttr>,
 }
 
 impl<'map> VariableResolutionVisitor<'map> {
     pub(crate) fn new(
         function: Rc<String>,
-        functions_map: &'map mut HashMap<Identifier, FunAttr>,
+        functions_map: &'map HashMap<Identifier, FunAttr>,
+        global_variables_map: &'map mut HashMap<Identifier, IdentifierAttr>,
     ) -> Self {
         Self {
             layer: 0,
@@ -25,6 +31,7 @@ impl<'map> VariableResolutionVisitor<'map> {
             variable_map: HashMap::new(),
             loop_labels: VecDeque::new(),
             functions_map,
+            global_variables_map,
         }
     }
 }
@@ -48,51 +55,94 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         match declaration {
             Declaration::VariableDeclaration(d) => {
                 let (identifier, expression) = (&mut d.kind.name, &mut d.kind.init);
-                if !self
-                    .variable_map
-                    .contains_key(&(*Rc::clone(&identifier)).clone())
-                {
-                    let mut stack = VecDeque::new();
-                    stack.push_back((
-                        self.layer,
-                        d.kind.storage_class == Some(StorageClass::Extern),
-                    ));
-                    self.variable_map
-                        .insert((*Rc::clone(&identifier)).clone(), stack);
-                } else {
-                    let stack = self
-                        .variable_map
-                        .get_mut(&(*Rc::clone(&identifier)).clone())
-                        .unwrap();
-                    if !stack.is_empty() && (*stack.back().unwrap()).0 == self.layer {
-                        return Err(SemanticError(format!(
-                            "Duplicate variable declaration {} at {:?}",
-                            identifier, line_number
-                        )));
-                    }
-                    stack.push_back((
-                        self.layer,
-                        d.kind.storage_class == Some(StorageClass::Extern),
-                    ));
+                let key = (*Rc::clone(&identifier)).clone();
+                if self.functions_map.contains_key(&key) {
+                    return Err(SemanticError(format!(
+                        "Function {} redeclared as variable at {:?}",
+                        identifier, line_number
+                    )));
                 }
-                *identifier = Rc::new(format!("{}::{}::{}", self.function, identifier, self.layer));
-                if let Some(expression) = expression {
-                    expression.accept(self)
-                } else {
-                    Ok(())
+                match d.kind.storage_class {
+                    Some(StorageClass::Extern) => {
+                        if !matches!(expression, None) {
+                            Err(SemanticError(format!(
+                                "Extern variable cannot be initialized at {:?}",
+                                line_number
+                            )))
+                        } else {
+                            self.global_variables_map.insert(
+                                key,
+                                StaticAttr {
+                                    init: InitialValue::NoInitializer,
+                                    global: true,
+                                    type_: Type::Int,
+                                },
+                            );
+                            Ok(())
+                        }
+                    }
+                    Some(StorageClass::Static) => {
+                        let initial_value = if let Some(init) = &d.kind.init {
+                            if let Expression::Constant(i) = init.kind {
+                                InitialValue::Initial(i)
+                            } else {
+                                return Err(SemanticError(format!(
+                                    "Non-constant initializer of static variable {} at {:?}",
+                                    identifier, line_number
+                                )));
+                            }
+                        } else {
+                            InitialValue::Initial(0)
+                        };
+                        self.global_variables_map.insert(
+                            key,
+                            StaticAttr {
+                                init: initial_value,
+                                global: false,
+                                type_: Type::Int,
+                            },
+                        );
+                        Ok(())
+                    }
+                    None => {
+                        if !self
+                            .variable_map
+                            .contains_key(&key)
+                        {
+                            let mut stack = VecDeque::new();
+                            stack.push_back((
+                                self.layer,
+                                d.kind.storage_class == Some(StorageClass::Extern),
+                            ));
+                            self.variable_map
+                                .insert(key, stack);
+                        } else {
+                            let stack = self
+                                .variable_map
+                                .get_mut(&key)
+                                .unwrap();
+                            if !stack.is_empty() && (*stack.back().unwrap()).0 == self.layer {
+                                return Err(SemanticError(format!(
+                                    "Duplicate variable declaration {} at {:?}",
+                                    identifier, line_number
+                                )));
+                            }
+                            stack.push_back((
+                                self.layer,
+                                d.kind.storage_class == Some(StorageClass::Extern),
+                            ));
+                        }
+                        *identifier =
+                            Rc::new(format!("{}::{}::{}", self.function, identifier, self.layer));
+                        if let Some(expression) = expression {
+                            expression.accept(self)
+                        } else {
+                            Ok(())
+                        }
+                    }
                 }
             }
             Declaration::FunctionDeclaration(f) => {
-                let global = f.kind.storage_class != Some(StorageClass::Static);
-                let (identifier, params) = (Rc::clone(&f.kind.name), &f.kind.params);
-                self.functions_map.insert(
-                    (*identifier).clone(),
-                    FunAttr {
-                        defined: true,
-                        global,
-                        param_count: params.len(),
-                    },
-                );
                 self.layer += 1;
                 for param in &mut f.kind.params {
                     let original_name = param.clone(); // Store original name

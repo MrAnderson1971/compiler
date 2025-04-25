@@ -1,7 +1,5 @@
 use crate::common::{Identifier, Operand, Pseudoregister};
-use crate::lexer::BinaryOperator::{BitwiseShiftLeft, BitwiseShiftRight};
-use crate::lexer::{BinaryOperator, UnaryOperator};
-use crate::tac::TACInstruction::ReturnInstruction;
+use crate::lexer::{BinaryOperator, Number, UnaryOperator};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -9,6 +7,12 @@ use std::rc::Rc;
 pub(crate) enum TACInstruction {
     FunctionInstruction {
         name: Rc<String>,
+        global: bool,
+    },
+    StaticVariable {
+        name: Rc<String>,
+        global: bool,
+        init: Number,
     },
     UnaryOpInstruction {
         dest: Rc<Pseudoregister>,
@@ -71,9 +75,9 @@ impl FunctionBody {
 
     pub(crate) fn add_default_return_to_main(&mut self) {
         match &self.instructions.last().unwrap() {
-            ReturnInstruction { .. } => {}
+            TACInstruction::ReturnInstruction { .. } => {}
             _ => {
-                self.add_instruction(ReturnInstruction {
+                self.add_instruction(TACInstruction::ReturnInstruction {
                     val: Rc::from(Operand::Immediate(0)),
                 });
             }
@@ -84,7 +88,7 @@ impl FunctionBody {
 impl TACInstruction {
     pub(crate) fn make_assembly(&self, out: &mut String, function_body: &FunctionBody) {
         match &self {
-            TACInstruction::FunctionInstruction { name } => {
+            TACInstruction::FunctionInstruction { name, global } => {
                 *out += &format!(
                     ".global {}\n\
                 {}:\n\
@@ -156,6 +160,7 @@ ret\n";
             TACInstruction::AdjustStack(size) => {
                 *out += &format!("addq ${}, %rsp\n", size);
             }
+            TACInstruction::StaticVariable { .. } => {}
         }
     }
 }
@@ -181,8 +186,8 @@ fn make_binary_op_instruction(
         | BinaryOperator::BitwiseOr
         | BinaryOperator::BitwiseXor => {
             *out += &format!("movl {}, %r10d\n", src1);
-            if *op == BitwiseShiftLeft || *op == BitwiseShiftRight {
-                let shift_op = if *op == BitwiseShiftLeft {
+            if *op == BinaryOperator::BitwiseShiftLeft || *op == BinaryOperator::BitwiseShiftRight {
+                let shift_op = if *op == BinaryOperator::BitwiseShiftLeft {
                     "shll"
                 } else {
                     "shrl"

@@ -340,8 +340,7 @@ impl Parser {
         }
     }
 
-    fn parse_primary(&mut self) -> Result<ASTNode<Expression>, CompilerError> {
-        let token = self.peek_token();
+    fn parse_primary(&mut self, token: Token) -> Result<ASTNode<Expression>, CompilerError> {
         match token {
             Token::NumberLiteral(value) => {
                 self.tokens.pop_front();
@@ -399,7 +398,7 @@ impl Parser {
             _ => {}
         }
 
-        let primary = self.parse_primary()?;
+        let primary = self.parse_primary(token)?;
 
         let token = self.peek_token();
         match token {
