@@ -192,9 +192,7 @@ impl Parser {
         Ok((type_, storage_class))
     }
 
-    fn parse_function_declaration(
-        &mut self,
-    ) -> Result<ASTNode<FunctionDeclaration>, CompilerError> {
+    fn parse_top_level(&mut self) -> Result<ASTNode<Declaration>, CompilerError> {
         let mut specifiers = vec![];
         while let Token::Keyword(spec @ (Keyword::Type(..) | Keyword::StorageClass(..))) =
             self.peek_token()
@@ -216,18 +214,39 @@ impl Parser {
         self.tokens.pop_front();
         self.line_number = Rc::from((0, function_name.clone()));
         let mut block_items: Vec<ASTNode<BlockItem>> = Vec::new();
+        let next = self.peek_token();
+        match next {
+            Token::Symbol(Symbol::OpenParenthesis) => {} // function
+            Token::Symbol(Binary(Assign)) | Token::Symbol(Symbol::Semicolon) => {
+                // top level variable
+                let declaration =
+                    self.parse_declaration((type_, storage_class), Some(function_name))?;
+                self.tokens.pop_front(); // consume semicolon
+                return Ok(self.make_node(Declaration::VariableDeclaration(declaration.kind)));
+            }
+            _ => {
+                return Err(SyntaxError(format!(
+                    "Unexpected token {:?} at {:?}",
+                    self.peek_token(),
+                    self.line_number
+                )));
+            }
+        }
+
         let params = self.parse_params()?;
 
         // function prototype
         if let Token::Symbol(Symbol::Semicolon) = self.peek_token() {
             self.tokens.pop_front(); // consume semicolon
-            return Ok(self.make_node(FunctionDeclaration {
-                name: Rc::from(function_name),
-                params,
-                body: None,
-                storage_class,
-                type_,
-            }));
+            return Ok(
+                self.make_node(Declaration::FunctionDeclaration(FunctionDeclaration {
+                    name: Rc::from(function_name),
+                    params,
+                    body: None,
+                    storage_class,
+                    type_,
+                })),
+            );
         }
 
         // full definition
@@ -247,28 +266,34 @@ impl Parser {
         }
         let function_body = self.make_node::<Block>(block_items);
         expect_token!(self, Token::Symbol(Symbol::CloseBrace))?;
-        Ok(self.make_node(FunctionDeclaration {
-            name: Rc::from(function_name),
-            params,
-            body: Some(function_body),
-            storage_class,
-            type_,
-        }))
+        Ok(
+            self.make_node(Declaration::FunctionDeclaration(FunctionDeclaration {
+                name: Rc::from(function_name),
+                params,
+                body: Some(function_body),
+                storage_class,
+                type_,
+            })),
+        )
     }
 
     fn parse_declaration(
         &mut self,
         specifiers: (Type, Option<StorageClass>),
+        name: Option<Identifier>,
     ) -> Result<ASTNode<VariableDeclaration>, CompilerError> {
-        let current = self.peek_token();
-        self.tokens.pop_front();
-        let identifier = match current {
-            Token::Name(name) => name,
-            _ => {
-                return Err(SyntaxError(format!(
-                    "Expected identifier but got {:?} at {:?}",
-                    current, self.line_number
-                )));
+        let identifier = if let Some(name) = name {
+            name
+        } else {
+            let current = self.consume_and_pop();
+            match current {
+                Token::Name(name) => name,
+                _ => {
+                    return Err(SyntaxError(format!(
+                        "Expected identifier but got {:?} at {:?}",
+                        current, self.line_number
+                    )));
+                }
             }
         };
         if let Token::Symbol(Binary(Assign)) = self.peek_token() {
@@ -564,9 +589,9 @@ impl Parser {
                     self.tokens.pop_front();
                 }
                 let (type_, storage_class) = self.parse_type_and_storage_class(specifiers)?;
-                let variable_declaration = self.parse_declaration((type_, storage_class))?;
+                let variable_declaration = self.parse_declaration((type_, storage_class), None)?;
                 let declaration =
-                    self.make_node(Declaration::VariableDeclaration(variable_declaration));
+                    self.make_node(Declaration::VariableDeclaration(variable_declaration.kind));
                 Ok(self.make_node(InitDecl(declaration)))
             }
             Token::Symbol(Symbol::Semicolon) => Ok(self.make_node(InitExp(None))),
@@ -734,7 +759,7 @@ impl Parser {
                         specifiers.push(spec);
                     }
                     let (type_, storage_class) = self.parse_type_and_storage_class(specifiers)?;
-                    let out = self.parse_declaration((type_, storage_class))?;
+                    let out = self.parse_declaration((type_, storage_class), None)?;
                     if let Token::Symbol(Symbol::OpenParenthesis) = self.peek_token() {
                         return Err(SemanticError(format!(
                             "Inner function declaration of {} at {:?}",
@@ -742,7 +767,7 @@ impl Parser {
                         )));
                     }
                     self.end_line()?;
-                    Ok(self.make_node(D(self.make_node(Declaration::VariableDeclaration(out)))))
+                    Ok(self.make_node(D(self.make_node(Declaration::VariableDeclaration(out.kind)))))
                 }
                 _ => {
                     let statement = self.parse_statement()?;
@@ -760,13 +785,8 @@ impl Parser {
         let mut declarations = Vec::new();
 
         while !matches!(self.tokens.front().unwrap(), Token::EOF) {
-            let function_declaration = self.parse_function_declaration()?;
-
-            let declaration = Declaration::FunctionDeclaration(function_declaration);
-
-            let declaration_node = self.make_node(declaration);
-
-            declarations.push(declaration_node);
+            let declaration = self.parse_top_level()?;
+            declarations.push(declaration);
         }
 
         expect_token!(self, Token::EOF)?;
@@ -798,5 +818,21 @@ impl Parser {
             line_number: Rc::clone(&self.line_number),
             kind,
         }
+    }
+
+    fn match_and_consume<T, F>(&mut self, matcher: F) -> Option<T>
+    where
+        F: FnOnce(&Token) -> Option<T>,
+    {
+        if let Some(result) = matcher(self.tokens.front()?) {
+            self.tokens.pop_front();
+            Some(result)
+        } else {
+            None
+        }
+    }
+
+    fn consume_and_pop(&mut self) -> Token {
+        return self.tokens.pop_front().unwrap();
     }
 }

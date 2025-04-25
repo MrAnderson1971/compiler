@@ -148,7 +148,7 @@ impl ASTNode<Program> {
         // second: regular
         for declaration in &mut self.kind {
             if let Declaration::FunctionDeclaration(func) = &declaration.kind {
-                let func_name = Rc::clone(&func.kind.name);
+                let func_name = Rc::clone(&func.name);
                 let mut visitor = VariableResolutionVisitor::new(
                     func_name,
                     &shared_functions_map,
@@ -182,26 +182,26 @@ impl ASTNode<Program> {
     fn typecheck_file_scope_variable_declaration(
         shared_functions_map: &mut HashMap<Identifier, FunAttr>,
         shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
-        var: &&mut ASTNode<VariableDeclaration>,
+        var: &&mut VariableDeclaration,
     ) -> Option<Result<(), CompilerError>> {
-        let mut initial_value = if let Some(init) = &var.kind.init {
+        let mut initial_value = if let Some(init) = &var.init {
             if let Expression::Constant(i) = init.kind {
                 InitialValue::Initial(i)
             } else {
                 return Some(Err(SemanticError(format!(
                     "Initial value {:?} of {} is non-constant",
-                    init.kind, var.kind.name
+                    init.kind, var.name
                 ))));
             }
         } else {
-            if var.kind.storage_class == Some(StorageClass::Extern) {
+            if var.storage_class == Some(StorageClass::Extern) {
                 InitialValue::NoInitializer
             } else {
                 InitialValue::Tentative
             }
         };
-        let mut global = var.kind.storage_class != Some(StorageClass::Static);
-        let identifier = (*var.kind.name).clone();
+        let mut global = var.storage_class != Some(StorageClass::Static);
+        let identifier = (*var.name).clone();
 
         if shared_functions_map.contains_key(&identifier) {
             return Some(Err(SemanticError(format!(
@@ -216,7 +216,7 @@ impl ASTNode<Program> {
             ..
         }) = shared_variables_map.get(&identifier)
         {
-            if var.kind.storage_class == Some(StorageClass::Extern) {
+            if var.storage_class == Some(StorageClass::Extern) {
                 global = *old_global;
             } else if *old_global != global {
                 return Some(Err(SemanticError(format!(
@@ -225,7 +225,7 @@ impl ASTNode<Program> {
                 ))));
             }
             if let InitialValue::Initial(i) = old_init {
-                if let Some(_) = var.kind.init {
+                if let Some(_) = var.init {
                     return Some(Err(SemanticError(format!(
                         "Conflict file scope variable definitions of {}",
                         identifier
@@ -253,11 +253,11 @@ impl ASTNode<Program> {
     fn typecheck_function_declaration(
         shared_functions_map: &mut HashMap<Identifier, FunAttr>,
         shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
-        func: &&mut ASTNode<FunctionDeclaration>,
+        func: &&mut FunctionDeclaration,
     ) -> Option<Result<(), CompilerError>> {
-        let name = Rc::clone(&func.kind.name);
-        let param_count = func.kind.params.len();
-        let has_body = func.kind.body.is_some();
+        let name = Rc::clone(&func.name);
+        let param_count = func.params.len();
+        let has_body = func.body.is_some();
         let identifier = (*name).clone();
         if shared_variables_map.contains_key(&identifier) {
             return Some(Err(SemanticError(format!(
@@ -273,7 +273,7 @@ impl ASTNode<Program> {
                     name
                 ))));
             }
-            if old_decl.global && func.kind.storage_class == Some(StorageClass::Static) {
+            if old_decl.global && func.storage_class == Some(StorageClass::Static) {
                 return Some(Err(SemanticError(format!(
                     "Static function declaration of {} follows non-static",
                     name
@@ -289,8 +289,8 @@ impl ASTNode<Program> {
         shared_functions_map.insert(
             identifier,
             FunAttr {
-                defined: func.kind.body.is_some(),
-                global: func.kind.storage_class != Some(StorageClass::Static),
+                defined: func.body.is_some(),
+                global: func.storage_class != Some(StorageClass::Static),
                 param_count,
             },
         );
@@ -325,7 +325,7 @@ impl ASTNode<Declaration> {
         shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
     ) -> Result<(), CompilerError> {
         if let Declaration::FunctionDeclaration(func) = &mut self.kind {
-            let identifier = Rc::clone(&func.kind.name);
+            let identifier = Rc::clone(&func.name);
 
             let mut variable_resolution_visitor = VariableResolutionVisitor::new(
                 Rc::clone(&identifier),
@@ -400,8 +400,8 @@ impl ASTNode<BlockItem> {
 
 #[derive(Debug)]
 pub(crate) enum Declaration {
-    FunctionDeclaration(ASTNode<FunctionDeclaration>),
-    VariableDeclaration(ASTNode<VariableDeclaration>),
+    FunctionDeclaration(FunctionDeclaration),
+    VariableDeclaration(VariableDeclaration),
 }
 
 impl ASTNode<Declaration> {

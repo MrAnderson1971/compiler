@@ -1,6 +1,6 @@
 use crate::ast::{
     ASTNode, Block, Declaration, Expression, ForInit, FunAttr, InitialValue, Statement, StaticAttr,
-    Visitor,
+    VariableDeclaration, Visitor,
 };
 use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
@@ -9,12 +9,19 @@ use crate::lexer::{BinaryOperator, Number, StorageClass, Type, UnaryOperator};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
+#[derive(Debug, Clone)]
+struct ScopeEntry {
+    layer: i32,
+    is_extern: bool,
+    unique_name: Rc<String>,
+}
+
 pub(crate) struct VariableResolutionVisitor<'map> {
     layer: i32,
     function: Rc<String>,
-    variable_map: HashMap<Identifier, VecDeque<(i32, bool)>>, // (layer, has_linkage)
+    variable_scopes: HashMap<String, VecDeque<ScopeEntry>>,
     loop_labels: VecDeque<(Rc<String>, bool)>,
-    functions_map: &'map HashMap<Identifier, FunAttr>, // (has_body, is_global)
+    functions_map: &'map HashMap<Identifier, FunAttr>,
     global_variables_map: &'map mut HashMap<Identifier, StaticAttr>,
 }
 
@@ -27,24 +34,41 @@ impl<'map> VariableResolutionVisitor<'map> {
         Self {
             layer: 0,
             function,
-            variable_map: HashMap::new(),
+            variable_scopes: HashMap::new(),
             loop_labels: VecDeque::new(),
             functions_map,
             global_variables_map,
         }
     }
+
+    fn pop_stack(&mut self) {
+        for scopes in self.variable_scopes.values_mut() {
+            while !scopes.is_empty() && scopes.back().unwrap().layer == self.layer {
+                scopes.pop_back();
+            }
+        }
+    }
+
+    fn resolve_variable(&self, original_name: &str) -> Option<Rc<String>> {
+        if let Some(scopes) = self.variable_scopes.get(original_name) {
+            if !scopes.is_empty() {
+                let scope = scopes.back().unwrap();
+                return if scope.is_extern {
+                    Some(Rc::new(original_name.to_string()))
+                } else {
+                    Some(scope.unique_name.clone())
+                };
+            }
+        }
+
+        if self.global_variables_map.contains_key(original_name) {
+            return Some(Rc::new(original_name.to_string()));
+        }
+
+        None
+    }
 }
 
-/*
-*resolve_declaration(Declaration(name, init), variable_map):
-1 if name is in variable_map:
-fail("Duplicate variable declaration!")
-unique_name = make_temporary()
-2 variable_map.add(name, unique_name)
-3 if init is not null:
-init = resolve_exp(init, variable_map)
-4 return Declaration(unique_name, init)
-*/
 impl<'map> Visitor for VariableResolutionVisitor<'map> {
     fn visit_declaration(
         &mut self,
@@ -52,102 +76,38 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         declaration: &mut Declaration,
     ) -> Result<(), CompilerError> {
         match declaration {
-            Declaration::VariableDeclaration(d) => {
-                let (identifier, expression) = (&mut d.kind.name, &mut d.kind.init);
-                let key = (*Rc::clone(&identifier)).clone();
-                if self.functions_map.contains_key(&key) {
-                    return Err(SemanticError(format!(
-                        "Function {} redeclared as variable at {:?}",
-                        identifier, line_number
-                    )));
-                }
-                match d.kind.storage_class {
-                    Some(StorageClass::Extern) => {
-                        if !matches!(expression, None) {
-                            Err(SemanticError(format!(
-                                "Extern variable cannot be initialized at {:?}",
-                                line_number
-                            )))
-                        } else {
-                            self.global_variables_map.insert(
-                                key,
-                                StaticAttr {
-                                    init: InitialValue::NoInitializer,
-                                    global: true,
-                                    type_: Type::Int,
-                                },
-                            );
-                            Ok(())
-                        }
-                    }
-                    Some(StorageClass::Static) => {
-                        let initial_value = if let Some(init) = &d.kind.init {
-                            if let Expression::Constant(i) = init.kind {
-                                InitialValue::Initial(i)
-                            } else {
-                                return Err(SemanticError(format!(
-                                    "Non-constant initializer of static variable {} at {:?}",
-                                    identifier, line_number
-                                )));
-                            }
-                        } else {
-                            InitialValue::Initial(0)
-                        };
-                        self.global_variables_map.insert(
-                            key,
-                            StaticAttr {
-                                init: initial_value,
-                                global: false,
-                                type_: Type::Int,
-                            },
-                        );
-                        Ok(())
-                    }
-                    None => {
-                        if !self.variable_map.contains_key(&key) {
-                            let mut stack = VecDeque::new();
-                            stack.push_back((
-                                self.layer,
-                                d.kind.storage_class == Some(StorageClass::Extern),
-                            ));
-                            self.variable_map.insert(key, stack);
-                        } else {
-                            let stack = self.variable_map.get_mut(&key).unwrap();
-                            if !stack.is_empty() && (*stack.back().unwrap()).0 == self.layer {
-                                return Err(SemanticError(format!(
-                                    "Duplicate variable declaration {} at {:?}",
-                                    identifier, line_number
-                                )));
-                            }
-                            stack.push_back((
-                                self.layer,
-                                d.kind.storage_class == Some(StorageClass::Extern),
-                            ));
-                        }
-                        *identifier =
-                            Rc::new(format!("{}::{}::{}", self.function, identifier, self.layer));
-                        if let Some(expression) = expression {
-                            expression.accept(self)
-                        } else {
-                            Ok(())
-                        }
-                    }
-                }
-            }
+            Declaration::VariableDeclaration(d) => self.handle_variable_declaration(line_number, d),
             Declaration::FunctionDeclaration(f) => {
                 self.layer += 1;
-                for param in &mut f.kind.params {
-                    let original_name = param.clone(); // Store original name
-                    *param = format!("{}::{}::{}", self.function, param, self.layer);
-                    let mut stack = VecDeque::new();
-                    stack.push_back((self.layer, false));
-                    self.variable_map.insert(original_name, stack); // Use original name as key
+
+                for param in &mut f.params {
+                    let original_name = param.clone();
+                    let unique_name = Rc::new(format!(
+                        "{}::{}::{}",
+                        self.function, original_name, self.layer
+                    ));
+
+                    let entry = ScopeEntry {
+                        layer: self.layer,
+                        is_extern: false,
+                        unique_name: Rc::clone(&unique_name),
+                    };
+
+                    self.variable_scopes
+                        .entry(original_name)
+                        .or_insert_with(VecDeque::new)
+                        .push_back(entry);
+
+                    *param = unique_name.to_string();
                 }
-                if let Some(body) = &mut f.kind.body {
+
+                if let Some(body) = &mut f.body {
                     body.accept(self)?;
                 }
-                self.variable_map.clear();
+
+                self.pop_stack();
                 self.layer -= 1;
+
                 Ok(())
             }
         }
@@ -311,28 +271,18 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         line_number: &Rc<Position>,
         identifier: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
-        match self.variable_map.get_mut(identifier.as_ref()) {
-            None => {}
-            Some(stack) => {
-                return if stack.is_empty() {
-                    Err(SemanticError(format!(
-                        "Variable {} at {:?} out of scope",
-                        identifier, line_number
-                    )))
-                } else {
-                    let variable = stack.back().unwrap();
-                    *identifier =
-                        Rc::new(format!("{}::{}::{}", self.function, identifier, variable.0));
-                    Ok(())
-                };
-            }
-        }
-        match self.global_variables_map.get(identifier.as_ref()) {
-            None => Err(SemanticError(format!(
+        let original_name = identifier.as_ref().to_string();
+
+        // Try to resolve the variable
+        if let Some(resolved_name) = self.resolve_variable(&original_name) {
+            *identifier = resolved_name;
+            Ok(())
+        } else {
+            // Variable not found in any scope
+            Err(SemanticError(format!(
                 "Undefined variable {} at {:?}",
-                identifier, line_number
-            ))),
-            Some(_) => Ok(()),
+                original_name, line_number
+            )))
         }
     }
 
@@ -342,11 +292,12 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         identifier: &mut Rc<Identifier>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
     ) -> Result<(), CompilerError> {
-        if let Some(func) = self.functions_map.get(&(*Rc::clone(&identifier)).clone()) {
+        let original_name = identifier.as_ref().to_string();
+        if let Some(func) = self.functions_map.get(&original_name) {
             if arguments.len() != func.param_count {
                 return Err(SemanticError(format!(
                     "Function {} called with {} parameters but expected {} at {:?}",
-                    identifier,
+                    original_name,
                     arguments.len(),
                     func.param_count,
                     line_number
@@ -359,7 +310,7 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         } else {
             Err(SemanticError(format!(
                 "Undefined function {} called at {:?}",
-                identifier, line_number
+                original_name, line_number
             )))
         }
     }
@@ -390,18 +341,137 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         if_false: &mut Option<Box<ASTNode<Statement>>>,
     ) -> Result<(), CompilerError> {
         expression.accept(self)?;
+        if_true.accept(self)?;
         if let Some(if_false) = if_false {
             if_false.accept(self)?;
         }
-        if_true.accept(self)
+        Ok(())
     }
 }
 
 impl<'map> VariableResolutionVisitor<'map> {
-    fn pop_stack(&mut self) {
-        for stack in self.variable_map.values_mut() {
-            if !stack.is_empty() && stack.back().unwrap().0 == self.layer {
-                stack.pop_back();
+    fn handle_variable_declaration(
+        &mut self,
+        line_number: &Rc<Position>,
+        d: &mut VariableDeclaration,
+    ) -> Result<(), CompilerError> {
+        let original_name = d.name.as_ref().to_string();
+
+        if self.functions_map.contains_key(&original_name) {
+            return Err(SemanticError(format!(
+                "Function {} redeclared as variable at {:?}",
+                original_name, line_number
+            )));
+        }
+
+        match d.storage_class {
+            Some(StorageClass::Extern) => {
+                if d.init.is_some() {
+                    return Err(SemanticError(format!(
+                        "Extern variable cannot be initialized at {:?}",
+                        line_number
+                    )));
+                }
+
+                if !self.global_variables_map.contains_key(&original_name) {
+                    self.global_variables_map.insert(
+                        original_name.clone(),
+                        StaticAttr {
+                            init: InitialValue::NoInitializer,
+                            global: true,
+                            type_: Type::Int,
+                        },
+                    );
+                }
+
+                let entry = ScopeEntry {
+                    layer: self.layer,
+                    is_extern: true,
+                    unique_name: Rc::clone(&d.name),
+                };
+
+                self.variable_scopes
+                    .entry(original_name)
+                    .or_insert_with(VecDeque::new)
+                    .push_back(entry);
+
+                Ok(())
+            }
+
+            Some(StorageClass::Static) => {
+                let initial_value = if let Some(init) = &d.init {
+                    if let Expression::Constant(i) = init.kind {
+                        InitialValue::Initial(i)
+                    } else {
+                        return Err(SemanticError(format!(
+                            "Non-constant initializer of static variable {} at {:?}",
+                            original_name, line_number
+                        )));
+                    }
+                } else {
+                    InitialValue::Initial(0)
+                };
+
+                let static_unique_name = format!("static::{}::{}", self.function, original_name);
+
+                self.global_variables_map.insert(
+                    static_unique_name.clone(),
+                    StaticAttr {
+                        init: initial_value,
+                        global: false,
+                        type_: Type::Int,
+                    },
+                );
+
+                let unique_name = Rc::new(static_unique_name);
+                d.name = Rc::clone(&unique_name);
+
+                let entry = ScopeEntry {
+                    layer: self.layer,
+                    is_extern: false,
+                    unique_name,
+                };
+
+                self.variable_scopes
+                    .entry(original_name)
+                    .or_insert_with(VecDeque::new)
+                    .push_back(entry);
+
+                Ok(())
+            }
+
+            None => {
+                let scopes = self
+                    .variable_scopes
+                    .entry(original_name.clone())
+                    .or_insert_with(VecDeque::new);
+
+                if !scopes.is_empty() && scopes.back().unwrap().layer == self.layer {
+                    return Err(SemanticError(format!(
+                        "Duplicate variable declaration {} at {:?}",
+                        original_name, line_number
+                    )));
+                }
+
+                let unique_name = Rc::new(format!(
+                    "{}::{}::{}",
+                    self.function, original_name, self.layer
+                ));
+
+                d.name = Rc::clone(&unique_name);
+
+                let entry = ScopeEntry {
+                    layer: self.layer,
+                    is_extern: false,
+                    unique_name,
+                };
+                scopes.push_back(entry);
+
+                if let Some(expr) = &mut d.init {
+                    expr.accept(self)?;
+                }
+
+                Ok(())
             }
         }
     }

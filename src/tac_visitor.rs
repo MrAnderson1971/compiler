@@ -39,10 +39,10 @@ impl<'a> Visitor for TacVisitor<'a> {
     ) -> Result<(), CompilerError> {
         match declaration {
             Declaration::VariableDeclaration(v) => {
-                if v.kind.storage_class == Some(StorageClass::Static) {
+                if v.storage_class.is_some() {
                     return Ok(());
                 }
-                let (identifier, expression) = (&v.kind.name, &mut v.kind.init);
+                let (identifier, expression) = (&v.name, &mut v.init);
                 let pseudoregister = Rc::from(Pseudoregister::new(
                     (*self.name).clone(),
                     self.body.variable_count,
@@ -61,14 +61,14 @@ impl<'a> Visitor for TacVisitor<'a> {
                 Ok(())
             }
             Declaration::FunctionDeclaration(func) => {
-                if let Some(body) = &mut func.kind.body {
+                if let Some(body) = &mut func.body {
                     self.body.add_instruction(FunctionInstruction {
-                        name: Rc::clone(&func.kind.name),
-                        global: func.kind.storage_class != Some(StorageClass::Static),
+                        name: Rc::clone(&func.name),
+                        global: func.storage_class != Some(StorageClass::Static),
                     });
                     self.body.add_instruction(AllocateStackInstruction);
 
-                    for (i, param) in func.kind.params.iter().enumerate() {
+                    for (i, param) in func.params.iter().enumerate() {
                         let param_name = (*param).clone();
 
                         let param_register =
@@ -511,12 +511,10 @@ impl<'a> Visitor for TacVisitor<'a> {
             return Ok(());
         }
 
-        for i in 0..10 {
-            let scoped_key = format!("{}::{}::{}", self.name, param_key, i);
-            if let Some(pseudoregister) = self.body.variable_to_pseudoregister.get(&scoped_key) {
-                self.result = Rc::from(Operand::Register((**pseudoregister).clone()));
-                return Ok(());
-            }
+        let scoped_key = format!("{}::{}::{}", self.name, param_key, 0);
+        if let Some(pseudoregister) = self.body.variable_to_pseudoregister.get(&scoped_key) {
+            self.result = Rc::from(Operand::Register((**pseudoregister).clone()));
+            return Ok(());
         }
 
         // static
