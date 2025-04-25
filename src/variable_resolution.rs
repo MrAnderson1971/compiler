@@ -412,6 +412,9 @@ impl<'map> VariableResolutionVisitor<'map> {
                     InitialValue::Initial(0)
                 };
 
+                let unique_name = Rc::from(format!("{}.{}", self.function, d.name));
+                d.name = Rc::clone(&unique_name);
+
                 self.global_variables_map.insert(
                     d.name.to_string(),
                     StaticAttr {
@@ -424,7 +427,7 @@ impl<'map> VariableResolutionVisitor<'map> {
                 let entry = ScopeEntry {
                     layer: self.layer,
                     is_extern: false,
-                    unique_name: Rc::clone(&d.name),
+                    unique_name: Rc::clone(&unique_name),
                 };
 
                 self.variable_scopes

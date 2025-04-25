@@ -69,8 +69,6 @@ impl<'a> Visitor for TacVisitor<'a> {
                     self.body.add_instruction(AllocateStackInstruction);
 
                     for (i, param) in func.params.iter().enumerate() {
-                        let param_name = (*param).clone();
-
                         let param_register =
                             Rc::new(Pseudoregister::Pseudoregister(self.body.variable_count));
                         self.body.variable_count += 1;
@@ -502,13 +500,11 @@ impl<'a> Visitor for TacVisitor<'a> {
         _line_number: &Rc<Position>,
         identifier: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
-        let param_key = (*Rc::clone(identifier)).clone();
-
-        if let Some(pseudoregister) = self.body.variable_to_pseudoregister.get(&param_key) {
+        if let Some(pseudoregister) = self.body.variable_to_pseudoregister.get(&identifier.to_string()) {
             self.result = Rc::from(Operand::Register((**pseudoregister).clone()));
             return Ok(());
         }
-
+        
         // static
         self.result = Rc::from(Operand::Register(Pseudoregister::Data(Rc::clone(
             &identifier,

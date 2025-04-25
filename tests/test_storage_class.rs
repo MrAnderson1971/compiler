@@ -1,12 +1,25 @@
 mod simulator;
 
+use crate::simulator::{CompilerTest, harness};
 use rstest::rstest;
-use crate::simulator::{harness, CompilerTest};
+use compiler::CompilerError::SyntaxError;
 
 #[rstest]
 fn test_static(mut harness: CompilerTest) {
     let source = r#"
     static int foo() {
+        return 0;
+    }
+    int main() {
+        return foo();
+    }"#;
+    harness.assert_runs_ok(source, 0);
+}
+
+#[rstest]
+fn test_int_static(mut harness: CompilerTest) {
+    let source = r#"
+    int static foo() {
         return 0;
     }
     int main() {
@@ -74,4 +87,33 @@ int main() {
     return a + return_a();
 }"#;
     harness.assert_runs_ok(source, 7);
+}
+
+#[rstest]
+fn test_static_variables_with_same_name_in_different_functions(mut harness: CompilerTest) {
+    let source = r#"
+    int foo() {
+        static int bar = 1;
+        return bar;
+    }
+    int baz() {
+        static int bar = 2;
+        bar += 1;
+        return bar;
+    }
+    int main() {
+        baz();
+        return foo() + baz();
+    }"#;
+    harness.assert_runs_ok(source, 5);
+}
+
+#[rstest]
+fn test_static_and_extern_variables_with_same_name(harness: CompilerTest) {
+    let source = r#"
+    static extern foo = 1;
+    int main() {
+        return foo;
+        }"#;
+    assert_compile_err!(harness, source, SyntaxError(_));
 }
