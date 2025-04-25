@@ -75,11 +75,9 @@ impl<'a> Visitor for TacVisitor<'a> {
                             Rc::new(Pseudoregister::Pseudoregister(self.body.variable_count));
                         self.body.variable_count += 1;
 
-                        let unique_key = format!("{}::{}::{}", self.name, param_name, i);
-
                         self.body
                             .variable_to_pseudoregister
-                            .insert(unique_key, Rc::clone(&param_register));
+                            .insert(param.to_string(), Rc::clone(&param_register));
 
                         if i < 6 {
                             self.body.add_instruction(StoreValueInstruction {
@@ -507,12 +505,6 @@ impl<'a> Visitor for TacVisitor<'a> {
         let param_key = (*Rc::clone(identifier)).clone();
 
         if let Some(pseudoregister) = self.body.variable_to_pseudoregister.get(&param_key) {
-            self.result = Rc::from(Operand::Register((**pseudoregister).clone()));
-            return Ok(());
-        }
-
-        let scoped_key = format!("{}::{}::{}", self.name, param_key, 0);
-        if let Some(pseudoregister) = self.body.variable_to_pseudoregister.get(&scoped_key) {
             self.result = Rc::from(Operand::Register((**pseudoregister).clone()));
             return Ok(());
         }

@@ -78,8 +78,6 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         match declaration {
             Declaration::VariableDeclaration(d) => self.handle_variable_declaration(line_number, d),
             Declaration::FunctionDeclaration(f) => {
-                self.layer += 1;
-
                 for param in &mut f.params {
                     let original_name = param.clone();
                     let unique_name = Rc::new(format!(
@@ -102,11 +100,13 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
                 }
 
                 if let Some(body) = &mut f.body {
+                    self.layer += 1;
                     body.accept(self)?;
+                    self.pop_stack();
+                    self.layer -= 1;
                 }
 
                 self.pop_stack();
-                self.layer -= 1;
 
                 Ok(())
             }
@@ -412,10 +412,8 @@ impl<'map> VariableResolutionVisitor<'map> {
                     InitialValue::Initial(0)
                 };
 
-                let static_unique_name = format!("static::{}::{}", self.function, original_name);
-
                 self.global_variables_map.insert(
-                    static_unique_name.clone(),
+                    d.name.to_string(),
                     StaticAttr {
                         init: initial_value,
                         global: false,
@@ -423,13 +421,10 @@ impl<'map> VariableResolutionVisitor<'map> {
                     },
                 );
 
-                let unique_name = Rc::new(static_unique_name);
-                d.name = Rc::clone(&unique_name);
-
                 let entry = ScopeEntry {
                     layer: self.layer,
                     is_extern: false,
-                    unique_name,
+                    unique_name: Rc::clone(&d.name),
                 };
 
                 self.variable_scopes
