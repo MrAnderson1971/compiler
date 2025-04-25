@@ -1,13 +1,14 @@
 use crate::CompilerError;
 use crate::CompilerError::SemanticError;
-use crate::common::{Identifier, Position};
-use crate::lexer::{BinaryOperator, Number, StorageClass, Type, UnaryOperator};
+use crate::common::{Const, Identifier, Position};
+use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use crate::tac::{FunctionBody, TACInstruction};
 use crate::tac_visitor::TacVisitor;
 use crate::variable_resolution::VariableResolutionVisitor;
 use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::rc::Rc;
+use crate::common::Const::ConstInt;
 
 pub(crate) trait Visitor {
     fn visit_declaration(
@@ -82,7 +83,7 @@ pub(crate) trait Visitor {
     fn visit_const(
         &mut self,
         line_number: &Rc<Position>,
-        value: &mut Number,
+        value: &mut Const,
     ) -> Result<(), CompilerError>;
     fn visit_variable(
         &mut self,
@@ -131,7 +132,7 @@ pub(crate) struct StaticAttr {
 #[derive(Debug)]
 pub(crate) enum InitialValue {
     Tentative,
-    Initial(Number),
+    Initial(Const),
     NoInitializer,
 }
 
@@ -158,7 +159,7 @@ pub(crate) struct FunctionDeclaration {
     pub(crate) params: Vec<Identifier>,
     pub(crate) body: Option<ASTNode<Block>>,
     pub(crate) storage_class: Option<StorageClass>,
-    pub(crate) type_: Rc<ASTType>,
+    pub(crate) func_type: Rc<ASTType>,
 }
 
 pub(crate) type Block = Vec<ASTNode<BlockItem>>;
@@ -180,12 +181,12 @@ pub(crate) struct VariableDeclaration {
     pub(crate) name: Rc<Identifier>,
     pub(crate) init: Option<ASTNode<Expression>>,
     pub(crate) storage_class: Option<StorageClass>,
-    pub(crate) type_: Rc<ASTType>,
+    pub(crate) var_type: Rc<ASTType>,
 }
 
 #[derive(Debug)]
 pub(crate) enum Expression {
-    Constant(Number),
+    Constant(Const),
     Variable(Rc<Identifier>),
     Unary(UnaryOperator, Box<ASTNode<Expression>>),
     Binary {
@@ -205,6 +206,7 @@ pub(crate) enum Expression {
     FunctionCall(Rc<Identifier>, Box<Vec<ASTNode<Expression>>>),
     Prefix(UnaryOperator, Box<ASTNode<Expression>>),
     Postfix(UnaryOperator, Box<ASTNode<Expression>>),
+    Cast(Rc<ASTType>, Box<Expression>),
 }
 
 #[derive(Debug)]
@@ -303,16 +305,16 @@ impl ASTNode<Program> {
         }
 
         for (name, static_attr) in shared_variables_map.iter() {
-            let tac = match static_attr.init {
+            let tac = match &static_attr.init {
                 InitialValue::Tentative => TACInstruction::StaticVariable {
                     name: Rc::from(name.clone()),
                     global: static_attr.global,
-                    init: 0,
+                    init: ConstInt(0),
                 },
                 InitialValue::Initial(i) => TACInstruction::StaticVariable {
                     name: Rc::from(name.clone()),
                     global: static_attr.global,
-                    init: i,
+                    init: i.clone(),
                 },
                 InitialValue::NoInitializer => continue,
             };
@@ -328,8 +330,8 @@ impl ASTNode<Program> {
         var: &&mut VariableDeclaration,
     ) -> Option<Result<(), CompilerError>> {
         let mut initial_value = if let Some(init) = &var.init {
-            if let Expression::Constant(i) = init.kind {
-                InitialValue::Initial(i)
+            if let Expression::Constant(i) = &init.kind {
+                InitialValue::Initial(i.clone())
             } else {
                 return Some(Err(SemanticError(format!(
                     "Initial value {:?} of {} is non-constant",
@@ -374,7 +376,7 @@ impl ASTNode<Program> {
                         identifier
                     ))));
                 } else {
-                    initial_value = InitialValue::Initial(*i);
+                    initial_value = InitialValue::Initial(i.clone());
                 }
             } else if !matches!(initial_value, InitialValue::Initial(_))
                 && matches!(old_init, InitialValue::Tentative)
@@ -525,6 +527,9 @@ impl ASTNode<Expression> {
             }
             Expression::Prefix(op, exp) => visitor.visit_prefix(&self.line_number, exp, op),
             Expression::Postfix(op, exp) => visitor.visit_postfix(&self.line_number, exp, op),
+            Expression::Cast(_, _) => {
+                todo!()
+            }
         }
     }
 }

@@ -1,8 +1,8 @@
 use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Statement, Visitor};
-use crate::common::{Identifier, Position};
+use crate::common::{Const, Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
-use crate::lexer::{BinaryOperator, Number, StorageClass, UnaryOperator};
+use crate::lexer::{BinaryOperator, StorageClass, UnaryOperator};
 use crate::tac::TACInstruction::{
     AdjustStack, AllocateStackInstruction, BinaryOpInstruction, DeallocateStackInstruction,
     FunctionCall, FunctionInstruction, Jump, JumpIfNotZero, JumpIfZero, Label, PushArgument,
@@ -216,7 +216,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 ));
                 self.body.add_instruction(StoreValueInstruction {
                     dest: Rc::clone(&dest),
-                    src: Rc::new(Operand::Immediate(1)),
+                    src: Rc::new(Operand::Immediate(1.into())),
                 });
                 self.body.add_instruction(Jump {
                     label: Rc::clone(&end_label),
@@ -228,7 +228,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 });
                 self.body.add_instruction(StoreValueInstruction {
                     dest: Rc::clone(&dest),
-                    src: Rc::new(Operand::Immediate(0)),
+                    src: Rc::new(Operand::Immediate(0.into())),
                 });
 
                 // end
@@ -267,7 +267,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 ));
                 self.body.add_instruction(StoreValueInstruction {
                     dest: Rc::clone(&dest),
-                    src: Rc::new(Operand::Immediate(0)),
+                    src: Rc::new(Operand::Immediate(0.into())),
                 });
                 self.body.add_instruction(
                     // goto end
@@ -281,7 +281,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 }); // true
                 self.body.add_instruction(StoreValueInstruction {
                     dest: Rc::clone(&dest),
-                    src: Rc::new(Operand::Immediate(1)),
+                    src: Rc::new(Operand::Immediate(1.into())),
                 });
                 //end
                 self.body.add_instruction(Label {
@@ -489,9 +489,9 @@ impl<'a> Visitor for TacVisitor<'a> {
     fn visit_const(
         &mut self,
         _line_number: &Rc<Position>,
-        value: &mut Number,
+        value: &mut Const,
     ) -> Result<(), CompilerError> {
-        self.result = Rc::from(Operand::Immediate(*value));
+        self.result = Rc::from(Operand::Immediate(value.clone()));
         Ok(())
     }
 
@@ -573,7 +573,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                     dest: Rc::from((*pseudoregister).clone()),
                     op: binary_operator,
                     left: Rc::clone(&self.result),
-                    right: Rc::from(Operand::Immediate(1)),
+                    right: Rc::from(Operand::Immediate(1.into())),
                 });
                 self.body.variable_count += 1;
                 Ok(())
@@ -619,7 +619,7 @@ impl<'a> Visitor for TacVisitor<'a> {
             dest: Rc::clone(&dest),
             op: binary_operator,
             left: Rc::clone(&self.result),
-            right: Rc::from(Operand::Immediate(1)),
+            right: Rc::from(Operand::Immediate(1.into())),
         });
         self.result = Rc::from(Operand::Register((*temp1).clone()));
         Ok(())

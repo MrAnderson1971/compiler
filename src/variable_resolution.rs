@@ -2,10 +2,10 @@ use crate::ast::{
     ASTNode, Block, Declaration, Expression, ForInit, FunAttr, InitialValue, Statement, StaticAttr,
     VariableDeclaration, Visitor,
 };
-use crate::common::{Identifier, Position};
+use crate::common::{Const, Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
-use crate::lexer::{BinaryOperator, Number, StorageClass, Type, UnaryOperator};
+use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
@@ -261,7 +261,7 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
     fn visit_const(
         &mut self,
         _line_number: &Rc<Position>,
-        _value: &mut Number,
+        _value: &mut Const,
     ) -> Result<(), CompilerError> {
         Ok(())
     }
@@ -411,8 +411,8 @@ impl<'map> VariableResolutionVisitor<'map> {
 
             Some(StorageClass::Static) => {
                 let initial_value = if let Some(init) = &d.init {
-                    if let Expression::Constant(i) = init.kind {
-                        InitialValue::Initial(i)
+                    if let Expression::Constant(i) = &init.kind {
+                        InitialValue::Initial(i.clone())
                     } else {
                         return Err(SemanticError(format!(
                             "Non-constant initializer of static variable {} at {:?}",
@@ -420,7 +420,7 @@ impl<'map> VariableResolutionVisitor<'map> {
                         )));
                     }
                 } else {
-                    InitialValue::Initial(0)
+                    InitialValue::Initial(0.into())
                 };
 
                 let unique_name = Rc::from(format!("{}.{}", self.function, d.name));

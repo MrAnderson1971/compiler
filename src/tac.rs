@@ -1,5 +1,5 @@
-use crate::common::Identifier;
-use crate::lexer::{BinaryOperator, Number, UnaryOperator};
+use crate::common::{Const, Identifier};
+use crate::lexer::{BinaryOperator, UnaryOperator};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::rc::Rc;
@@ -21,7 +21,7 @@ impl Pseudoregister {
 #[derive(Debug)]
 pub(crate) enum Operand {
     Register(Pseudoregister),
-    Immediate(Number),
+    Immediate(Const),
     MemoryReference(usize, String),
     None,
 }
@@ -56,7 +56,7 @@ pub(crate) enum TACInstruction {
     StaticVariable {
         name: Rc<String>,
         global: bool,
-        init: Number,
+        init: Const,
     },
     UnaryOpInstruction {
         dest: Rc<Pseudoregister>,
@@ -122,7 +122,7 @@ impl FunctionBody {
             TACInstruction::ReturnInstruction { .. } => {}
             _ => {
                 self.add_instruction(TACInstruction::ReturnInstruction {
-                    val: Rc::from(Operand::Immediate(0)),
+                    val: Rc::from(Operand::Immediate(0.into())),
                 });
             }
         }
@@ -211,7 +211,7 @@ ret\n";
                 if *global {
                     *out += &format!(".global {}\n", name);
                 }
-                if *init == 0 {
+                if matches!(*init, Const::ConstInt(0)) {
                     *out += &format!(
                         r#".bss
 .align 4

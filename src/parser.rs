@@ -261,7 +261,7 @@ impl Parser {
                     params,
                     body: None,
                     storage_class,
-                    type_,
+                    func_type: type_,
                 })),
             );
         }
@@ -289,7 +289,7 @@ impl Parser {
                 params,
                 body: Some(function_body),
                 storage_class,
-                type_,
+                func_type: type_,
             })),
         )
     }
@@ -319,14 +319,14 @@ impl Parser {
                 name: Rc::from(identifier),
                 init: Some(expression),
                 storage_class: specifiers.1,
-                type_: Rc::clone(&specifiers.0),
+                var_type: Rc::clone(&specifiers.0),
             }))
         } else {
             Ok(self.make_node(VariableDeclaration {
                 name: Rc::from(identifier),
                 init: None,
                 storage_class: specifiers.1,
-                type_: Rc::clone(&specifiers.0),
+                var_type: Rc::clone(&specifiers.0),
             }))
         }
     }
@@ -379,7 +379,7 @@ impl Parser {
         match token {
             Token::NumberLiteral(value) => {
                 self.tokens.pop_front();
-                Ok(self.make_node::<Expression>(Constant(value)))
+                Ok(self.make_node::<Expression>(Constant((value as i32).into())))
             }
             Token::Symbol(..) => {
                 expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;

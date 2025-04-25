@@ -82,14 +82,12 @@ pub(crate) enum Keyword {
     StorageClass(StorageClass),
 }
 
-pub(crate) type Number = u64;
-
 #[derive(Debug, Clone, PartialEq)] // String prevents Copy. PartialEq is useful for tests.
 pub(crate) enum Token {
     Keyword(Keyword),
     Symbol(Symbol),
     Name(String),
-    NumberLiteral(Number),
+    NumberLiteral(u32),
     Invalid,
     EOF,
 }
@@ -225,7 +223,7 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
                         break;
                     }
                 }
-                match number_string.parse::<u64>() {
+                match number_string.parse::<u32>() {
                     Ok(num) => Token::NumberLiteral(num),
                     Err(_) => Token::Invalid, // Handle parsing error
                 }
