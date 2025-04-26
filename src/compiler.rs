@@ -7,7 +7,6 @@ pub fn compile(source: String) -> Result<String, CompilerError> {
     let tokens = lex(source);
     let mut parser = Parser::new(tokens);
     let mut program_node = parser.parse_program()?;
-    println!("{:#?}", program_node);
     program_node.generate(&mut out)?;
     Ok(out)
 }

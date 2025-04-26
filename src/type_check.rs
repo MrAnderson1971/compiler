@@ -1,15 +1,18 @@
 use crate::CompilerError;
 use crate::CompilerError::SemanticError;
-use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, FuncType, Statement, Visitor};
+use crate::ast::{
+    ASTNode, Block, Declaration, Expression, ForInit, FunAttr, Statement, StaticAttr,
+    Visitor,
+};
 use crate::common::{Const, Identifier, Position};
 use crate::lexer::{BinaryOperator, Type, UnaryOperator};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-struct TypeCheckVisitor<'map> {
+pub(crate) struct TypeCheckVisitor<'map> {
     variables_map: HashMap<Identifier, Type>,
-    functions_map: &'map HashMap<Identifier, FuncType>,
-    global_variables_map: &'map HashMap<Identifier, Type>,
+    functions_map: &'map HashMap<Identifier, FunAttr>,
+    global_variables_map: &'map HashMap<Identifier, StaticAttr>,
     current_return_type: Type,
 }
 
@@ -45,9 +48,9 @@ fn convert_to(line_number: &Rc<Position>, e: &mut ASTNode<Expression>, t: &Type)
 }
 
 impl<'map> TypeCheckVisitor<'map> {
-    fn new(
-        functions_map: &'map HashMap<Identifier, FuncType>,
-        global_variables_map: &'map HashMap<Identifier, Type>,
+    pub(crate) fn new(
+        functions_map: &'map HashMap<Identifier, FunAttr>,
+        global_variables_map: &'map HashMap<Identifier, StaticAttr>,
     ) -> Self {
         Self {
             variables_map: HashMap::new(),
@@ -79,7 +82,11 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
             }
             Declaration::FunctionDeclaration(decl) => {
                 self.current_return_type = decl.func_type.ret.clone();
-                Ok(())
+                if let Some(body) = &mut decl.body {
+                    body.accept(self)
+                } else {
+                    Ok(())
+                }
             }
         }
     }
@@ -104,6 +111,7 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         line_number: &Rc<Position>,
         expression: &mut ASTNode<Expression>,
     ) -> Result<(), CompilerError> {
+        expression.accept(self)?;
         convert_to(line_number, expression, &self.current_return_type);
         Ok(())
     }
@@ -249,11 +257,11 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         identifier: &mut Rc<Identifier>,
         node: &mut Type,
     ) -> Result<(), CompilerError> {
-        if let Some(type_) = self.global_variables_map.get(&identifier.to_string()) {
-            *node = type_.clone();
+        if let Some(attr) = self.global_variables_map.get(&identifier.to_string()) {
+            *node = attr.type_;
         } else {
             *node = self
-                .global_variables_map
+                .variables_map
                 .get(&identifier.to_string())
                 .unwrap()
                 .clone();
@@ -268,7 +276,13 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
         ret_type: &mut Type,
     ) -> Result<(), CompilerError> {
-        let func_type = self.functions_map.get(&identifier.to_string()).unwrap();
+        let func_type = Rc::clone(
+            &self
+                .functions_map
+                .get(&identifier.to_string())
+                .unwrap()
+                .func_type,
+        );
         if func_type.params.len() != arguments.len() {
             return Err(SemanticError(format!(
                 "Function {} called with {} arguments but expected {} at {:?}",

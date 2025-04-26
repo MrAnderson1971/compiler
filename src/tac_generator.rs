@@ -110,7 +110,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         line_number: &Rc<Position>,
         left: &mut Box<ASTNode<Expression>>,
         right: &mut Box<ASTNode<Expression>>,
-        type_: &mut Type,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         left.accept(self)?;
         let dest = Rc::clone(&self.result);
@@ -157,10 +157,10 @@ impl<'a> Visitor for TacVisitor<'a> {
 
     fn visit_unary(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         op: &mut UnaryOperator,
         expression: &mut Box<ASTNode<Expression>>,
-        type_: &mut Type,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         expression.accept(self)?;
         if *op == UnaryOperator::UnaryAdd {
@@ -183,11 +183,11 @@ impl<'a> Visitor for TacVisitor<'a> {
 
     fn visit_binary(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         op: &mut BinaryOperator,
         left: &mut Box<ASTNode<Expression>>,
         right: &mut Box<ASTNode<Expression>>,
-        type_: &mut Type,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         match op {
             BinaryOperator::LogicalAnd => {
@@ -320,11 +320,11 @@ impl<'a> Visitor for TacVisitor<'a> {
 
     fn visit_condition(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         condition: &mut Box<ASTNode<Expression>>,
         if_true: &mut Box<ASTNode<Expression>>,
         if_false: &mut Box<ASTNode<Expression>>,
-        type_: &mut Type,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         condition.accept(self)?;
         let else_label: Rc<String> = Rc::from(format!(".{}{}_else", self.name, self.label_count));
@@ -524,10 +524,10 @@ impl<'a> Visitor for TacVisitor<'a> {
 
     fn visit_function_call(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         identifier: &mut Rc<Identifier>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
-        ret_type: &mut Type,
+        _ret_type: &mut Type,
     ) -> Result<(), CompilerError> {
         for i in (6..arguments.len()).rev() {
             arguments[i].accept(self)?;
@@ -692,9 +692,9 @@ impl<'a> Visitor for TacVisitor<'a> {
 
     fn visit_cast(
         &mut self,
-        line_number: &Rc<Position>,
-        target_type: &mut Type,
-        exp: &mut Box<ASTNode<Expression>>,
+        _line_number: &Rc<Position>,
+        _target_type: &mut Type,
+        _exp: &mut Box<ASTNode<Expression>>,
     ) -> Result<(), CompilerError> {
         todo!()
     }

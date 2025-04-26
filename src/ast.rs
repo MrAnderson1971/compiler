@@ -6,6 +6,7 @@ use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use crate::tac::{FunctionBody, TACInstruction};
 use crate::tac_generator::TacVisitor;
 use crate::variable_resolution::VariableResolutionVisitor;
+use crate::type_check::TypeCheckVisitor;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::ops::DerefMut;
@@ -159,8 +160,8 @@ pub(crate) struct FuncType {
 #[derive(Debug)]
 pub(crate) struct ASTNode<T> {
     pub(crate) line_number: Rc<Position>,
-    pub(crate) kind: T,
     pub(crate) type_: Type,
+    pub(crate) kind: T,
 }
 
 pub(crate) type Program = Vec<ASTNode<Declaration>>;
@@ -318,6 +319,9 @@ impl ASTNode<Program> {
                     &mut shared_variables_map,
                 );
                 visitor.visit_declaration(&declaration.line_number, &mut declaration.kind)?;
+                let mut visitor = TypeCheckVisitor::new(&shared_functions_map, &shared_variables_map);
+                visitor.visit_declaration(&declaration.line_number, &mut declaration.kind)?;
+                println!("{:#?}", declaration);
                 declaration.generate(out, &shared_functions_map, &mut shared_variables_map)?;
             }
         }
@@ -376,9 +380,15 @@ impl ASTNode<Program> {
         if let Some(StaticAttr {
             global: old_global,
             init: old_init,
-            ..
+            type_: old_type,
         }) = shared_variables_map.get(&identifier)
         {
+            if var.var_type != *old_type {
+                return Some(Err(SemanticError(format!(
+                    "Conflicting variable type definitions of {}",
+                    var.name
+                ))));
+            }
             if var.storage_class == Some(StorageClass::Extern) {
                 global = *old_global;
             } else if *old_global != global {
@@ -407,7 +417,7 @@ impl ASTNode<Program> {
             StaticAttr {
                 init: initial_value,
                 global,
-                type_: Type::Int,
+                type_: var.var_type,
             },
         );
         None
@@ -419,7 +429,7 @@ impl ASTNode<Program> {
         func: &&mut FunctionDeclaration,
     ) -> Option<Result<(), CompilerError>> {
         let name = Rc::clone(&func.name);
-        let param_count = Rc::clone(&func.func_type);
+        let func_type = Rc::clone(&func.func_type);
         let has_body = func.body.is_some();
         let identifier = (*name).clone();
         if shared_variables_map.contains_key(&identifier) {
@@ -442,7 +452,7 @@ impl ASTNode<Program> {
                     name
                 ))));
             }
-            if *old_decl.func_type != *param_count {
+            if *old_decl.func_type != *func_type {
                 return Some(Err(SemanticError(format!(
                     "Incompatible function declaration of {}",
                     name
@@ -454,7 +464,7 @@ impl ASTNode<Program> {
             FunAttr {
                 defined: func.body.is_some(),
                 global: func.storage_class != Some(StorageClass::Static),
-                func_type: param_count,
+                func_type,
             },
         );
         None
@@ -545,10 +555,19 @@ impl ASTNode<Expression> {
                 condition,
                 if_true,
                 if_false,
-            } => visitor.visit_condition(&self.line_number, condition, if_true, if_false, &mut self.type_),
-            Expression::FunctionCall(identifier, arguments) => {
-                visitor.visit_function_call(&self.line_number, identifier, arguments, &mut self.type_)
-            }
+            } => visitor.visit_condition(
+                &self.line_number,
+                condition,
+                if_true,
+                if_false,
+                &mut self.type_,
+            ),
+            Expression::FunctionCall(identifier, arguments) => visitor.visit_function_call(
+                &self.line_number,
+                identifier,
+                arguments,
+                &mut self.type_,
+            ),
             Expression::Prefix(op, exp) => visitor.visit_prefix(&self.line_number, exp, op),
             Expression::Postfix(op, exp) => visitor.visit_postfix(&self.line_number, exp, op),
             Expression::Cast(type_, exp) => visitor.visit_cast(&self.line_number, type_, exp),

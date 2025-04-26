@@ -264,12 +264,3 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
     tokens.push_back(Token::EOF);
     tokens
 }
-
-impl Const {
-    pub(crate) fn get_type(&self) -> Type {
-        match self {
-            ConstInt(_) => Type::Int,
-            ConstLong(_) => Type::Long,
-        }
-    }
-}

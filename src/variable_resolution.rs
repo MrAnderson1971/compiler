@@ -115,10 +115,10 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
 
     fn visit_assignment(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         left: &mut Box<ASTNode<Expression>>,
         right: &mut Box<ASTNode<Expression>>,
-        type_: &mut Type,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         left.accept(self)?;
         right.accept(self)
@@ -148,21 +148,21 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
 
     fn visit_unary(
         &mut self,
-        line_number: &Rc<Position>,
-        op: &mut UnaryOperator,
+        _line_number: &Rc<Position>,
+        _op: &mut UnaryOperator,
         expression: &mut Box<ASTNode<Expression>>,
-        type_: &mut Type,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         expression.accept(self)
     }
 
     fn visit_binary(
         &mut self,
-        line_number: &Rc<Position>,
-        op: &mut BinaryOperator,
+        _line_number: &Rc<Position>,
+        _op: &mut BinaryOperator,
         left: &mut Box<ASTNode<Expression>>,
         right: &mut Box<ASTNode<Expression>>,
-        type_: &mut Type,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         left.accept(self)?;
         right.accept(self)
@@ -170,11 +170,11 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
 
     fn visit_condition(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         condition: &mut Box<ASTNode<Expression>>,
         if_true: &mut Box<ASTNode<Expression>>,
         if_false: &mut Box<ASTNode<Expression>>,
-        type_: &mut Type,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         condition.accept(self)?;
         if_true.accept(self)?;
@@ -297,7 +297,7 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         line_number: &Rc<Position>,
         identifier: &mut Rc<Identifier>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
-        ret_type: &mut Type,
+        _ret_type: &mut Type,
     ) -> Result<(), CompilerError> {
         let original_name = identifier.as_ref().to_string();
         if let Some(func) = self.functions_map.get(&original_name) {
@@ -357,9 +357,9 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
 
     fn visit_cast(
         &mut self,
-        line_number: &Rc<Position>,
-        target_type: &mut Type,
-        exp: &mut Box<ASTNode<Expression>>,
+        _line_number: &Rc<Position>,
+        _target_type: &mut Type,
+        _exp: &mut Box<ASTNode<Expression>>,
     ) -> Result<(), CompilerError> {
         Ok(())
     }
