@@ -20,118 +20,206 @@ pub(crate) trait Visitor {
     ) -> Result<(), CompilerError>;
     fn visit_assignment(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         left: &mut Box<ASTNode<Expression>>,
         right: &mut Box<ASTNode<Expression>>,
-        type_: &mut Type,
-    ) -> Result<(), CompilerError>;
+        _type_: &mut Type,
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
+        left.accept(self)?;
+        right.accept(self)
+    }
     fn visit_return(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         expression: &mut ASTNode<Expression>,
-    ) -> Result<(), CompilerError>;
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
+        expression.accept(self)
+    }
     fn visit_block(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         body: &mut Block,
-    ) -> Result<(), CompilerError>;
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
+        for item in body {
+            item.accept(self)?;
+        }
+        Ok(())
+    }
     fn visit_unary(
         &mut self,
-        line_number: &Rc<Position>,
-        op: &mut UnaryOperator,
+        _line_number: &Rc<Position>,
+        _op: &mut UnaryOperator,
         expression: &mut Box<ASTNode<Expression>>,
-        type_: &mut Type,
-    ) -> Result<(), CompilerError>;
+        _type_: &mut Type,
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
+        expression.accept(self)
+    }
     fn visit_binary(
         &mut self,
-        line_number: &Rc<Position>,
-        op: &mut BinaryOperator,
+        _line_number: &Rc<Position>,
+        _op: &mut BinaryOperator,
         left: &mut Box<ASTNode<Expression>>,
         right: &mut Box<ASTNode<Expression>>,
-        type_: &mut Type,
-    ) -> Result<(), CompilerError>;
+        _type_: &mut Type,
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
+        left.accept(self)?;
+        right.accept(self)
+    }
     fn visit_condition(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         condition: &mut Box<ASTNode<Expression>>,
         if_true: &mut Box<ASTNode<Expression>>,
         if_false: &mut Box<ASTNode<Expression>>,
-        type_: &mut Type,
-    ) -> Result<(), CompilerError>;
+        _type_: &mut Type,
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
+        condition.accept(self)?;
+        if_true.accept(self)?;
+        if_false.accept(self)
+    }
     fn visit_while(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         condition: &mut ASTNode<Expression>,
         body: &mut Box<ASTNode<Statement>>,
-        label: &mut Rc<String>,
-        is_do_while: &mut bool,
-    ) -> Result<(), CompilerError>;
+        _label: &mut Rc<String>,
+        _is_do_while: &mut bool,
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
+        condition.accept(self)?;
+        body.accept(self)
+    }
     fn visit_break(
         &mut self,
-        line_number: &Rc<Position>,
-        label: &mut Rc<String>,
-    ) -> Result<(), CompilerError>;
+        _line_number: &Rc<Position>,
+        _label: &mut Rc<String>,
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
+        Ok(())
+    }
     fn visit_continue(
         &mut self,
-        line_number: &Rc<Position>,
-        label: &mut Rc<String>,
-        is_for: &mut bool,
-    ) -> Result<(), CompilerError>;
+        _line_number: &Rc<Position>,
+        _label: &mut Rc<String>,
+        _is_for: &mut bool,
+    ) -> Result<(), CompilerError> {
+        Ok(())
+    }
     fn visit_for(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         init: &mut ASTNode<ForInit>,
         condition: &mut Option<ASTNode<Expression>>,
         increment: &mut Option<ASTNode<Expression>>,
         body: &mut Box<ASTNode<Statement>>,
-        label: &mut Rc<String>,
-    ) -> Result<(), CompilerError>;
+        _label: &mut Rc<String>,
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
+        init.accept(self)?;
+        if let Some(condition) = condition {
+            condition.accept(self)?;
+        }
+        if let Some(increment) = increment {
+            increment.accept(self)?;
+        }
+        body.accept(self)
+    }
     fn visit_const(
         &mut self,
-        line_number: &Rc<Position>,
-        value: &mut Const,
-        type_: &mut Type,
-    ) -> Result<(), CompilerError>;
+        _line_number: &Rc<Position>,
+        _value: &mut Const,
+        _type_: &mut Type,
+    ) -> Result<(), CompilerError> {
+        Ok(())
+    }
     fn visit_variable(
         &mut self,
-        line_number: &Rc<Position>,
-        identifier: &mut Rc<Identifier>,
-        node: &mut Type,
-    ) -> Result<(), CompilerError>;
+        _line_number: &Rc<Position>,
+        _identifier: &mut Rc<Identifier>,
+        _type_: &mut Type,
+    ) -> Result<(), CompilerError> {
+        Ok(())
+    }
     fn visit_function_call(
         &mut self,
-        line_number: &Rc<Position>,
-        identifier: &mut Rc<Identifier>,
+        _line_number: &Rc<Position>,
+        _identifier: &mut Rc<Identifier>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
-        ret_type: &mut Type,
-    ) -> Result<(), CompilerError>;
+        _ret_type: &mut Type,
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
+        for argument in arguments.iter_mut() {
+            argument.accept(self)?;
+        }
+        Ok(())
+    }
     fn visit_prefix(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         variable: &mut Box<ASTNode<Expression>>,
-        operator: &mut UnaryOperator,
-        type_: &mut Type,
-    ) -> Result<(), CompilerError>;
+        _operator: &mut UnaryOperator,
+        _type_: &mut Type,
+    ) -> Result<(), CompilerError> where Self: Sized {
+        variable.accept(self)
+    }
     fn visit_postfix(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         variable: &mut Box<ASTNode<Expression>>,
-        operator: &mut UnaryOperator,
-        type_: &mut Type,
-    ) -> Result<(), CompilerError>;
+        _operator: &mut UnaryOperator,
+        _type_: &mut Type,
+    ) -> Result<(), CompilerError> where Self: Sized {
+        variable.accept(self)
+    }
     fn visit_if_else(
         &mut self,
-        line_number: &Rc<Position>,
+        _line_number: &Rc<Position>,
         expression: &mut ASTNode<Expression>,
         if_true: &mut Box<ASTNode<Statement>>,
         if_false: &mut Option<Box<ASTNode<Statement>>>,
-    ) -> Result<(), CompilerError>;
+    ) -> Result<(), CompilerError> where Self: Sized {
+        expression.accept(self)?;
+        if_true.accept(self)?;
+        if let Some(if_false) = if_false {
+            if_false.accept(self)
+        } else {
+            Ok(())
+        }
+    }
     fn visit_cast(
         &mut self,
-        line_number: &Rc<Position>,
-        target_type: &mut Type,
+        _line_number: &Rc<Position>,
+        _target_type: &mut Type,
         exp: &mut Box<ASTNode<Expression>>,
-    ) -> Result<(), CompilerError>;
+    ) -> Result<(), CompilerError> where Self: Sized {
+        exp.accept(self)
+    }
 }
 
 pub(crate) struct FunAttr {
@@ -481,7 +569,7 @@ impl ASTNode<Declaration> {
 
             let mut function_body = FunctionBody::new();
             let mut tac_visitor = TacVisitor::new(Rc::clone(&identifier), &mut function_body);
-            self.accept(&mut tac_visitor as &mut dyn Visitor)?;
+            self.accept(&mut tac_visitor)?;
             println!("{:#?}", function_body);
 
             function_body.add_default_return();
@@ -498,7 +586,7 @@ impl ASTNode<Declaration> {
 }
 
 impl ASTNode<Block> {
-    pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
+    pub(crate) fn accept<V: Visitor>(&mut self, visitor: &mut V) -> Result<(), CompilerError> {
         for block_item in &mut self.kind {
             block_item.accept(visitor)?;
         }
@@ -507,7 +595,7 @@ impl ASTNode<Block> {
 }
 
 impl ASTNode<BlockItem> {
-    pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
+    pub(crate) fn accept<V: Visitor>(&mut self, visitor: &mut V) -> Result<(), CompilerError> {
         match &mut self.kind {
             BlockItem::D(declaration) => declaration.accept(visitor),
             BlockItem::S(statement) => statement.deref_mut().accept(visitor),
@@ -516,13 +604,13 @@ impl ASTNode<BlockItem> {
 }
 
 impl ASTNode<Declaration> {
-    fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
+    fn accept<V: Visitor>(&mut self, visitor: &mut V) -> Result<(), CompilerError> {
         visitor.visit_declaration(&self.line_number, &mut self.kind)
     }
 }
 
 impl ASTNode<Expression> {
-    pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
+    pub(crate) fn accept<V: Visitor>(&mut self, visitor: &mut V) -> Result<(), CompilerError> {
         match &mut self.kind {
             Expression::Constant(value) => {
                 visitor.visit_const(&self.line_number, value, &mut self.type_)
@@ -568,7 +656,7 @@ impl ASTNode<Expression> {
 }
 
 impl ASTNode<Statement> {
-    pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
+    pub(crate) fn accept<V: Visitor>(&mut self, visitor: &mut V) -> Result<(), CompilerError> {
         match &mut self.kind {
             Statement::Return(val) => visitor.visit_return(&self.line_number, val),
             Statement::Expression(exp) => exp.accept(visitor),
@@ -601,7 +689,7 @@ impl ASTNode<Statement> {
 }
 
 impl ASTNode<ForInit> {
-    pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
+    pub(crate) fn accept<V: Visitor>(&mut self, visitor: &mut V) -> Result<(), CompilerError> {
         match &mut self.kind {
             ForInit::InitDecl(v) => visitor.visit_declaration(&self.line_number, v),
             ForInit::InitExp(v) => match v {

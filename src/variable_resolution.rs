@@ -2,10 +2,10 @@ use crate::ast::{
     ASTNode, Block, Declaration, Expression, ForInit, FunAttr, InitialValue, Statement, StaticAttr,
     VariableDeclaration, Visitor,
 };
-use crate::common::{Const, Identifier, Position};
+use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
-use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
+use crate::lexer::{StorageClass, Type};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
@@ -113,25 +113,6 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         }
     }
 
-    fn visit_assignment(
-        &mut self,
-        _line_number: &Rc<Position>,
-        left: &mut Box<ASTNode<Expression>>,
-        right: &mut Box<ASTNode<Expression>>,
-        _type_: &mut Type,
-    ) -> Result<(), CompilerError> {
-        left.accept(self)?;
-        right.accept(self)
-    }
-
-    fn visit_return(
-        &mut self,
-        _line_number: &Rc<Position>,
-        expression: &mut ASTNode<Expression>,
-    ) -> Result<(), CompilerError> {
-        expression.accept(self)
-    }
-
     fn visit_block(
         &mut self,
         _line_number: &Rc<Position>,
@@ -143,42 +124,6 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         }
         self.pop_stack();
         self.layer -= 1;
-        Ok(())
-    }
-
-    fn visit_unary(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _op: &mut UnaryOperator,
-        expression: &mut Box<ASTNode<Expression>>,
-        _type_: &mut Type,
-    ) -> Result<(), CompilerError> {
-        expression.accept(self)
-    }
-
-    fn visit_binary(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _op: &mut BinaryOperator,
-        left: &mut Box<ASTNode<Expression>>,
-        right: &mut Box<ASTNode<Expression>>,
-        _type_: &mut Type,
-    ) -> Result<(), CompilerError> {
-        left.accept(self)?;
-        right.accept(self)
-    }
-
-    fn visit_condition(
-        &mut self,
-        _line_number: &Rc<Position>,
-        condition: &mut Box<ASTNode<Expression>>,
-        if_true: &mut Box<ASTNode<Expression>>,
-        if_false: &mut Box<ASTNode<Expression>>,
-        _type_: &mut Type,
-    ) -> Result<(), CompilerError> {
-        condition.accept(self)?;
-        if_true.accept(self)?;
-        if_false.accept(self)?;
         Ok(())
     }
 
@@ -262,15 +207,6 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         Ok(())
     }
 
-    fn visit_const(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _value: &mut Const,
-        _type_: &mut Type,
-    ) -> Result<(), CompilerError> {
-        Ok(())
-    }
-
     fn visit_variable(
         &mut self,
         line_number: &Rc<Position>,
@@ -320,50 +256,6 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
                 original_name, line_number
             )))
         }
-    }
-
-    fn visit_prefix(
-        &mut self,
-        _line_number: &Rc<Position>,
-        variable: &mut Box<ASTNode<Expression>>,
-        _operator: &mut UnaryOperator,
-        _type_: &mut Type,
-    ) -> Result<(), CompilerError> {
-        variable.accept(self)
-    }
-
-    fn visit_postfix(
-        &mut self,
-        _line_number: &Rc<Position>,
-        variable: &mut Box<ASTNode<Expression>>,
-        _operator: &mut UnaryOperator,
-        _type_: &mut Type,
-    ) -> Result<(), CompilerError> {
-        variable.accept(self)
-    }
-
-    fn visit_if_else(
-        &mut self,
-        _line_number: &Rc<Position>,
-        expression: &mut ASTNode<Expression>,
-        if_true: &mut Box<ASTNode<Statement>>,
-        if_false: &mut Option<Box<ASTNode<Statement>>>,
-    ) -> Result<(), CompilerError> {
-        expression.accept(self)?;
-        if_true.accept(self)?;
-        if let Some(if_false) = if_false {
-            if_false.accept(self)?;
-        }
-        Ok(())
-    }
-
-    fn visit_cast(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _target_type: &mut Type,
-        _exp: &mut Box<ASTNode<Expression>>,
-    ) -> Result<(), CompilerError> {
-        Ok(())
     }
 }
 

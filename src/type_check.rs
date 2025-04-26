@@ -1,8 +1,6 @@
 use crate::CompilerError;
 use crate::CompilerError::SemanticError;
-use crate::ast::{
-    ASTNode, Block, Declaration, Expression, ForInit, FunAttr, Statement, StaticAttr, Visitor,
-};
+use crate::ast::{ASTNode, Declaration, Expression, FunAttr, StaticAttr, Visitor};
 use crate::common::{Const, Identifier, Position};
 use crate::lexer::{BinaryOperator, Type, UnaryOperator};
 use std::collections::HashMap;
@@ -123,17 +121,6 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         Ok(())
     }
 
-    fn visit_block(
-        &mut self,
-        _line_number: &Rc<Position>,
-        body: &mut Block,
-    ) -> Result<(), CompilerError> {
-        for line in body.iter_mut() {
-            line.accept(self)?;
-        }
-        Ok(())
-    }
-
     fn visit_unary(
         &mut self,
         _line_number: &Rc<Position>,
@@ -196,54 +183,6 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         convert_to(line_number, if_false, &common_type);
         *type_ = common_type;
         Ok(())
-    }
-
-    fn visit_while(
-        &mut self,
-        _line_number: &Rc<Position>,
-        condition: &mut ASTNode<Expression>,
-        body: &mut Box<ASTNode<Statement>>,
-        _label: &mut Rc<String>,
-        _is_do_while: &mut bool,
-    ) -> Result<(), CompilerError> {
-        condition.accept(self)?;
-        body.accept(self)
-    }
-
-    fn visit_break(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _label: &mut Rc<String>,
-    ) -> Result<(), CompilerError> {
-        Ok(())
-    }
-
-    fn visit_continue(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _label: &mut Rc<String>,
-        _is_for: &mut bool,
-    ) -> Result<(), CompilerError> {
-        Ok(())
-    }
-
-    fn visit_for(
-        &mut self,
-        _line_number: &Rc<Position>,
-        init: &mut ASTNode<ForInit>,
-        condition: &mut Option<ASTNode<Expression>>,
-        increment: &mut Option<ASTNode<Expression>>,
-        body: &mut Box<ASTNode<Statement>>,
-        _label: &mut Rc<String>,
-    ) -> Result<(), CompilerError> {
-        init.accept(self)?;
-        if let Some(condition) = condition {
-            condition.accept(self)?;
-        }
-        if let Some(increment) = increment {
-            increment.accept(self)?;
-        }
-        body.accept(self)
     }
 
     fn visit_const(
@@ -330,22 +269,6 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         variable.accept(self)?;
         *type_ = variable.type_;
         Ok(())
-    }
-
-    fn visit_if_else(
-        &mut self,
-        _line_number: &Rc<Position>,
-        expression: &mut ASTNode<Expression>,
-        if_true: &mut Box<ASTNode<Statement>>,
-        if_false: &mut Option<Box<ASTNode<Statement>>>,
-    ) -> Result<(), CompilerError> {
-        expression.accept(self)?;
-        if_true.accept(self)?;
-        if let Some(if_false) = if_false {
-            if_false.accept(self)
-        } else {
-            Ok(())
-        }
     }
 
     fn visit_cast(

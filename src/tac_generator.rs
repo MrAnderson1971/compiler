@@ -1,4 +1,4 @@
-use crate::ast::{ASTNode, Block, Declaration, Expression, ForInit, Statement, Visitor};
+use crate::ast::{ASTNode, Declaration, Expression, ForInit, Statement, Visitor};
 use crate::common::{Const, Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
@@ -141,17 +141,6 @@ impl<'a> Visitor for TacVisitor<'a> {
         self.body.add_instruction(ReturnInstruction {
             val: Rc::clone(&self.result),
         });
-        Ok(())
-    }
-
-    fn visit_block(
-        &mut self,
-        _line_number: &Rc<Position>,
-        body: &mut Block,
-    ) -> Result<(), CompilerError> {
-        for item in body {
-            item.accept(self)?;
-        }
         Ok(())
     }
 
