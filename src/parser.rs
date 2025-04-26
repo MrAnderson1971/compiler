@@ -403,7 +403,7 @@ impl Parser {
         match token {
             Token::NumberLiteral(value) => {
                 self.tokens.pop_front();
-                Ok(self.make_node::<Expression>(Constant((value as i32).into())))
+                Ok(self.make_node::<Expression>(Constant(value)))
             }
             Token::Symbol(..) => {
                 expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;

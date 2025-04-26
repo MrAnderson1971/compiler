@@ -1,3 +1,5 @@
+use crate::common::Const;
+use crate::common::Const::{ConstInt, ConstLong};
 use crate::lexer::Symbol::{Ambiguous, Binary, Unary};
 use std::collections::VecDeque;
 
@@ -87,7 +89,7 @@ pub(crate) enum Token {
     Keyword(Keyword),
     Symbol(Symbol),
     Name(String),
-    NumberLiteral(u32),
+    NumberLiteral(Const),
     Invalid,
     EOF,
 }
@@ -215,17 +217,29 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
             '0'..='9' => {
                 let mut number_string = String::new();
                 number_string.push(c);
-                while let Some(&next) = chars.peek() {
-                    if next.is_ascii_digit() {
-                        number_string.push(next);
-                        chars.next();
+                loop {
+                    if let Some(&next) = chars.peek() {
+                        if next.is_ascii_digit() {
+                            number_string.push(next);
+                            chars.next();
+                        } else if Some(&'l') == chars.peek() || Some(&'L') == chars.peek() {
+                            chars.next();
+                            break match number_string.parse::<u64>() {
+                                Ok(num) => Token::NumberLiteral(ConstLong(num as i64)),
+                                Err(_) => Token::Invalid,
+                            };
+                        } else {
+                            break match number_string.parse::<u32>() {
+                                Ok(num) => Token::NumberLiteral(ConstInt(num as i32)),
+                                Err(_) => Token::Invalid, // Handle parsing error
+                            };
+                        }
                     } else {
-                        break;
+                        break match number_string.parse::<u32>() {
+                            Ok(num) => Token::NumberLiteral(ConstInt(num as i32)),
+                            Err(_) => Token::Invalid, // Handle parsing error
+                        };
                     }
-                }
-                match number_string.parse::<u32>() {
-                    Ok(num) => Token::NumberLiteral(num),
-                    Err(_) => Token::Invalid, // Handle parsing error
                 }
             }
             'a'..='z' | 'A'..='Z' | '_' => {

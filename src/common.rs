@@ -4,7 +4,7 @@ pub(crate) type Position = (i32, String);
 
 pub(crate) type Identifier = String;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Const {
     ConstInt(i32),
     ConstLong(i64),
