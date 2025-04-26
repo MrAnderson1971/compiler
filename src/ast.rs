@@ -5,8 +5,8 @@ use crate::common::{Const, Identifier, Position};
 use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use crate::tac::{FunctionBody, TACInstruction};
 use crate::tac_generator::TacVisitor;
-use crate::variable_resolution::VariableResolutionVisitor;
 use crate::type_check::TypeCheckVisitor;
+use crate::variable_resolution::VariableResolutionVisitor;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::ops::DerefMut;
@@ -321,10 +321,11 @@ impl ASTNode<Program> {
                     &mut shared_variables_map,
                 );
                 visitor.visit_declaration(&declaration.line_number, &mut declaration.kind)?;
-                let mut visitor = TypeCheckVisitor::new(&shared_functions_map, &shared_variables_map);
+                let mut visitor =
+                    TypeCheckVisitor::new(&shared_functions_map, &shared_variables_map);
                 visitor.visit_declaration(&declaration.line_number, &mut declaration.kind)?;
                 println!("{:#?}", declaration);
-                declaration.generate(out, &shared_functions_map, &mut shared_variables_map)?;
+                declaration.generate(out)?;
             }
         }
 
@@ -474,22 +475,9 @@ impl ASTNode<Program> {
 }
 
 impl ASTNode<Declaration> {
-    pub(crate) fn generate(
-        &mut self,
-        out: &mut String,
-        shared_functions_map: &HashMap<Identifier, FunAttr>,
-        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
-    ) -> Result<(), CompilerError> {
+    pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
         if let Declaration::FunctionDeclaration(func) = &mut self.kind {
             let identifier = Rc::clone(&func.name);
-
-            let mut variable_resolution_visitor = VariableResolutionVisitor::new(
-                Rc::clone(&identifier),
-                shared_functions_map,
-                shared_variables_map,
-            );
-
-            self.accept(&mut variable_resolution_visitor as &mut dyn Visitor)?;
 
             let mut function_body = FunctionBody::new();
             let mut tac_visitor = TacVisitor::new(Rc::clone(&identifier), &mut function_body);
@@ -570,8 +558,12 @@ impl ASTNode<Expression> {
                 arguments,
                 &mut self.type_,
             ),
-            Expression::Prefix(op, exp) => visitor.visit_prefix(&self.line_number, exp, op, &mut self.type_),
-            Expression::Postfix(op, exp) => visitor.visit_postfix(&self.line_number, exp, op, &mut self.type_),
+            Expression::Prefix(op, exp) => {
+                visitor.visit_prefix(&self.line_number, exp, op, &mut self.type_)
+            }
+            Expression::Postfix(op, exp) => {
+                visitor.visit_postfix(&self.line_number, exp, op, &mut self.type_)
+            }
             Expression::Cast(type_, exp) => visitor.visit_cast(&self.line_number, type_, exp),
         }
     }

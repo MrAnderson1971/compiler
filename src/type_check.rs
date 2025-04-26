@@ -69,13 +69,16 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         match declaration {
             Declaration::VariableDeclaration(decl) => {
                 if decl.var_type == Type::Void {
-                    Err(SemanticError(format!(
+                    return Err(SemanticError(format!(
                         "Cannot declare variable {} of type 'void' at {:?}",
                         decl.name, line_number
-                    )))
+                    )));
+                }
+                self.variables_map
+                    .insert(decl.name.to_string(), decl.var_type);
+                if let Some(init) = &mut decl.init {
+                    init.accept(self)
                 } else {
-                    self.variables_map
-                        .insert(decl.name.to_string(), decl.var_type);
                     Ok(())
                 }
             }

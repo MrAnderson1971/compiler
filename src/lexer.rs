@@ -71,6 +71,16 @@ pub(crate) enum Type {
     Long,
 }
 
+impl Type {
+    pub(crate) fn size(&self) -> i32 {
+        match self {
+            Type::Void => 0,
+            Type::Int => 4,
+            Type::Long => 8,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Keyword {
     Return,

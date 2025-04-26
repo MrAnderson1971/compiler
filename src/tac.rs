@@ -1,19 +1,19 @@
 use crate::common::{Const, Identifier};
-use crate::lexer::{BinaryOperator, UnaryOperator};
+use crate::lexer::{BinaryOperator, Type, UnaryOperator};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub(crate) enum Pseudoregister {
-    Pseudoregister(i32),
+    Pseudoregister(i32, Type),
     Register(String),
-    Data(Rc<String>),
+    Data(Rc<String>, Type),
 }
 
 impl Pseudoregister {
-    pub(crate) fn new(offset: i32) -> Self {
-        Pseudoregister::Pseudoregister(offset)
+    pub(crate) fn new(offset: i32, t: &Type) -> Self {
+        Pseudoregister::Pseudoregister(offset, *t)
     }
 }
 
@@ -21,7 +21,7 @@ impl Pseudoregister {
 pub(crate) enum Operand {
     Register(Pseudoregister),
     Immediate(Const),
-    MemoryReference(usize, String),
+    MemoryReference(usize, String, Type),
     None,
 }
 
@@ -31,7 +31,7 @@ impl Display for Operand {
             Operand::Immediate(i) => write!(f, "${}", i),
             Operand::None => write!(f, ""),
             Operand::Register(r) => r.fmt(f),
-            Operand::MemoryReference(offset, reg) => write!(f, "{}(%{})", offset, reg),
+            Operand::MemoryReference(offset, reg, _) => write!(f, "{}(%{})", offset, reg),
         }
     }
 }
@@ -39,9 +39,9 @@ impl Display for Operand {
 impl Display for Pseudoregister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Pseudoregister::Pseudoregister(size) => write!(f, "-{}(%rbp)", 4 * size),
+            Pseudoregister::Pseudoregister(offset, t) => write!(f, "-{}(%rbp)", offset * t.size()),
             Pseudoregister::Register(s) => write!(f, "%{}", s),
-            Pseudoregister::Data(d) => write!(f, "{}(%rip)", d),
+            Pseudoregister::Data(d, _) => write!(f, "{}(%rip)", d),
         }
     }
 }
