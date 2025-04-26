@@ -241,3 +241,37 @@ fn test_assignment_in_param(harness: CompilerTest) {
     }"#;
     assert_compile_err!(harness, source, CompilerError::SyntaxError(_));
 }
+
+#[rstest]
+fn test_forward_declaration_with_too_many_args(harness: CompilerTest) {
+    let source = r#"
+    int helper();
+    int helper(int a);
+
+    int main() {
+        return helper();
+    }
+
+    int helper() {
+        return 42;
+    }
+    "#;
+    assert_compile_err!(harness, source, CompilerError::SemanticError(_));
+}
+
+#[rstest]
+fn test_forward_declaration_with_too_few_args(harness: CompilerTest) {
+    let source = r#"
+    int helper();
+    int helper();
+
+    int main() {
+        return helper(42);
+    }
+
+    int helper(int a) {
+        return a;
+    }
+    "#;
+    assert_compile_err!(harness, source, CompilerError::SemanticError(_));
+}

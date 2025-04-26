@@ -294,12 +294,12 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
     ) -> Result<(), CompilerError> {
         let original_name = identifier.as_ref().to_string();
         if let Some(func) = self.functions_map.get(&original_name) {
-            if arguments.len() != func.param_count {
+            if arguments.len() != (*func.func_type).params.len() {
                 return Err(SemanticError(format!(
                     "Function {} called with {} parameters but expected {} at {:?}",
                     original_name,
                     arguments.len(),
-                    func.param_count,
+                    (*func.func_type).params.len(),
                     line_number
                 )));
             }

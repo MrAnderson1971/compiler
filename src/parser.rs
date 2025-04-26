@@ -4,7 +4,10 @@ use crate::ast::Expression::{
 };
 use crate::ast::ForInit::{InitDecl, InitExp};
 use crate::ast::Statement::{Compound, For, If, Null, Return, While};
-use crate::ast::{ASTNode, Block, BlockItem, Declaration, Expression, ForInit, FunctionDeclaration, Program, Statement, VariableDeclaration, extract_base_variable, is_lvalue_node, ASTType};
+use crate::ast::{
+    ASTNode, Block, BlockItem, Declaration, Expression, ForInit, FuncType, FunctionDeclaration,
+    Program, Statement, VariableDeclaration, extract_base_variable, is_lvalue_node,
+};
 use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::{SemanticError, SyntaxError};
@@ -102,16 +105,18 @@ impl Parser {
     }
 
     #[allow(unused_variables)]
-    fn parse_params(&mut self) -> Result<Vec<Identifier>, CompilerError> {
+    fn parse_params(&mut self) -> Result<(Vec<Identifier>, Vec<Type>), CompilerError> {
         expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;
         let mut params = vec![];
+        let mut types = vec![];
 
         let next = self.tokens.pop_front().unwrap();
         match next {
-            Token::Symbol(Symbol::CloseParenthesis) => return Ok(params),
-            Token::Keyword(Keyword::Type(_)) => {
+            Token::Symbol(Symbol::CloseParenthesis) => return Ok((params, types)),
+            Token::Keyword(Keyword::Type(param_type)) => {
                 if let Token::Name(name) = self.tokens.pop_front().unwrap() {
                     params.push(name);
+                    types.push(param_type);
                 } else {
                     return Err(SyntaxError(format!(
                         "Expected identifier but got {:?}",
@@ -130,10 +135,19 @@ impl Parser {
         loop {
             let next = self.tokens.pop_front().unwrap();
             match next {
-                Token::Symbol(Symbol::CloseParenthesis) => return Ok(params),
+                Token::Symbol(Symbol::CloseParenthesis) => return Ok((params, types)),
                 Token::Symbol(Symbol::Comma) => {
-                    expect_token!(self, Token::Keyword(Keyword::Type(..)))?;
+                    let param_type =
+                        match_and_consume!(self, Token::Keyword(Keyword::Type(t)) => Some(t))
+                            .ok_or_else(|| {
+                                SyntaxError(format!(
+                                    "Expected type but got {:?} at {:?}",
+                                    self.peek_token(),
+                                    self.line_number
+                                ))
+                            })?;
                     if let Token::Name(name) = self.tokens.pop_front().unwrap() {
+                        types.push(param_type);
                         params.push(name);
                     } else {
                         return Err(SyntaxError(format!(
@@ -177,31 +191,35 @@ impl Parser {
     fn parse_type_and_storage_class(
         &mut self,
         specifier_list: Vec<Keyword>,
-    ) -> Result<(Rc<ASTType>, Option<StorageClass>), CompilerError> {
+    ) -> Result<(Type, Option<StorageClass>), CompilerError> {
         let mut types = vec![];
         let mut storage_classes = vec![];
         for specifier in specifier_list.iter() {
-            if matches!(specifier, Keyword::Type(Type::Int)) {
-                types.push(specifier);
+            if let Keyword::Type(type_) = specifier {
+                types.push(*type_);
             } else if let Keyword::StorageClass(class) = specifier {
                 storage_classes.push(class);
             }
         }
 
-        if types.len() != 1 {
-            return Err(SyntaxError(format!(
-                "Invalid type specifier {:?} at {:?}",
-                types, self.line_number
-            )));
-        }
+        let type_ = if types.len() != 1 {
+            if types == vec![Type::Int, Type::Long] || types == vec![Type::Long, Type::Int] {
+                Type::Long
+            } else {
+                return Err(SyntaxError(format!(
+                    "Invalid type specifier {:?} at {:?}",
+                    types, self.line_number
+                )));
+            }
+        } else {
+            types[0]
+        };
         if storage_classes.len() > 1 {
             return Err(SyntaxError(format!(
                 "Invalid storage class {:?} at {:?}",
                 storage_classes, self.line_number
             )));
-        }
-
-        let type_ = Rc::from(ASTType::Type(Type::Int));
+        };
 
         let storage_class = if storage_classes.len() == 1 {
             Some(*storage_classes[0])
@@ -251,7 +269,7 @@ impl Parser {
             }
         }
 
-        let params = self.parse_params()?;
+        let (params, types) = self.parse_params()?;
 
         // function prototype
         if match_and_consume!(self, Token::Symbol(Symbol::Semicolon)) {
@@ -261,7 +279,10 @@ impl Parser {
                     params,
                     body: None,
                     storage_class,
-                    func_type: type_,
+                    func_type: Rc::from(FuncType {
+                        params: types,
+                        ret: type_,
+                    }),
                 })),
             );
         }
@@ -289,14 +310,17 @@ impl Parser {
                 params,
                 body: Some(function_body),
                 storage_class,
-                func_type: type_,
+                func_type: Rc::from(FuncType {
+                    params: types,
+                    ret: type_,
+                }),
             })),
         )
     }
 
     fn parse_declaration(
         &mut self,
-        specifiers: (Rc<ASTType>, Option<StorageClass>),
+        specifiers: (Type, Option<StorageClass>),
         name: Option<Identifier>,
     ) -> Result<ASTNode<VariableDeclaration>, CompilerError> {
         let identifier = if let Some(name) = name {
@@ -319,14 +343,14 @@ impl Parser {
                 name: Rc::from(identifier),
                 init: Some(expression),
                 storage_class: specifiers.1,
-                var_type: Rc::clone(&specifiers.0),
+                var_type: specifiers.0,
             }))
         } else {
             Ok(self.make_node(VariableDeclaration {
                 name: Rc::from(identifier),
                 init: None,
                 storage_class: specifiers.1,
-                var_type: Rc::clone(&specifiers.0),
+                var_type: specifiers.0,
             }))
         }
     }

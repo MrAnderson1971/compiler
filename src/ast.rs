@@ -1,5 +1,7 @@
+use std::cmp::PartialEq;
 use crate::CompilerError;
 use crate::CompilerError::SemanticError;
+use crate::common::Const::ConstInt;
 use crate::common::{Const, Identifier, Position};
 use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use crate::tac::{FunctionBody, TACInstruction};
@@ -8,7 +10,6 @@ use crate::variable_resolution::VariableResolutionVisitor;
 use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::rc::Rc;
-use crate::common::Const::ConstInt;
 
 pub(crate) trait Visitor {
     fn visit_declaration(
@@ -120,7 +121,7 @@ pub(crate) trait Visitor {
 pub(crate) struct FunAttr {
     pub(crate) defined: bool,
     pub(crate) global: bool,
-    pub(crate) param_count: usize,
+    pub(crate) func_type: Rc<FuncType>,
 }
 
 pub(crate) struct StaticAttr {
@@ -137,12 +138,9 @@ pub(crate) enum InitialValue {
 }
 
 #[derive(Debug)]
-pub(crate) enum ASTType {
-    Type(Type),
-    FuncType {
-        params: Box<Vec<ASTType>>,
-        ret: Box<ASTType>,
-    },
+pub(crate) struct FuncType {
+    pub(crate) params: Vec<Type>,
+    pub(crate) ret: Type,
 }
 
 #[derive(Debug)]
@@ -159,7 +157,7 @@ pub(crate) struct FunctionDeclaration {
     pub(crate) params: Vec<Identifier>,
     pub(crate) body: Option<ASTNode<Block>>,
     pub(crate) storage_class: Option<StorageClass>,
-    pub(crate) func_type: Rc<ASTType>,
+    pub(crate) func_type: Rc<FuncType>,
 }
 
 pub(crate) type Block = Vec<ASTNode<BlockItem>>;
@@ -181,7 +179,7 @@ pub(crate) struct VariableDeclaration {
     pub(crate) name: Rc<Identifier>,
     pub(crate) init: Option<ASTNode<Expression>>,
     pub(crate) storage_class: Option<StorageClass>,
-    pub(crate) var_type: Rc<ASTType>,
+    pub(crate) var_type: Type,
 }
 
 #[derive(Debug)]
@@ -206,7 +204,7 @@ pub(crate) enum Expression {
     FunctionCall(Rc<Identifier>, Box<Vec<ASTNode<Expression>>>),
     Prefix(UnaryOperator, Box<ASTNode<Expression>>),
     Postfix(UnaryOperator, Box<ASTNode<Expression>>),
-    Cast(Rc<ASTType>, Box<Expression>),
+    Cast(Rc<Type>, Box<Expression>),
 }
 
 #[derive(Debug)]
@@ -258,6 +256,12 @@ pub(crate) fn extract_base_variable(node: &Expression) -> Rc<Identifier> {
         Expression::Variable(v) => Rc::clone(v),
         Expression::Prefix(_, v) => extract_base_variable(&v.kind),
         _ => panic!("Not a variable"),
+    }
+}
+
+impl PartialEq for FuncType {
+    fn eq(&self, other: &Self) -> bool {
+        self.params == other.params && self.ret == other.ret
     }
 }
 
@@ -401,7 +405,7 @@ impl ASTNode<Program> {
         func: &&mut FunctionDeclaration,
     ) -> Option<Result<(), CompilerError>> {
         let name = Rc::clone(&func.name);
-        let param_count = func.params.len();
+        let param_count = Rc::clone(&func.func_type);
         let has_body = func.body.is_some();
         let identifier = (*name).clone();
         if shared_variables_map.contains_key(&identifier) {
@@ -424,7 +428,7 @@ impl ASTNode<Program> {
                     name
                 ))));
             }
-            if old_decl.param_count != param_count {
+            if *old_decl.func_type != *param_count {
                 return Some(Err(SemanticError(format!(
                     "Incompatible function declaration of {}",
                     name
@@ -436,7 +440,7 @@ impl ASTNode<Program> {
             FunAttr {
                 defined: func.body.is_some(),
                 global: func.storage_class != Some(StorageClass::Static),
-                param_count,
+                func_type: param_count,
             },
         );
         None
