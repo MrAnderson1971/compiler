@@ -192,7 +192,7 @@ impl Simulator {
         self.dll_handle = Some(dll_handle);
 
         // Get the function pointer
-        type AsmFunction = unsafe extern "C" fn() -> i64;
+        type AsmFunction = unsafe extern "sysv64" fn() -> i32;
         let run_asm_name = CString::new("_runAsm")?;
         let mut run_asm: Option<AsmFunction> = None;
 
@@ -225,7 +225,7 @@ impl Simulator {
             }
             self.dll_handle = None;
 
-            Ok(result as i32)
+            Ok(result)
         } else {
             let error_code = unsafe { GetLastError() };
             unsafe {
@@ -358,6 +358,7 @@ impl CompilerTest {
         }
     }
 
+    #[allow(dead_code)]
     pub fn assert_is_global(&self, asm_source: &str, name: &str) {
         if !Regex::new(format!("\\.global\\s+\\b{}\\b", name).as_str())
             .unwrap()
@@ -367,6 +368,7 @@ impl CompilerTest {
         }
     }
 
+    #[allow(dead_code)]
     pub fn assert_isnt_global(&self, asm_source: &str, name: &str) {
         if Regex::new(format!("\\.global\\s+\\b{}\\b", name).as_str())
             .unwrap()
