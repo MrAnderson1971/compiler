@@ -1,6 +1,5 @@
 use crate::CompilerError;
 use crate::CompilerError::SemanticError;
-use crate::common::Const::ConstInt;
 use crate::common::{Const, Identifier, Position};
 use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use crate::tac::{FunctionBody, TACInstruction};
@@ -185,7 +184,10 @@ pub(crate) trait Visitor {
         variable: &mut Box<ASTNode<Expression>>,
         _operator: &mut UnaryOperator,
         _type_: &mut Type,
-    ) -> Result<(), CompilerError> where Self: Sized {
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
         variable.accept(self)
     }
     fn visit_postfix(
@@ -194,7 +196,10 @@ pub(crate) trait Visitor {
         variable: &mut Box<ASTNode<Expression>>,
         _operator: &mut UnaryOperator,
         _type_: &mut Type,
-    ) -> Result<(), CompilerError> where Self: Sized {
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
         variable.accept(self)
     }
     fn visit_if_else(
@@ -203,7 +208,10 @@ pub(crate) trait Visitor {
         expression: &mut ASTNode<Expression>,
         if_true: &mut Box<ASTNode<Statement>>,
         if_false: &mut Option<Box<ASTNode<Statement>>>,
-    ) -> Result<(), CompilerError> where Self: Sized {
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
         expression.accept(self)?;
         if_true.accept(self)?;
         if let Some(if_false) = if_false {
@@ -217,7 +225,10 @@ pub(crate) trait Visitor {
         _line_number: &Rc<Position>,
         _target_type: &mut Type,
         exp: &mut Box<ASTNode<Expression>>,
-    ) -> Result<(), CompilerError> where Self: Sized {
+    ) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
         exp.accept(self)
     }
 }
@@ -422,7 +433,11 @@ impl ASTNode<Program> {
                 InitialValue::Tentative => TACInstruction::StaticVariable {
                     name: Rc::from(name.clone()),
                     global: static_attr.global,
-                    init: ConstInt(0),
+                    init: match static_attr.type_ {
+                        Type::Void => unreachable!(),
+                        Type::Int => Const::ConstInt(0),
+                        Type::Long => Const::ConstLong(0),
+                    },
                 },
                 InitialValue::Initial(i) => TACInstruction::StaticVariable {
                     name: Rc::from(name.clone()),

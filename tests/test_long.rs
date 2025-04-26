@@ -47,6 +47,41 @@ fn test_sign_extend(mut harness: CompilerTest) {
 }
 
 #[rstest]
+fn test_long_multiplication(mut harness: CompilerTest) {
+    let source = r#"
+    int main() {
+    return 1000000l * 1000000l;
+    }
+    "#;
+    harness.assert_runs_ok(source, (1_000_000i64 * 1_000_000i64) as i32);
+}
+
+#[rstest]
+fn test_long_division(mut harness: CompilerTest) {
+    let source = r#"
+    int main() {
+    return 1000000l / 1000000l;
+    }
+    "#;
+    harness.assert_runs_ok(source, 1);
+}
+
+#[rstest]
+fn test_long_subtraction(mut harness: CompilerTest) {
+    let source = r#"
+    long a;
+    long b;
+    int main() {
+             a = -4294967290l; // 2^32 - 6
+             b = 90l;
+
+    return a - b == -4294967380l;
+    }
+    "#;
+    harness.assert_runs_ok(source, 1);
+}
+
+#[rstest]
 fn test_long_operations(mut harness: CompilerTest) {
     let source = r#"
 long a;

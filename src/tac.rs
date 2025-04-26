@@ -179,8 +179,14 @@ impl TACInstruction {
             }
             TACInstruction::UnaryOpInstruction { dest, op, operand } => {
                 let mov = if dest.size() == 4 { "movl" } else { "movq" };
-                let operand = format!("{}", operand);
-                if operand.find("$").is_some() {
+                if operand.is_immediate() && operand.size() == 8 {
+                    *out += &format!(
+                        r#"movabsq {}, %r10
+movq %r10, {}
+"#,
+                        operand, dest
+                    );
+                } else if operand.is_immediate() {
                     *out += &format!("{} {}, {}\n", mov, operand, dest);
                 } else {
                     let r10 = if dest.size() == 4 { "r10d" } else { "r10" };
@@ -223,6 +229,8 @@ impl TACInstruction {
             TACInstruction::Jump { label } => *out += &format!("jmp {}\n", label),
             TACInstruction::Label { label } => *out += &format!("{}:\n", label),
             TACInstruction::StoreValueInstruction { dest, src } => {
+                let mov = if dest.size() == 4 { "movl" } else { "movq" };
+                let r10 = if dest.size() == 4 { "r10d" } else { "r10" };
                 if format!("{}", dest) == format!("{}", src) {
                     return;
                 }
@@ -236,10 +244,10 @@ movq %r10, {}
                     return;
                 }
                 if src.is_immediate() {
-                    *out += &format!("movl {}, {}\n", src, dest);
+                    *out += &format!("{} {}, {}\n", mov, src, dest);
                 } else {
-                    *out += &format!("movl {}, %r10d\n", src);
-                    *out += &format!("movl %r10d, {}\n", dest);
+                    *out += &format!("{} {}, %{}\n", mov, src, r10);
+                    *out += &format!("{} %{}, {}\n", mov, r10, dest);
                 }
             }
             TACInstruction::ReturnInstruction { val } => {
@@ -272,7 +280,7 @@ ret\n";
 .align {}
 .zero {}
 {}:
-                    "#,
+"#,
                         init.size(),
                         init.size(),
                         name
@@ -284,7 +292,7 @@ ret\n";
 .align {}
 {}:
 .{} {}
-                    "#,
+"#,
                         init.size(),
                         name,
                         which,
@@ -402,9 +410,16 @@ fn make_binary_op_instruction(
             *out += &format!("{} %{}, {}\n", mov, r10, d);
         }
         BinaryOperator::Multiply => {
-            let mull = if dest.size() == 4 { "imull" } else { "mulq" };
-            *out += &format!("{} {}, %{}\n", mov, src1, r11);
-            if src2_is_immediate {
+            let mull = if dest.size() == 4 { "imull" } else { "imulq" };
+            if left.is_immediate() && left.size() == 8 {
+                *out += &format!("movabsq {}, %r11\n", src1);
+            } else {
+                *out += &format!("{} {}, %{}\n", mov, src1, r11);
+            }
+            if src2_is_immediate && right.size() == 8 {
+                *out += &format!("movabsq {}, %r10\n", src2);
+                *out += &format!("{} %r10, %r11\n", mull);
+            } else if src2_is_immediate {
                 *out += &format!("{} {}, %{}\n", mull, src2, r11);
             } else {
                 *out += &format!("{} {}, %{}\n", mov, src2, r10);
@@ -413,14 +428,21 @@ fn make_binary_op_instruction(
             *out += &format!("{} %{}, {}\n", mov, r11, d);
         }
         BinaryOperator::Divide | BinaryOperator::Modulo => {
-            *out += &format!("{} {}, %eax\n", mov, src1);
+            let ax = if dest.size() == 4 { "eax" } else { "rax" };
+            let cx = if dest.size() == 4 { "ecx" } else { "rcx" };
+            *out += &format!("{} {}, %{}\n", mov, src1, ax);
             *out += if dest.size() == 4 { "cdq\n" } else { "cqo\n" };
-            *out += &format!("{} {}, %ecx\n", mov, src2);
+            if src2_is_immediate && right.size() == 8 {
+                *out += &format!("movabsq {}, %{}\n", src2, cx);
+            } else {
+                *out += &format!("{} {}, %{}\n", mov, src2, cx);
+            }
             *out += "idiv %ecx\n";
             if *op == BinaryOperator::Divide {
-                *out += &format!("{} %eax, {}\n", mov, d);
+                *out += &format!("{} %{}, {}\n", mov, ax, d);
             } else {
-                *out += &format!("{} %edx, {}\n", mov, d);
+                let dx = if dest.size() == 4 { "edx" } else { "rdx" };
+                *out += &format!("{} %{}, {}\n", mov, dx, d);
             }
         }
         BinaryOperator::Equals
@@ -432,7 +454,7 @@ fn make_binary_op_instruction(
             let cmp = if left.size() == 4 { "cmpl" } else { "cmpq" };
             let dest_reg = if left.size() == 4 { "edx" } else { "rdx" };
             *out += &format!("{} {}, %{}\n", mov, src1, dest_reg);
-            if left.size() == 8 && src2_is_immediate {
+            if right.size() == 8 && src2_is_immediate {
                 *out += &format!("movabsq {}, %r11\n", src2);
                 *out += &format!("cmpq %r11, %{}\n", dest_reg);
             } else {

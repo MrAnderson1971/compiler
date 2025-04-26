@@ -75,10 +75,11 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
                 self.variables_map
                     .insert(decl.name.to_string(), decl.var_type);
                 if let Some(init) = &mut decl.init {
-                    init.accept(self)
-                } else {
-                    Ok(())
+                    init.accept(self)?;
+                    let common = get_common_type(&decl.var_type, &init.type_);
+                    convert_to(line_number, init, &common);
                 }
+                Ok(())
             }
             Declaration::FunctionDeclaration(decl) => {
                 for (param_name, param_type) in decl.params.iter().zip(decl.func_type.params.iter())
