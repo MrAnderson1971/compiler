@@ -91,7 +91,6 @@ pub(crate) enum TACInstruction {
         val: Rc<Operand>,
     },
     AllocateStackInstruction,
-    DeallocateStackInstruction,
     FunctionCall(Rc<Identifier>),
     PushArgument(Rc<Operand>),
     AdjustStack(usize),
@@ -125,7 +124,7 @@ impl FunctionBody {
         self.instructions.push(instruction);
     }
 
-    pub(crate) fn add_default_return_to_main(&mut self) {
+    pub(crate) fn add_default_return(&mut self) {
         match &self.instructions.last() {
             Some(TACInstruction::ReturnInstruction { .. }) | None => {}
             _ => {
@@ -192,8 +191,6 @@ impl TACInstruction {
                 *out += &format!("movl %r10d, {}\n", dest);
             }
             TACInstruction::ReturnInstruction { val } => {
-                let allocate = ((function_body.variable_count * 4) + 15) & !15;
-                *out += &format!("addq ${}, %rsp\n", allocate);
                 *out += &format!("movl {}, %eax\n", val);
                 *out += "movq %rbp, %rsp\n\
 popq %rbp\n\
@@ -202,10 +199,6 @@ ret\n";
             TACInstruction::AllocateStackInstruction => {
                 let allocate = ((function_body.variable_count * 4) + 15) & !15;
                 *out += &format!("subq ${}, %rsp\n", allocate)
-            }
-            TACInstruction::DeallocateStackInstruction => {
-                let allocate = ((function_body.variable_count * 4) + 15) & !15;
-                *out += &format!("addq ${}, %rsp\n", allocate);
             }
             TACInstruction::FunctionCall(name) => {
                 *out += &format!("call {}\n", name);
