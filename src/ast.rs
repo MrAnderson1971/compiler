@@ -575,6 +575,7 @@ impl ASTNode<Declaration> {
             function_body.add_default_return();
 
             for instruction in &function_body.instructions {
+                *out += "\n";
                 instruction.make_assembly(out, &function_body);
             }
 

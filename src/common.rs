@@ -10,6 +10,15 @@ pub(crate) enum Const {
     ConstLong(i64),
 }
 
+impl Const {
+    pub(crate) fn size(&self) -> i32 {
+        match self {
+            Const::ConstInt(_) => 4,
+            Const::ConstLong(_) => 8,
+        }
+    }
+}
+
 impl Display for Const {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
