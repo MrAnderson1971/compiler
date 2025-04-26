@@ -484,9 +484,7 @@ impl ASTNode<Declaration> {
             self.accept(&mut tac_visitor as &mut dyn Visitor)?;
             println!("{:#?}", function_body);
 
-            if identifier.as_str() == "main" {
-                function_body.add_default_return_to_main();
-            }
+            function_body.add_default_return_to_main();
 
             for instruction in &function_body.instructions {
                 instruction.make_assembly(out, &function_body);

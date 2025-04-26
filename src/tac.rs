@@ -126,8 +126,8 @@ impl FunctionBody {
     }
 
     pub(crate) fn add_default_return_to_main(&mut self) {
-        match &self.instructions.last().unwrap() {
-            TACInstruction::ReturnInstruction { .. } => {}
+        match &self.instructions.last() {
+            Some(TACInstruction::ReturnInstruction { .. }) | None => {}
             _ => {
                 self.add_instruction(TACInstruction::ReturnInstruction {
                     val: Rc::from(Operand::Immediate(0.into())),
@@ -241,8 +241,22 @@ ret\n";
                     );
                 }
             }
-            TACInstruction::SignExtend { .. } => todo!(),
-            TACInstruction::Truncate { .. } => todo!(),
+            TACInstruction::SignExtend { dest, src } => {
+                    *out += &format!(r#"movl {}, %r10d
+movslq %r10d, %r10
+movq %r10, {}
+"#, src, dest);
+            }
+            TACInstruction::Truncate { dest, src } => {
+                let src = format!("{}", src);
+                if src.find("$").is_some() {
+                    *out += &format!("movl {}, {}\n", src, dest);
+                } else {
+                    *out += &format!(r#"movl {}, %r10d
+movl %r10d, {}
+"#, src, dest);
+                }
+            }
         }
     }
 }
