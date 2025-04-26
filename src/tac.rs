@@ -19,7 +19,13 @@ impl Pseudoregister {
     fn size(&self) -> i32 {
         match self {
             Pseudoregister::Pseudoregister(_, t) => t.size(),
-            Pseudoregister::Register(_) => todo!(),
+            Pseudoregister::Register(reg) => {
+                if reg.starts_with("e") || reg.ends_with("d") {
+                    4
+                } else {
+                    8
+                }
+            }
             Pseudoregister::Data(_, t) => t.size(),
         }
     }
@@ -229,8 +235,6 @@ movq %r10, {}
             TACInstruction::Jump { label } => *out += &format!("jmp {}\n", label),
             TACInstruction::Label { label } => *out += &format!("{}:\n", label),
             TACInstruction::StoreValueInstruction { dest, src } => {
-                let mov = if dest.size() == 4 { "movl" } else { "movq" };
-                let r10 = if dest.size() == 4 { "r10d" } else { "r10" };
                 if format!("{}", dest) == format!("{}", src) {
                     return;
                 }
@@ -243,6 +247,8 @@ movq %r10, {}
                     );
                     return;
                 }
+                let mov = if src.size() == 4 { "movl" } else { "movq" };
+                let r10 = if src.size() == 4 { "r10d" } else { "r10" };
                 if src.is_immediate() {
                     *out += &format!("{} {}, {}\n", mov, src, dest);
                 } else {
@@ -437,7 +443,7 @@ fn make_binary_op_instruction(
             } else {
                 *out += &format!("{} {}, %{}\n", mov, src2, cx);
             }
-            *out += "idiv %ecx\n";
+            *out += &format!("idiv %{}\n", cx);
             if *op == BinaryOperator::Divide {
                 *out += &format!("{} %{}, {}\n", mov, ax, d);
             } else {
