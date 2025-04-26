@@ -47,6 +47,7 @@ impl Display for Pseudoregister {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub(crate) enum TACInstruction {
     FunctionInstruction {
         name: Rc<String>,
@@ -191,6 +192,8 @@ impl TACInstruction {
                 *out += &format!("movl %r10d, {}\n", dest);
             }
             TACInstruction::ReturnInstruction { val } => {
+                let allocate = ((function_body.variable_count * 4) + 15) & !15;
+                *out += &format!("addq ${}, %rsp\n", allocate);
                 *out += &format!("movl {}, %eax\n", val);
                 *out += "movq %rbp, %rsp\n\
 popq %rbp\n\
@@ -202,7 +205,7 @@ ret\n";
             }
             TACInstruction::DeallocateStackInstruction => {
                 let allocate = ((function_body.variable_count * 4) + 15) & !15;
-                *out += &format!("addq ${}, %rsp\n", allocate)
+                *out += &format!("addq ${}, %rsp\n", allocate);
             }
             TACInstruction::FunctionCall(name) => {
                 *out += &format!("call {}\n", name);
