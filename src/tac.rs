@@ -91,7 +91,6 @@ pub(crate) enum TACInstruction {
         val: Rc<Operand>,
     },
     AllocateStackInstruction,
-    DeallocateStackInstruction,
     FunctionCall(Rc<Identifier>),
     PushArgument(Rc<Operand>),
     AdjustStack(usize),
@@ -192,10 +191,6 @@ ret\n";
             TACInstruction::AllocateStackInstruction => {
                 let allocate = ((function_body.variable_count * 4) + 15) & !15;
                 *out += &format!("subq ${}, %rsp\n", allocate)
-            }
-            TACInstruction::DeallocateStackInstruction => {
-                let allocate = ((function_body.variable_count * 4) + 15) & !15;
-                *out += &format!("addq ${}, %rsp\n", allocate)
             }
             TACInstruction::FunctionCall(name) => {
                 *out += &format!("call {}\n", name);

@@ -4,7 +4,7 @@ use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{BinaryOperator, Number, StorageClass, UnaryOperator};
 use crate::tac::TACInstruction::{
-    AdjustStack, AllocateStackInstruction, BinaryOpInstruction, DeallocateStackInstruction,
+    AdjustStack, AllocateStackInstruction, BinaryOpInstruction,
     FunctionCall, FunctionInstruction, Jump, JumpIfNotZero, JumpIfZero, Label, PushArgument,
     ReturnInstruction, StoreValueInstruction, UnaryOpInstruction,
 };
@@ -98,7 +98,6 @@ impl<'a> Visitor for TacVisitor<'a> {
                     }
 
                     body.accept(self)?;
-                    self.body.add_instruction(DeallocateStackInstruction);
                 }
                 Ok(())
             }
