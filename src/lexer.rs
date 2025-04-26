@@ -66,6 +66,7 @@ pub(crate) enum StorageClass {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Type {
+    Void,
     Int,
     Long,
 }
@@ -218,27 +219,24 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
                 let mut number_string = String::new();
                 number_string.push(c);
                 loop {
-                    if let Some(&next) = chars.peek() {
-                        if next.is_ascii_digit() {
-                            number_string.push(next);
+                    match chars.peek() {
+                        Some(next) if next.is_ascii_digit() => {
+                            number_string.push(*next);
                             chars.next();
-                        } else if Some(&'l') == chars.peek() || Some(&'L') == chars.peek() {
+                        }
+                        Some(next) if *next == 'l' || *next == 'L' => {
                             chars.next();
                             break match number_string.parse::<u64>() {
                                 Ok(num) => Token::NumberLiteral(ConstLong(num as i64)),
                                 Err(_) => Token::Invalid,
                             };
-                        } else {
+                        }
+                        _ => {
                             break match number_string.parse::<u32>() {
                                 Ok(num) => Token::NumberLiteral(ConstInt(num as i32)),
                                 Err(_) => Token::Invalid, // Handle parsing error
                             };
                         }
-                    } else {
-                        break match number_string.parse::<u32>() {
-                            Ok(num) => Token::NumberLiteral(ConstInt(num as i32)),
-                            Err(_) => Token::Invalid, // Handle parsing error
-                        };
                     }
                 }
             }
@@ -265,4 +263,13 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
     }
     tokens.push_back(Token::EOF);
     tokens
+}
+
+impl Const {
+    pub(crate) fn get_type(&self) -> Type {
+        match self {
+            ConstInt(_) => Type::Int,
+            ConstLong(_) => Type::Long,
+        }
+    }
 }

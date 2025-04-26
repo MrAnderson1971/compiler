@@ -1,12 +1,12 @@
-use std::cmp::PartialEq;
 use crate::CompilerError;
 use crate::CompilerError::SemanticError;
 use crate::common::Const::ConstInt;
 use crate::common::{Const, Identifier, Position};
 use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use crate::tac::{FunctionBody, TACInstruction};
-use crate::tac_visitor::TacVisitor;
+use crate::tac_generator::TacVisitor;
 use crate::variable_resolution::VariableResolutionVisitor;
+use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::rc::Rc;
@@ -22,6 +22,7 @@ pub(crate) trait Visitor {
         line_number: &Rc<Position>,
         left: &mut Box<ASTNode<Expression>>,
         right: &mut Box<ASTNode<Expression>>,
+        type_: &mut Type,
     ) -> Result<(), CompilerError>;
     fn visit_return(
         &mut self,
@@ -38,6 +39,7 @@ pub(crate) trait Visitor {
         line_number: &Rc<Position>,
         op: &mut UnaryOperator,
         expression: &mut Box<ASTNode<Expression>>,
+        type_: &mut Type,
     ) -> Result<(), CompilerError>;
     fn visit_binary(
         &mut self,
@@ -45,6 +47,7 @@ pub(crate) trait Visitor {
         op: &mut BinaryOperator,
         left: &mut Box<ASTNode<Expression>>,
         right: &mut Box<ASTNode<Expression>>,
+        type_: &mut Type,
     ) -> Result<(), CompilerError>;
     fn visit_condition(
         &mut self,
@@ -52,6 +55,7 @@ pub(crate) trait Visitor {
         condition: &mut Box<ASTNode<Expression>>,
         if_true: &mut Box<ASTNode<Expression>>,
         if_false: &mut Box<ASTNode<Expression>>,
+        type_: &mut Type,
     ) -> Result<(), CompilerError>;
     fn visit_while(
         &mut self,
@@ -85,17 +89,20 @@ pub(crate) trait Visitor {
         &mut self,
         line_number: &Rc<Position>,
         value: &mut Const,
+        type_: &mut Type,
     ) -> Result<(), CompilerError>;
     fn visit_variable(
         &mut self,
         line_number: &Rc<Position>,
         identifier: &mut Rc<Identifier>,
+        node: &mut Type,
     ) -> Result<(), CompilerError>;
     fn visit_function_call(
         &mut self,
         line_number: &Rc<Position>,
         identifier: &mut Rc<Identifier>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
+        ret_type: &mut Type,
     ) -> Result<(), CompilerError>;
     fn visit_prefix(
         &mut self,
@@ -115,6 +122,12 @@ pub(crate) trait Visitor {
         expression: &mut ASTNode<Expression>,
         if_true: &mut Box<ASTNode<Statement>>,
         if_false: &mut Option<Box<ASTNode<Statement>>>,
+    ) -> Result<(), CompilerError>;
+    fn visit_cast(
+        &mut self,
+        line_number: &Rc<Position>,
+        target_type: &mut Type,
+        exp: &mut Box<ASTNode<Expression>>,
     ) -> Result<(), CompilerError>;
 }
 
@@ -147,6 +160,7 @@ pub(crate) struct FuncType {
 pub(crate) struct ASTNode<T> {
     pub(crate) line_number: Rc<Position>,
     pub(crate) kind: T,
+    pub(crate) type_: Type,
 }
 
 pub(crate) type Program = Vec<ASTNode<Declaration>>;
@@ -204,7 +218,7 @@ pub(crate) enum Expression {
     FunctionCall(Rc<Identifier>, Box<Vec<ASTNode<Expression>>>),
     Prefix(UnaryOperator, Box<ASTNode<Expression>>),
     Postfix(UnaryOperator, Box<ASTNode<Expression>>),
-    Cast(Rc<Type>, Box<Expression>),
+    Cast(Type, Box<ASTNode<Expression>>),
 }
 
 #[derive(Debug)]
@@ -512,28 +526,32 @@ impl ASTNode<Declaration> {
 impl ASTNode<Expression> {
     pub(crate) fn accept(&mut self, visitor: &mut dyn Visitor) -> Result<(), CompilerError> {
         match &mut self.kind {
-            Expression::Constant(value) => visitor.visit_const(&self.line_number, value),
-            Expression::Variable(v) => visitor.visit_variable(&self.line_number, v),
-            Expression::Unary(op, exp) => visitor.visit_unary(&self.line_number, op, exp),
+            Expression::Constant(value) => {
+                visitor.visit_const(&self.line_number, value, &mut self.type_)
+            }
+            Expression::Variable(v) => {
+                visitor.visit_variable(&self.line_number, v, &mut self.type_)
+            }
+            Expression::Unary(op, exp) => {
+                visitor.visit_unary(&self.line_number, op, exp, &mut self.type_)
+            }
             Expression::Binary { op, left, right } => {
-                visitor.visit_binary(&self.line_number, op, left, right)
+                visitor.visit_binary(&self.line_number, op, left, right, &mut self.type_)
             }
             Expression::Assignment { left, right } => {
-                visitor.visit_assignment(&self.line_number, left, right)
+                visitor.visit_assignment(&self.line_number, left, right, &mut self.type_)
             }
             Expression::Condition {
                 condition,
                 if_true,
                 if_false,
-            } => visitor.visit_condition(&self.line_number, condition, if_true, if_false),
+            } => visitor.visit_condition(&self.line_number, condition, if_true, if_false, &mut self.type_),
             Expression::FunctionCall(identifier, arguments) => {
-                visitor.visit_function_call(&self.line_number, identifier, arguments)
+                visitor.visit_function_call(&self.line_number, identifier, arguments, &mut self.type_)
             }
             Expression::Prefix(op, exp) => visitor.visit_prefix(&self.line_number, exp, op),
             Expression::Postfix(op, exp) => visitor.visit_postfix(&self.line_number, exp, op),
-            Expression::Cast(_, _) => {
-                todo!()
-            }
+            Expression::Cast(type_, exp) => visitor.visit_cast(&self.line_number, type_, exp),
         }
     }
 }

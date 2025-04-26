@@ -834,6 +834,7 @@ impl Parser {
         ASTNode {
             line_number: Rc::clone(&self.line_number),
             kind,
+            type_: Type::Void, // placeholder
         }
     }
 
