@@ -1,8 +1,7 @@
 use crate::CompilerError;
 use crate::CompilerError::SemanticError;
 use crate::ast::{
-    ASTNode, Block, Declaration, Expression, ForInit, FunAttr, Statement, StaticAttr,
-    Visitor,
+    ASTNode, Block, Declaration, Expression, ForInit, FunAttr, Statement, StaticAttr, Visitor,
 };
 use crate::common::{Const, Identifier, Position};
 use crate::lexer::{BinaryOperator, Type, UnaryOperator};
@@ -81,6 +80,11 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
                 }
             }
             Declaration::FunctionDeclaration(decl) => {
+                for (param_name, param_type) in decl.params.iter().zip(decl.func_type.params.iter())
+                {
+                    self.variables_map
+                        .insert(param_name.clone(), param_type.clone());
+                }
                 self.current_return_type = decl.func_type.ret.clone();
                 if let Some(body) = &mut decl.body {
                     body.accept(self)
@@ -153,6 +157,7 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         left.accept(self)?;
         right.accept(self)?;
         if *op == BinaryOperator::LogicalAnd || *op == BinaryOperator::LogicalOr {
+            *type_ = Type::Int;
             return Ok(());
         }
         let t1 = left.type_;
@@ -305,8 +310,11 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         _line_number: &Rc<Position>,
         variable: &mut Box<ASTNode<Expression>>,
         _operator: &mut UnaryOperator,
+        type_: &mut Type,
     ) -> Result<(), CompilerError> {
-        variable.accept(self)
+        variable.accept(self)?;
+        *type_ = variable.type_;
+        Ok(())
     }
 
     fn visit_postfix(
@@ -314,8 +322,11 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         _line_number: &Rc<Position>,
         variable: &mut Box<ASTNode<Expression>>,
         _operator: &mut UnaryOperator,
+        type_: &mut Type,
     ) -> Result<(), CompilerError> {
-        variable.accept(self)
+        variable.accept(self)?;
+        *type_ = variable.type_;
+        Ok(())
     }
 
     fn visit_if_else(

@@ -327,6 +327,7 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         _line_number: &Rc<Position>,
         variable: &mut Box<ASTNode<Expression>>,
         _operator: &mut UnaryOperator,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         variable.accept(self)
     }
@@ -336,6 +337,7 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         _line_number: &Rc<Position>,
         variable: &mut Box<ASTNode<Expression>>,
         _operator: &mut UnaryOperator,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         variable.accept(self)
     }

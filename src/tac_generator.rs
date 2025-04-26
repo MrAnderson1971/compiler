@@ -6,7 +6,7 @@ use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use crate::tac::TACInstruction::{
     AdjustStack, AllocateStackInstruction, BinaryOpInstruction, DeallocateStackInstruction,
     FunctionCall, FunctionInstruction, Jump, JumpIfNotZero, JumpIfZero, Label, PushArgument,
-    ReturnInstruction, StoreValueInstruction, UnaryOpInstruction,
+    ReturnInstruction, SignExtend, StoreValueInstruction, Truncate, UnaryOpInstruction,
 };
 use crate::tac::{FunctionBody, Operand, Pseudoregister};
 use std::rc::Rc;
@@ -43,10 +43,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                     return Ok(());
                 }
                 let (identifier, expression) = (&v.name, &mut v.init);
-                let pseudoregister = Rc::from(Pseudoregister::new(
-                    (*self.name).clone(),
-                    self.body.variable_count,
-                ));
+                let pseudoregister = Rc::from(Pseudoregister::new(self.body.variable_count));
                 self.body
                     .variable_to_pseudoregister
                     .insert(identifier.as_ref().to_string(), Rc::clone(&pseudoregister));
@@ -167,10 +164,7 @@ impl<'a> Visitor for TacVisitor<'a> {
             return Ok(());
         }
         let src = Rc::clone(&self.result);
-        let dest = Rc::new(Pseudoregister::new(
-            (*self.name).clone(),
-            self.body.variable_count,
-        ));
+        let dest = Rc::new(Pseudoregister::new(self.body.variable_count));
         self.body.variable_count += 1;
         self.body.add_instruction(UnaryOpInstruction {
             dest: Rc::clone(&dest),
@@ -213,10 +207,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                     operand: right_operand,
                 }); // goto false
 
-                let dest = Rc::new(Pseudoregister::new(
-                    (*self.name).clone(),
-                    self.body.variable_count,
-                ));
+                let dest = Rc::new(Pseudoregister::new(self.body.variable_count));
                 self.body.add_instruction(StoreValueInstruction {
                     dest: Rc::clone(&dest),
                     src: Rc::new(Operand::Immediate(1.into())),
@@ -264,10 +255,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                     operand: right_operand,
                 }); // goto true
 
-                let dest = Rc::new(Pseudoregister::new(
-                    (*self.name).clone(),
-                    self.body.variable_count,
-                ));
+                let dest = Rc::new(Pseudoregister::new(self.body.variable_count));
                 self.body.add_instruction(StoreValueInstruction {
                     dest: Rc::clone(&dest),
                     src: Rc::new(Operand::Immediate(0.into())),
@@ -301,10 +289,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 right.accept(self)?;
                 let right = Rc::clone(&self.result);
 
-                let dest = Rc::new(Pseudoregister::new(
-                    (*self.name).clone(),
-                    self.body.variable_count,
-                ));
+                let dest = Rc::new(Pseudoregister::new(self.body.variable_count));
                 self.body.variable_count += 1;
                 self.body.add_instruction(BinaryOpInstruction {
                     dest: Rc::clone(&dest),
@@ -331,10 +316,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         self.label_count += 1;
         let end_label: Rc<String> = Rc::from(format!(".{}{}_end", self.name, self.label_count));
         self.label_count += 1;
-        let dest = Rc::new(Pseudoregister::new(
-            (*self.name).clone(),
-            self.body.variable_count,
-        ));
+        let dest = Rc::new(Pseudoregister::new(self.body.variable_count));
         self.body.add_instruction(JumpIfZero {
             // if false goto else
             label: Rc::clone(&else_label),
@@ -571,6 +553,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         line_number: &Rc<Position>,
         variable: &mut Box<ASTNode<Expression>>,
         operator: &mut UnaryOperator,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         let binary_operator = if *operator == UnaryOperator::Increment {
             BinaryOperator::Addition
@@ -601,6 +584,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         line_number: &Rc<Position>,
         variable: &mut Box<ASTNode<Expression>>,
         operator: &mut UnaryOperator,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         let binary_operator = if *operator == UnaryOperator::Increment {
             BinaryOperator::Addition
@@ -617,10 +601,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 )));
             }
         };
-        let temp1 = Rc::new(Pseudoregister::new(
-            (*self.name).clone(),
-            self.body.variable_count,
-        ));
+        let temp1 = Rc::new(Pseudoregister::new(self.body.variable_count));
         self.body.variable_count += 1;
         self.body.add_instruction(StoreValueInstruction {
             dest: Rc::clone(&temp1),
@@ -693,9 +674,26 @@ impl<'a> Visitor for TacVisitor<'a> {
     fn visit_cast(
         &mut self,
         _line_number: &Rc<Position>,
-        _target_type: &mut Type,
-        _exp: &mut Box<ASTNode<Expression>>,
+        target_type: &mut Type,
+        exp: &mut Box<ASTNode<Expression>>,
     ) -> Result<(), CompilerError> {
-        todo!()
+        exp.accept(self)?;
+        if *target_type == exp.type_ {
+            return Ok(());
+        }
+        let dest = Rc::from(Pseudoregister::new(self.body.variable_count));
+        self.body.variable_count += 1;
+        if *target_type == Type::Long {
+            self.body.add_instruction(SignExtend {
+                dest,
+                src: Rc::clone(&self.result),
+            });
+        } else {
+            self.body.add_instruction(Truncate {
+                dest,
+                src: Rc::clone(&self.result),
+            })
+        }
+        Ok(())
     }
 }

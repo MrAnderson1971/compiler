@@ -110,12 +110,14 @@ pub(crate) trait Visitor {
         line_number: &Rc<Position>,
         variable: &mut Box<ASTNode<Expression>>,
         operator: &mut UnaryOperator,
+        type_: &mut Type,
     ) -> Result<(), CompilerError>;
     fn visit_postfix(
         &mut self,
         line_number: &Rc<Position>,
         variable: &mut Box<ASTNode<Expression>>,
         operator: &mut UnaryOperator,
+        type_: &mut Type,
     ) -> Result<(), CompilerError>;
     fn visit_if_else(
         &mut self,
@@ -568,8 +570,8 @@ impl ASTNode<Expression> {
                 arguments,
                 &mut self.type_,
             ),
-            Expression::Prefix(op, exp) => visitor.visit_prefix(&self.line_number, exp, op),
-            Expression::Postfix(op, exp) => visitor.visit_postfix(&self.line_number, exp, op),
+            Expression::Prefix(op, exp) => visitor.visit_prefix(&self.line_number, exp, op, &mut self.type_),
+            Expression::Postfix(op, exp) => visitor.visit_postfix(&self.line_number, exp, op, &mut self.type_),
             Expression::Cast(type_, exp) => visitor.visit_cast(&self.line_number, type_, exp),
         }
     }

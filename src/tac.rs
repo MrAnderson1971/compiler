@@ -6,15 +6,14 @@ use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub(crate) enum Pseudoregister {
-    //name: String,
     Pseudoregister(i32),
     Register(String),
     Data(Rc<String>),
 }
 
 impl Pseudoregister {
-    pub(crate) fn new(_name: String, size: i32) -> Self {
-        Pseudoregister::Pseudoregister(size)
+    pub(crate) fn new(offset: i32) -> Self {
+        Pseudoregister::Pseudoregister(offset)
     }
 }
 
@@ -95,6 +94,14 @@ pub(crate) enum TACInstruction {
     FunctionCall(Rc<Identifier>),
     PushArgument(Rc<Operand>),
     AdjustStack(usize),
+    SignExtend {
+        dest: Rc<Pseudoregister>,
+        src: Rc<Operand>,
+    },
+    Truncate {
+        dest: Rc<Pseudoregister>,
+        src: Rc<Operand>,
+    },
 }
 
 #[derive(Debug)]
@@ -231,6 +238,8 @@ ret\n";
                     );
                 }
             }
+            TACInstruction::SignExtend { .. } => todo!(),
+            TACInstruction::Truncate { .. } => todo!(),
         }
     }
 }
