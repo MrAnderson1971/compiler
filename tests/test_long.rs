@@ -1,8 +1,8 @@
 mod simulator;
 
-use rstest::rstest;
+use crate::simulator::{CompilerTest, harness};
 use compiler::CompilerError::{SemanticError, SyntaxError};
-use crate::simulator::{harness, CompilerTest};
+use rstest::rstest;
 
 #[rstest]
 fn test_long(mut harness: CompilerTest) {
@@ -253,23 +253,31 @@ fn test_align(mut harness: CompilerTest) {
 
 #[rstest]
 fn test_long_overflow(mut harness: CompilerTest) {
-    let source = format!(r#"
+    let source = format!(
+        r#"
     int main() {{
     long max = {};
     max++;
     return max == {};
-    }}"#, i64::MAX, i64::MIN);
+    }}"#,
+        i64::MAX,
+        i64::MIN
+    );
     harness.assert_runs_ok(&source, 1);
 }
 
 #[rstest]
 fn test_long_underflow(mut harness: CompilerTest) {
-    let source = format!(r#"
+    let source = format!(
+        r#"
     int main() {{
     long min = {};
     min--;
     return min == {};
-    }}"#, i64::MIN, i64::MAX);
+    }}"#,
+        i64::MIN,
+        i64::MAX
+    );
     harness.assert_runs_ok(&source, 1);
 }
 
@@ -285,11 +293,14 @@ fn test_long_prefix(mut harness: CompilerTest) {
 
 #[rstest]
 fn test_overflow(harness: CompilerTest) {
-    let source = format!(r#"
+    let source = format!(
+        r#"
     int main() {{
     long l = {};
     return 0;
-    }}"#, i128::MAX);
+    }}"#,
+        i128::MAX
+    );
     assert_compile_err!(harness, &*source, SyntaxError(_));
 }
 
@@ -394,4 +405,354 @@ fn test_static_long_without_init(mut harness: CompilerTest) {
     }
     "#;
     harness.assert_runs_ok(source, 3);
+}
+
+#[rstest]
+fn test_invalid_specifier(harness: CompilerTest) {
+    let source = r#"
+    int main() {
+        long long a;
+        return 0;
+    }
+    "#;
+    assert_compile_err!(harness, &*source, SyntaxError(_));
+}
+
+#[rstest]
+fn test_cast_without_parentheses(harness: CompilerTest) {
+    let source = r#"
+    int main() {
+        long a = long 1000000l;
+        return a;
+    }
+    "#;
+    assert_compile_err!(harness, &*source, SyntaxError(_));
+}
+
+#[rstest]
+fn test_invalid_cast(harness: CompilerTest) {
+    let source = r#"
+    int main() {
+        long a = (static long) 1000000l;
+        return a;
+    }
+    "#;
+    assert_compile_err!(harness, &*source, SyntaxError(_));
+}
+
+#[rstest]
+fn test_cast_long_int(mut harness: CompilerTest) {
+    let source = r#"
+    int main() {
+    if ((long int) 1000000 != 1000000l) {
+    return 1;
+    }
+
+    if (-1000000l != (long int) -1000000) {
+    return 2;
+    }
+    return 0;
+    }
+    "#;
+    harness.assert_runs_ok(source, 0);
+}
+
+#[rstest]
+fn test_cast_with_sign_extend(mut harness: CompilerTest) {
+    let source = r#"
+long sign_extend(int i, long expected) {
+    long extended = (long) i;
+    return (extended == expected);
+}
+
+int main() {
+    if (!sign_extend(10, 10l)) {
+        return 1;
+    }
+
+    if (!sign_extend(-10, -10l)) {
+        return 2;
+    }
+
+    long l = (long) 100;
+    if (l != 100l) {
+        return 3;
+    }
+    return 0;
+}"#;
+    harness.assert_runs_ok(source, 0);
+}
+
+#[rstest]
+fn test_cast_with_truncate(mut harness: CompilerTest) {
+    let source = r#"int truncate(long l, int expected) {
+    int result = (int) l;
+    return (result == expected);
+}
+
+int main()
+{
+
+    if (!truncate(10l, 10)) {
+        return 1;
+    }
+
+    if (!truncate(-10l, -10)) {
+        return 2;
+    }
+
+    if (!truncate(17179869189l, // 2^34 + 5
+                  5)) {
+        return 3;
+    }
+
+    if (!truncate(-17179869179l, // (-2^34) + 5
+                  5l)) {
+        return 4;
+    }
+
+    int i = (int)17179869189l; // 2^34 + 5
+    if (i != 5)
+        return 5;
+
+    return 0;
+}"#;
+    harness.assert_runs_ok(source, 0);
+}
+
+#[rstest]
+fn test_long_bitwise_operations(mut harness: CompilerTest) {
+    let source = r#"
+    int main() {
+        // Using decimal values instead of hex
+        long a = 123456789123456789l;
+        long b = 987654321987654321l;
+
+        // Bitwise AND
+        long and_result = a & b;
+        if (and_result != 122892737510904337l) return 1;
+
+        // Bitwise OR
+        long or_result = a | b;
+        if (or_result != 988218373600206773l) return 2;
+
+        // Bitwise XOR
+        long xor_result = a ^ b;
+        if (xor_result != 865325636089302436l) return 3;
+
+        // Bitwise NOT
+        long not_result = ~a;
+        if (not_result != -123456789123456790l) return 4;
+
+        // Bit shifts
+        long c = 1l;
+        if ((c << 60) != 1152921504606846976l) return 5;
+        if ((c << 60) >> 60 != 1l) return 6;
+
+        return 0;
+    }"#;
+    harness.assert_runs_ok(source, 0);
+}
+
+#[rstest]
+fn test_long_comparisons(mut harness: CompilerTest) {
+    let source = r#"
+    int main() {
+        long a = 1000000000000l;
+        long b = 1000000000001l;
+
+        if (!(a < b)) return 1;
+        if (!(b > a)) return 2;
+        if (a >= b) return 3;
+        if (b <= a) return 4;
+        if (a == b) return 5;
+        if (!(a != b)) return 6;
+
+        // Test comparison with negative values
+        long neg_a = -1000000000000l;
+        long neg_b = -1000000000001l;
+
+        if (!(neg_b < neg_a)) return 7;
+        if (!(neg_a > neg_b)) return 8;
+
+        return 0;
+    }"#;
+    harness.assert_runs_ok(source, 0);
+}
+
+#[rstest]
+fn test_int_long_promotion(mut harness: CompilerTest) {
+    let source = r#"
+    int main() {
+        int a = 1000000;
+        long b = 1000000l;
+        long result;
+
+        // These should all promote to long
+        result = a + b;
+        if (result != 2000000l) return 1;
+
+        result = a * b;
+        if (result != 1000000000000l) return 2;
+
+        // This should convert a to long before the shift
+        result = a << 20;
+        if (result != 603979776l) return 3;
+
+        // Mixed expressions with operations
+        result = (a * 2) + (b / 2);
+        if (result != 2500000l) return 4;
+
+        return 0;
+    }"#;
+    harness.assert_runs_ok(source, 0);
+}
+
+#[rstest]
+fn test_function_returning_long(mut harness: CompilerTest) {
+    let source = r#"
+    long get_long() {
+        return 1000000000000l;
+    }
+
+    long get_long_from_int(int a) {
+        return (long)a;
+    }
+
+    long calculate_long(int a, long b) {
+        return a * b + 42l;
+    }
+
+    int main() {
+        if (get_long() != 1000000000000l) return 1;
+        if (get_long_from_int(-5) != -5l) return 2;
+        if (calculate_long(10, 20l) != 200l + 42l) return 3;
+        return 0;
+    }"#;
+    harness.assert_runs_ok(source, 0);
+}
+
+#[rstest]
+fn test_long_compound_assignments(mut harness: CompilerTest) {
+    let source = r#"
+    int main() {
+        long a = 1000l;
+
+        a += 2000l;
+        if (a != 3000l) return 1;
+
+        a -= 1000l;
+        if (a != 2000l) return 2;
+
+        a *= 10l;
+        if (a != 20000l) return 3;
+
+        a /= 5l;
+        if (a != 4000l) return 4;
+
+        a %= 3000l;
+        if (a != 1000l) return 5;
+
+        a <<= 10;
+        if (a != 1024000l) return 6;
+
+        a >>= 10;
+        if (a != 1000l) return 7;
+
+        a &= 1023l;
+        if (a != 1000l) return 8;
+
+        a |= 24l;
+        if (a != 1016l) return 9;
+
+        a ^= 1000l;
+        if (a != 16l) return 10;
+
+        return 0;
+    }"#;
+    harness.assert_runs_ok(source, 0);
+}
+
+#[rstest]
+fn test_long_conditionals(mut harness: CompilerTest) {
+    let source = r#"
+    int main() {
+        long zero = 0l;
+        long non_zero = 1l;
+
+        // Test if() with longs
+        if (zero) return 1;
+        if (!non_zero) return 2;
+
+        // Test ternary operator with longs
+        long result = non_zero ? 10l : 20l;
+        if (result != 10l) return 3;
+
+        result = zero ? 10l : 20l;
+        if (result != 20l) return 4;
+
+        // Test with large long values
+        long big_num = 9223372036854775807l; // LONG_MAX
+        if (!(big_num > 0)) return 5;
+
+        // Test with comparison in condition
+        if ((zero < non_zero) ? zero : non_zero) return 6;
+        if (!((zero < non_zero) ? non_zero : zero)) return 7;
+
+        return 0;
+    }"#;
+    harness.assert_runs_ok(source, 0);
+}
+
+#[rstest]
+fn test_long_literal_edge_cases(mut harness: CompilerTest) {
+    let source = r#"
+    int main() {
+        // Test large long values near MAX
+        long big = 9223372036854775807l; // LONG_MAX
+
+        // Test assignment from variables
+        long big_copy = big;
+        if (big_copy != 9223372036854775807l) return 1;
+
+        // Test negating large values
+        long negated = -big;
+        if (negated != -9223372036854775807l) return 2;
+
+        // Test calculations with large values (staying in bounds)
+        long calc = big - 1000l;
+        if (calc != 9223372036854774807l) return 3;
+
+        // Test operations that cause value to wrap
+        long plus_one = big;
+        plus_one++;
+        if (plus_one != -9223372036854775808l) return 4;
+
+        return 0;
+    }"#;
+    harness.assert_runs_ok(source, 0);
+}
+
+#[rstest]
+fn test_multiple_casts(mut harness: CompilerTest) {
+    let source = r#"
+    int main() {
+        int i = 42;
+        long l = 1000000000000l;
+
+        // Multiple casts in one expression
+        int result = (int)(long)(int)(long)i;
+        if (result != 42) return 1;
+
+        // Cast in complex expressions
+        long complex = (long)i * l + ((long)i + l);
+        if (complex != 42l * l + (42l + l)) return 2;
+
+        // Nested casts
+        int truncated = (int)((long)i * 100000000l);
+        if (truncated != 42 * 100000000 % (1l << 32)) return 3;
+
+        return 0;
+    }"#;
+    harness.assert_runs_ok(source, 0);
 }

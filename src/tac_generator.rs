@@ -524,9 +524,7 @@ impl<'a> Visitor for TacVisitor<'a> {
             };
             arguments[i].accept(self)?;
             self.body.add_instruction(StoreValueInstruction {
-                dest: Rc::from(Pseudoregister::Register(
-                    reg.to_string(),
-                )),
+                dest: Rc::from(Pseudoregister::Register(reg.to_string())),
                 src: Rc::clone(&self.result),
             });
         }
@@ -542,10 +540,11 @@ impl<'a> Visitor for TacVisitor<'a> {
         let result_register = Rc::new(Pseudoregister::new(self.body.current_offset, ret_type));
         self.body.current_offset += 8;
 
+        let from_register = if ret_type.size() == 4 { "eax" } else { "rax" };
         self.body.add_instruction(StoreValueInstruction {
             dest: Rc::clone(&result_register),
             src: Rc::from(Operand::Register(Pseudoregister::Register(
-                "eax".to_string(),
+                from_register.to_string(),
             ))),
         });
 
@@ -559,7 +558,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         line_number: &Rc<Position>,
         variable: &mut Box<ASTNode<Expression>>,
         operator: &mut UnaryOperator,
-        _type_: &mut Type,
+        type_: &mut Type,
     ) -> Result<(), CompilerError> {
         let binary_operator = if *operator == UnaryOperator::Increment {
             BinaryOperator::Addition
@@ -567,13 +566,16 @@ impl<'a> Visitor for TacVisitor<'a> {
             BinaryOperator::Subtraction
         };
         variable.accept(self)?;
+        let one = if type_.size() == 4 {Const::ConstInt(1u32.into())} else {
+            Const::ConstLong(1u64.into())
+        };
         match &*self.result {
             Operand::Register(pseudoregister) => {
                 self.body.add_instruction(BinaryOpInstruction {
                     dest: Rc::from((*pseudoregister).clone()),
                     op: binary_operator,
                     left: Rc::clone(&self.result),
-                    right: Rc::from(Operand::Immediate(1u32.into())),
+                    right: Rc::from(Operand::Immediate(one)),
                 });
                 self.body.current_offset += 8;
                 Ok(())
@@ -613,11 +615,16 @@ impl<'a> Visitor for TacVisitor<'a> {
             dest: Rc::clone(&temp1),
             src: Rc::clone(&self.result),
         });
+        let one = if type_.size() == 4 {
+            Const::ConstInt(1u32.into())
+        } else {
+            Const::ConstLong(1u64.into())
+        };
         self.body.add_instruction(BinaryOpInstruction {
             dest: Rc::clone(&dest),
             op: binary_operator,
             left: Rc::clone(&self.result),
-            right: Rc::from(Operand::Immediate(1u32.into())),
+            right: Rc::from(Operand::Immediate(one)),
         });
         self.result = Rc::from(Operand::Register((*temp1).clone()));
         Ok(())

@@ -157,12 +157,13 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         convert_to(line_number, left, &common_type);
         convert_to(line_number, right, &common_type);
         *type_ = match op {
-            BinaryOperator::Addition
-            | BinaryOperator::Subtraction
-            | BinaryOperator::Multiply
-            | BinaryOperator::Divide
-            | BinaryOperator::Modulo => common_type,
-            _ => Type::Int,
+            BinaryOperator::Equals
+            | BinaryOperator::NotEquals
+            | BinaryOperator::GreaterThan
+            | BinaryOperator::LessThan
+            | BinaryOperator::GreaterThanOrEquals
+            | BinaryOperator::LessThanOrEquals => Type::Int,
+            _ => common_type,
         };
 
         Ok(())
