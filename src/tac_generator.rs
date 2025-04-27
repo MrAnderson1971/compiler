@@ -533,7 +533,7 @@ impl<'a> Visitor for TacVisitor<'a> {
             .add_instruction(FunctionCall(Rc::clone(&identifier)));
 
         if arguments.len() > 6 {
-            let stack_cleanup_size = (arguments.len() - 6) * 4; // 4 bytes per arg
+            let stack_cleanup_size = (arguments.len() - 6) * 8; // 8 bytes per arg
             self.body.add_instruction(AdjustStack(stack_cleanup_size));
         }
 
