@@ -221,14 +221,22 @@ movq %r10, {}
                 right,
             } => make_binary_op_instruction(out, dest, op, left, right),
             TACInstruction::JumpIfZero { label, operand } => {
-                *out += &format!("movl {}, %edx\n", operand);
-                *out += "cmpl $0, %edx\n";
-                *out += &format!("je {}\n", label);
+                *out += &format!(
+                    r#"movl {}, %edx
+testl %edx, %edx
+je {}
+"#,
+                    operand, label
+                );
             }
             TACInstruction::JumpIfNotZero { label, operand } => {
-                *out += &format!("movl {}, %edx\n", operand);
-                *out += "cmpl $0, %edx\n";
-                *out += &format!("jne {}\n", label);
+                *out += &format!(
+                    r#"movl {}, %edx
+testl %edx, %edx
+jne {}
+"#,
+                    operand, label
+                );
             }
             TACInstruction::Jump { label } => *out += &format!("jmp {}\n", label),
             TACInstruction::Label { label } => *out += &format!("{}:\n", label),
@@ -255,12 +263,18 @@ movq %r10, {}
                 }
             }
             TACInstruction::ReturnInstruction { val } => {
-                if val.size() == 4 {
-                    *out += &format!("movl {}, %eax\n", val);
-                } else if val.is_immediate() && val.size() == 8 {
-                    *out += &format!("movabsq {}, %rax\n", val);
-                } else {
-                    *out += &format!("movq {}, %rax\n", val);
+                match val.as_ref() {
+                    Operand::Immediate(Const::ConstInt(0)) => *out += "xorl %eax, %eax\n",
+                    Operand::Immediate(Const::ConstLong(0)) => *out += "xorq %rax, %rax\n",
+                    _ => {
+                        if val.size() == 4 {
+                            *out += &format!("movl {}, %eax\n", val);
+                        } else if val.is_immediate() && val.size() == 8 {
+                            *out += &format!("movabsq {}, %rax\n", val);
+                        } else {
+                            *out += &format!("movq {}, %rax\n", val);
+                        }
+                    }
                 }
                 *out += "movq %rbp, %rsp\n\
 popq %rbp\n\
@@ -419,9 +433,12 @@ fn make_binary_op_instruction(
                 _ => unreachable!(),
             };
             if right.is_immediate() && left.is_immediate() && left.size() == 4 {
-                *out += &format!(r#"movl {}, {}
+                *out += &format!(
+                    r#"movl {}, {}
 {} {}, {}
-"#, src1, dest, opcode, src2, dest);
+"#,
+                    src1, dest, opcode, src2, dest
+                );
                 return;
             }
             if left.is_immediate() && left.size() == 8 {
