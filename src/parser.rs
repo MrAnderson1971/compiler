@@ -5,8 +5,8 @@ use crate::ast::Expression::{
 use crate::ast::ForInit::{InitDecl, InitExp};
 use crate::ast::Statement::{Compound, For, If, Null, Return, While};
 use crate::ast::{
-    ASTNode, Block, BlockItem, Declaration, Expression, ForInit, FunctionDeclaration, Program,
-    Statement, VariableDeclaration, extract_base_variable, is_lvalue_node,
+    ASTNode, Block, BlockItem, Declaration, Expression, ForInit, FuncType, FunctionDeclaration,
+    Program, Statement, VariableDeclaration, extract_base_variable, is_lvalue_node,
 };
 use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
@@ -105,16 +105,18 @@ impl Parser {
     }
 
     #[allow(unused_variables)]
-    fn parse_params(&mut self) -> Result<Vec<Identifier>, CompilerError> {
+    fn parse_params(&mut self) -> Result<(Vec<Identifier>, Vec<Type>), CompilerError> {
         expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;
         let mut params = vec![];
+        let mut types = vec![];
 
         let next = self.tokens.pop_front().unwrap();
         match next {
-            Token::Symbol(Symbol::CloseParenthesis) => return Ok(params),
-            Token::Keyword(Keyword::Type(_)) => {
+            Token::Symbol(Symbol::CloseParenthesis) => return Ok((params, types)),
+            Token::Keyword(Keyword::Type(param_type)) => {
                 if let Token::Name(name) = self.tokens.pop_front().unwrap() {
                     params.push(name);
+                    types.push(param_type);
                 } else {
                     return Err(SyntaxError(format!(
                         "Expected identifier but got {:?}",
@@ -133,10 +135,19 @@ impl Parser {
         loop {
             let next = self.tokens.pop_front().unwrap();
             match next {
-                Token::Symbol(Symbol::CloseParenthesis) => return Ok(params),
+                Token::Symbol(Symbol::CloseParenthesis) => return Ok((params, types)),
                 Token::Symbol(Symbol::Comma) => {
-                    expect_token!(self, Token::Keyword(Keyword::Type(..)))?;
+                    let param_type =
+                        match_and_consume!(self, Token::Keyword(Keyword::Type(t)) => Some(t))
+                            .ok_or_else(|| {
+                                SyntaxError(format!(
+                                    "Expected type but got {:?} at {:?}",
+                                    self.peek_token(),
+                                    self.line_number
+                                ))
+                            })?;
                     if let Token::Name(name) = self.tokens.pop_front().unwrap() {
+                        types.push(param_type);
                         params.push(name);
                     } else {
                         return Err(SyntaxError(format!(
@@ -152,6 +163,21 @@ impl Parser {
                     )));
                 }
             }
+        }
+    }
+
+    fn parse_type_specifier(&self, types: Vec<Type>) -> Result<Type, CompilerError> {
+        if types.len() != 1 {
+            if types == vec![Type::Int, Type::Long] || types == vec![Type::Long, Type::Int] {
+                Ok(Type::Long)
+            } else {
+                Err(SyntaxError(format!(
+                    "Invalid type specifier {:?} at {:?}",
+                    types, self.line_number
+                )))
+            }
+        } else {
+            Ok(types[0])
         }
     }
 
@@ -184,27 +210,20 @@ impl Parser {
         let mut types = vec![];
         let mut storage_classes = vec![];
         for specifier in specifier_list.iter() {
-            if matches!(specifier, Keyword::Type(Type::Int)) {
-                types.push(specifier);
+            if let Keyword::Type(type_) = specifier {
+                types.push(*type_);
             } else if let Keyword::StorageClass(class) = specifier {
                 storage_classes.push(class);
             }
         }
 
-        if types.len() != 1 {
-            return Err(SyntaxError(format!(
-                "Invalid type specifier {:?} at {:?}",
-                types, self.line_number
-            )));
-        }
+        let type_ = self.parse_type_specifier(types)?;
         if storage_classes.len() > 1 {
             return Err(SyntaxError(format!(
                 "Invalid storage class {:?} at {:?}",
                 storage_classes, self.line_number
             )));
-        }
-
-        let type_ = Type::Int;
+        };
 
         let storage_class = if storage_classes.len() == 1 {
             Some(*storage_classes[0])
@@ -254,7 +273,7 @@ impl Parser {
             }
         }
 
-        let params = self.parse_params()?;
+        let (params, types) = self.parse_params()?;
 
         // function prototype
         if match_and_consume!(self, Token::Symbol(Symbol::Semicolon)) {
@@ -264,7 +283,10 @@ impl Parser {
                     params,
                     body: None,
                     storage_class,
-                    type_,
+                    func_type: Rc::from(FuncType {
+                        params: types,
+                        ret: type_,
+                    }),
                 })),
             );
         }
@@ -292,7 +314,10 @@ impl Parser {
                 params,
                 body: Some(function_body),
                 storage_class,
-                type_,
+                func_type: Rc::from(FuncType {
+                    params: types,
+                    ret: type_,
+                }),
             })),
         )
     }
@@ -322,14 +347,14 @@ impl Parser {
                 name: Rc::from(identifier),
                 init: Some(expression),
                 storage_class: specifiers.1,
-                type_: specifiers.0,
+                var_type: specifiers.0,
             }))
         } else {
             Ok(self.make_node(VariableDeclaration {
                 name: Rc::from(identifier),
                 init: None,
                 storage_class: specifiers.1,
-                type_: specifiers.0,
+                var_type: specifiers.0,
             }))
         }
     }
@@ -386,9 +411,28 @@ impl Parser {
             }
             Token::Symbol(..) => {
                 expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;
-                let expression = self.parse_binary_op(0)?;
-                expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
-                Ok(expression)
+                let expression = if let Some(t) =
+                    match_and_consume!(self, Token::Keyword(Keyword::Type(t)) => Some(t))
+                {
+                    let mut types = vec![t];
+                    while let Some(t) =
+                        match_and_consume!(self, Token::Keyword(Keyword::Type(t)) => Some(t))
+                    {
+                        types.push(t);
+                    }
+                    expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
+                    let type_ = self.parse_type_specifier(types)?;
+                    let exp = self.parse_unary_or_primary()?;
+                    Ok(self.make_node(Expression::Cast(type_, Box::from(exp))))
+                } else {
+                    let expression = match self.parse_binary_op(0) {
+                        Ok(expression) => Ok(expression),
+                        Err(err) => return Err(err),
+                    };
+                    expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
+                    expression
+                };
+                expression
             }
             Token::Name(identifier) => {
                 self.tokens.pop_front();
@@ -589,7 +633,7 @@ impl Parser {
 
     fn parse_for_init(&mut self) -> Result<ASTNode<ForInit>, CompilerError> {
         match self.peek_token() {
-            Token::Keyword(spec @ (Keyword::Type(_))) => {
+            Token::Keyword(spec @ Keyword::Type(_)) => {
                 let mut specifiers = vec![spec];
                 self.tokens.pop_front();
                 while let Token::Keyword(spec @ (Keyword::Type(_) | Keyword::StorageClass(_))) =
@@ -602,7 +646,7 @@ impl Parser {
                 let variable_declaration = self.parse_declaration((type_, storage_class), None)?;
                 let declaration =
                     self.make_node(Declaration::VariableDeclaration(variable_declaration.kind));
-                Ok(self.make_node(InitDecl(declaration)))
+                Ok(self.make_node(InitDecl(declaration.kind)))
             }
             Token::Symbol(Symbol::Semicolon) => Ok(self.make_node(InitExp(None))),
             _ => {
@@ -813,6 +857,7 @@ impl Parser {
         ASTNode {
             line_number: Rc::clone(&self.line_number),
             kind,
+            type_: Type::Void, // placeholder
         }
     }
 

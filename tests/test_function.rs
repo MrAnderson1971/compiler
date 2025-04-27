@@ -1,7 +1,7 @@
 mod simulator;
 
 use crate::simulator::{CompilerTest, harness};
-use compiler::CompilerError;
+use compiler::{CompilerError, compile};
 use rstest::rstest;
 
 #[rstest]
@@ -240,4 +240,52 @@ fn test_assignment_in_param(harness: CompilerTest) {
         return foo(1);
     }"#;
     assert_compile_err!(harness, source, CompilerError::SyntaxError(_));
+}
+
+#[rstest]
+fn test_forward_declaration_with_too_many_args(harness: CompilerTest) {
+    let source = r#"
+    int helper();
+    int helper(int a);
+
+    int main() {
+        return helper();
+    }
+
+    int helper() {
+        return 42;
+    }
+    "#;
+    assert_compile_err!(harness, source, CompilerError::SemanticError(_));
+}
+
+#[rstest]
+fn test_forward_declaration_with_too_few_args(harness: CompilerTest) {
+    let source = r#"
+    int helper();
+    int helper();
+
+    int main() {
+        return helper(42);
+    }
+
+    int helper(int a) {
+        return a;
+    }
+    "#;
+    assert_compile_err!(harness, source, CompilerError::SemanticError(_));
+}
+
+#[rstest]
+fn test_declaration_with_no_definition(harness: CompilerTest) {
+    let source = r#"
+    int foo();
+    int main() {
+        return foo();
+    }
+    "#;
+    match compile(source.parse().unwrap()) {
+        Ok(_) => {} // should succeed compilation but not linking
+        Err(_) => panic!("Expected compilation to succeed"),
+    };
 }

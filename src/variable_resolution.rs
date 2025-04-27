@@ -5,7 +5,7 @@ use crate::ast::{
 use crate::common::{Identifier, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
-use crate::lexer::{BinaryOperator, Number, StorageClass, Type, UnaryOperator};
+use crate::lexer::{StorageClass, Type};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
@@ -113,24 +113,6 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         }
     }
 
-    fn visit_assignment(
-        &mut self,
-        _line_number: &Rc<Position>,
-        left: &mut Box<ASTNode<Expression>>,
-        right: &mut Box<ASTNode<Expression>>,
-    ) -> Result<(), CompilerError> {
-        left.accept(self)?;
-        right.accept(self)
-    }
-
-    fn visit_return(
-        &mut self,
-        _line_number: &Rc<Position>,
-        expression: &mut ASTNode<Expression>,
-    ) -> Result<(), CompilerError> {
-        expression.accept(self)
-    }
-
     fn visit_block(
         &mut self,
         _line_number: &Rc<Position>,
@@ -142,39 +124,6 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         }
         self.pop_stack();
         self.layer -= 1;
-        Ok(())
-    }
-
-    fn visit_unary(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _op: &mut UnaryOperator,
-        expression: &mut Box<ASTNode<Expression>>,
-    ) -> Result<(), CompilerError> {
-        expression.accept(self)
-    }
-
-    fn visit_binary(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _op: &mut BinaryOperator,
-        left: &mut Box<ASTNode<Expression>>,
-        right: &mut Box<ASTNode<Expression>>,
-    ) -> Result<(), CompilerError> {
-        left.accept(self)?;
-        right.accept(self)
-    }
-
-    fn visit_condition(
-        &mut self,
-        _line_number: &Rc<Position>,
-        condition: &mut Box<ASTNode<Expression>>,
-        if_true: &mut Box<ASTNode<Expression>>,
-        if_false: &mut Box<ASTNode<Expression>>,
-    ) -> Result<(), CompilerError> {
-        condition.accept(self)?;
-        if_true.accept(self)?;
-        if_false.accept(self)?;
         Ok(())
     }
 
@@ -258,18 +207,11 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         Ok(())
     }
 
-    fn visit_const(
-        &mut self,
-        _line_number: &Rc<Position>,
-        _value: &mut Number,
-    ) -> Result<(), CompilerError> {
-        Ok(())
-    }
-
     fn visit_variable(
         &mut self,
         line_number: &Rc<Position>,
-        identifier: &mut Rc<String>,
+        identifier: &mut Rc<Identifier>,
+        _node: &mut Type,
     ) -> Result<(), CompilerError> {
         let original_name = identifier.as_ref().to_string();
 
@@ -291,15 +233,16 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         line_number: &Rc<Position>,
         identifier: &mut Rc<Identifier>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
+        _ret_type: &mut Type,
     ) -> Result<(), CompilerError> {
         let original_name = identifier.as_ref().to_string();
         if let Some(func) = self.functions_map.get(&original_name) {
-            if arguments.len() != func.param_count {
+            if arguments.len() != (*func.func_type).params.len() {
                 return Err(SemanticError(format!(
                     "Function {} called with {} parameters but expected {} at {:?}",
                     original_name,
                     arguments.len(),
-                    func.param_count,
+                    (*func.func_type).params.len(),
                     line_number
                 )));
             }
@@ -313,39 +256,6 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
                 original_name, line_number
             )))
         }
-    }
-
-    fn visit_prefix(
-        &mut self,
-        _line_number: &Rc<Position>,
-        variable: &mut Box<ASTNode<Expression>>,
-        _operator: &mut UnaryOperator,
-    ) -> Result<(), CompilerError> {
-        variable.accept(self)
-    }
-
-    fn visit_postfix(
-        &mut self,
-        _line_number: &Rc<Position>,
-        variable: &mut Box<ASTNode<Expression>>,
-        _operator: &mut UnaryOperator,
-    ) -> Result<(), CompilerError> {
-        variable.accept(self)
-    }
-
-    fn visit_if_else(
-        &mut self,
-        _line_number: &Rc<Position>,
-        expression: &mut ASTNode<Expression>,
-        if_true: &mut Box<ASTNode<Statement>>,
-        if_false: &mut Option<Box<ASTNode<Statement>>>,
-    ) -> Result<(), CompilerError> {
-        expression.accept(self)?;
-        if_true.accept(self)?;
-        if let Some(if_false) = if_false {
-            if_false.accept(self)?;
-        }
-        Ok(())
     }
 }
 
@@ -384,7 +294,14 @@ impl<'map> VariableResolutionVisitor<'map> {
                     )));
                 }
 
-                if !self.global_variables_map.contains_key(&original_name) {
+                if let Some(attr) = self.global_variables_map.get(&original_name) {
+                    if attr.type_ != d.var_type {
+                        return Err(SemanticError(format!(
+                            "Extern variable {} redeclared with incompatible type at {:?}",
+                            d.name, line_number
+                        )));
+                    }
+                } else {
                     self.global_variables_map.insert(
                         original_name.clone(),
                         StaticAttr {
@@ -411,8 +328,8 @@ impl<'map> VariableResolutionVisitor<'map> {
 
             Some(StorageClass::Static) => {
                 let initial_value = if let Some(init) = &d.init {
-                    if let Expression::Constant(i) = init.kind {
-                        InitialValue::Initial(i)
+                    if let Expression::Constant(i) = &init.kind {
+                        InitialValue::Initial(i.clone())
                     } else {
                         return Err(SemanticError(format!(
                             "Non-constant initializer of static variable {} at {:?}",
@@ -420,7 +337,7 @@ impl<'map> VariableResolutionVisitor<'map> {
                         )));
                     }
                 } else {
-                    InitialValue::Initial(0)
+                    InitialValue::Initial(0u32.into())
                 };
 
                 let unique_name = Rc::from(format!("{}.{}", self.function, d.name));

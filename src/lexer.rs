@@ -1,3 +1,5 @@
+use crate::common::Const;
+use crate::common::Const::{ConstInt, ConstLong};
 use crate::lexer::Symbol::{Ambiguous, Binary, Unary};
 use std::collections::VecDeque;
 
@@ -64,7 +66,19 @@ pub(crate) enum StorageClass {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Type {
+    Void,
     Int,
+    Long,
+}
+
+impl Type {
+    pub(crate) fn size(&self) -> i32 {
+        match self {
+            Type::Void => 0,
+            Type::Int => 4,
+            Type::Long => 8,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -81,15 +95,14 @@ pub(crate) enum Keyword {
     StorageClass(StorageClass),
 }
 
-pub(crate) type Number = u64;
-
 #[derive(Debug, Clone, PartialEq)] // String prevents Copy. PartialEq is useful for tests.
 pub(crate) enum Token {
     Keyword(Keyword),
     Symbol(Symbol),
     Name(String),
-    NumberLiteral(Number),
+    NumberLiteral(Const),
     Invalid,
+    Overflow,
     EOF,
 }
 
@@ -106,6 +119,7 @@ fn match_keyword(string: &str) -> Option<Keyword> {
         "break" => Some(Keyword::Break),
         "static" => Some(Keyword::StorageClass(StorageClass::Static)),
         "extern" => Some(Keyword::StorageClass(StorageClass::Extern)),
+        "long" => Some(Keyword::Type(Type::Long)),
         _ => None,
     }
 }
@@ -215,17 +229,34 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
             '0'..='9' => {
                 let mut number_string = String::new();
                 number_string.push(c);
-                while let Some(&next) = chars.peek() {
-                    if next.is_ascii_digit() {
-                        number_string.push(next);
-                        chars.next();
-                    } else {
+                while let Some(char) = chars.peek() {
+                    if !char.is_ascii_digit() {
                         break;
                     }
+                    number_string.push(*char);
+                    chars.next();
                 }
-                match number_string.parse::<u64>() {
-                    Ok(num) => Token::NumberLiteral(num),
-                    Err(_) => Token::Invalid, // Handle parsing error
+                let mut is_long = false;
+                match chars.peek() {
+                    Some(char) if *char == 'l' || *char == 'L' => {
+                        chars.next();
+                        is_long = true;
+                    }
+                    _ => {}
+                }
+                if is_long {
+                    match number_string.parse::<u64>() {
+                        Ok(num) => Token::NumberLiteral(ConstLong(num)),
+                        Err(_) => Token::Overflow,
+                    }
+                } else {
+                    match number_string.parse::<u32>() {
+                        Ok(num) => Token::NumberLiteral(ConstInt(num)),
+                        Err(_) => match number_string.parse::<u64>() { // fallback in case of overflow
+                            Ok(num) => Token::NumberLiteral(ConstLong(num)),
+                            Err(_) => Token::Overflow,
+                        },
+                    }
                 }
             }
             'a'..='z' | 'A'..='Z' | '_' => {
