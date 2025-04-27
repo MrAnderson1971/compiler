@@ -11,7 +11,8 @@ use crate::tac::TACInstruction::{
 use crate::tac::{FunctionBody, Operand, Pseudoregister};
 use std::rc::Rc;
 
-const FIRST_SIX_REGISTERS: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
+const FIRST_SIX_INT_REGISTERS: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
+const FIRST_SIX_LONG_REGISTERS: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 pub(crate) struct TacVisitor<'a> {
     name: Rc<String>,
@@ -55,7 +56,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                         src: Rc::clone(&self.result),
                     });
                 }
-                self.body.current_offset += v.var_type.size();
+                self.body.current_offset += 8;
                 Ok(())
             }
             Declaration::FunctionDeclaration(func) => {
@@ -71,17 +72,22 @@ impl<'a> Visitor for TacVisitor<'a> {
                             self.body.current_offset,
                             &func.func_type.params[i],
                         ));
-                        self.body.current_offset += func.func_type.params[i].size();
+                        self.body.current_offset += 8;
 
                         self.body
                             .variable_to_pseudoregister
                             .insert(param.to_string(), Rc::clone(&param_register));
 
                         if i < 6 {
+                            let reg = if func.func_type.params[i].size() == 4 {
+                                FIRST_SIX_INT_REGISTERS[i]
+                            } else {
+                                FIRST_SIX_LONG_REGISTERS[i]
+                            };
                             self.body.add_instruction(StoreValueInstruction {
                                 dest: Rc::clone(&param_register),
                                 src: Rc::from(Operand::Register(Pseudoregister::Register(
-                                    FIRST_SIX_REGISTERS[i].to_string(),
+                                    reg.parse().unwrap(),
                                 ))),
                             });
                         } else {
@@ -157,7 +163,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         }
         let src = Rc::clone(&self.result);
         let dest = Rc::new(Pseudoregister::new(self.body.current_offset, type_));
-        self.body.current_offset += type_.size();
+        self.body.current_offset += 8;
         self.body.add_instruction(UnaryOpInstruction {
             dest: Rc::clone(&dest),
             op: *op,
@@ -202,7 +208,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 let dest = Rc::new(Pseudoregister::new(self.body.current_offset, type_));
                 self.body.add_instruction(StoreValueInstruction {
                     dest: Rc::clone(&dest),
-                    src: Rc::new(Operand::Immediate(1.into())),
+                    src: Rc::new(Operand::Immediate(1u32.into())),
                 });
                 self.body.add_instruction(Jump {
                     label: Rc::clone(&end_label),
@@ -214,7 +220,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 });
                 self.body.add_instruction(StoreValueInstruction {
                     dest: Rc::clone(&dest),
-                    src: Rc::new(Operand::Immediate(0.into())),
+                    src: Rc::new(Operand::Immediate(0u32.into())),
                 });
 
                 // end
@@ -250,7 +256,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 let dest = Rc::new(Pseudoregister::new(self.body.current_offset, type_));
                 self.body.add_instruction(StoreValueInstruction {
                     dest: Rc::clone(&dest),
-                    src: Rc::new(Operand::Immediate(0.into())),
+                    src: Rc::new(Operand::Immediate(0u32.into())),
                 });
                 self.body.add_instruction(
                     // goto end
@@ -264,13 +270,13 @@ impl<'a> Visitor for TacVisitor<'a> {
                 }); // true
                 self.body.add_instruction(StoreValueInstruction {
                     dest: Rc::clone(&dest),
-                    src: Rc::new(Operand::Immediate(1.into())),
+                    src: Rc::new(Operand::Immediate(1u32.into())),
                 });
                 //end
                 self.body.add_instruction(Label {
                     label: Rc::clone(&end_label),
                 });
-                self.body.current_offset += type_.size();
+                self.body.current_offset += 8;
                 self.result = Rc::from(Operand::Register((*dest).clone()));
                 Ok(())
             }
@@ -282,7 +288,7 @@ impl<'a> Visitor for TacVisitor<'a> {
                 let right = Rc::clone(&self.result);
 
                 let dest = Rc::new(Pseudoregister::new(self.body.current_offset, type_));
-                self.body.current_offset += type_.size();
+                self.body.current_offset += 8;
                 self.body.add_instruction(BinaryOpInstruction {
                     dest: Rc::clone(&dest),
                     op: *op,
@@ -511,9 +517,16 @@ impl<'a> Visitor for TacVisitor<'a> {
         }
 
         for i in 0..arguments.len().min(6) {
+            let reg = if arguments[i].type_.size() == 4 {
+                FIRST_SIX_INT_REGISTERS[i]
+            } else {
+                FIRST_SIX_LONG_REGISTERS[i]
+            };
             arguments[i].accept(self)?;
             self.body.add_instruction(StoreValueInstruction {
-                dest: Rc::from(Pseudoregister::Register(FIRST_SIX_REGISTERS[i].to_string())),
+                dest: Rc::from(Pseudoregister::Register(
+                    reg.to_string(),
+                )),
                 src: Rc::clone(&self.result),
             });
         }
@@ -527,7 +540,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         }
 
         let result_register = Rc::new(Pseudoregister::new(self.body.current_offset, ret_type));
-        self.body.current_offset += ret_type.size();
+        self.body.current_offset += 8;
 
         self.body.add_instruction(StoreValueInstruction {
             dest: Rc::clone(&result_register),
@@ -546,7 +559,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         line_number: &Rc<Position>,
         variable: &mut Box<ASTNode<Expression>>,
         operator: &mut UnaryOperator,
-        type_: &mut Type,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         let binary_operator = if *operator == UnaryOperator::Increment {
             BinaryOperator::Addition
@@ -560,9 +573,9 @@ impl<'a> Visitor for TacVisitor<'a> {
                     dest: Rc::from((*pseudoregister).clone()),
                     op: binary_operator,
                     left: Rc::clone(&self.result),
-                    right: Rc::from(Operand::Immediate(1.into())),
+                    right: Rc::from(Operand::Immediate(1u32.into())),
                 });
-                self.body.current_offset += type_.size();
+                self.body.current_offset += 8;
                 Ok(())
             }
             _ => Err(SemanticError(format!(
@@ -595,7 +608,7 @@ impl<'a> Visitor for TacVisitor<'a> {
             }
         };
         let temp1 = Rc::new(Pseudoregister::new(self.body.current_offset, type_));
-        self.body.current_offset += type_.size();
+        self.body.current_offset += 8;
         self.body.add_instruction(StoreValueInstruction {
             dest: Rc::clone(&temp1),
             src: Rc::clone(&self.result),
@@ -604,7 +617,7 @@ impl<'a> Visitor for TacVisitor<'a> {
             dest: Rc::clone(&dest),
             op: binary_operator,
             left: Rc::clone(&self.result),
-            right: Rc::from(Operand::Immediate(1.into())),
+            right: Rc::from(Operand::Immediate(1u32.into())),
         });
         self.result = Rc::from(Operand::Register((*temp1).clone()));
         Ok(())
@@ -677,7 +690,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         let src = Rc::clone(&self.result);
         let dest = Rc::from(Pseudoregister::new(self.body.current_offset, target_type));
         self.result = Rc::from(Operand::Register((*dest).clone()));
-        self.body.current_offset += target_type.size();
+        self.body.current_offset += 8;
         if *target_type == Type::Long {
             self.body.add_instruction(SignExtend { dest, src });
         } else {

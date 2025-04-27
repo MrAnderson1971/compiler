@@ -330,7 +330,7 @@ impl<'map> VariableResolutionVisitor<'map> {
                         )));
                     }
                 } else {
-                    InitialValue::Initial(0.into())
+                    InitialValue::Initial(0u32.into())
                 };
 
                 let unique_name = Rc::from(format!("{}.{}", self.function, d.name));

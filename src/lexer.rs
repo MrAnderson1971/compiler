@@ -102,6 +102,7 @@ pub(crate) enum Token {
     Name(String),
     NumberLiteral(Const),
     Invalid,
+    Overflow,
     EOF,
 }
 
@@ -228,25 +229,33 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
             '0'..='9' => {
                 let mut number_string = String::new();
                 number_string.push(c);
-                loop {
-                    match chars.peek() {
-                        Some(next) if next.is_ascii_digit() => {
-                            number_string.push(*next);
-                            chars.next();
-                        }
-                        Some(next) if *next == 'l' || *next == 'L' => {
-                            chars.next();
-                            break match number_string.parse::<u64>() {
-                                Ok(num) => Token::NumberLiteral(ConstLong(num as i64)),
-                                Err(_) => Token::Invalid,
-                            };
-                        }
-                        _ => {
-                            break match number_string.parse::<u32>() {
-                                Ok(num) => Token::NumberLiteral(ConstInt(num as i32)),
-                                Err(_) => Token::Invalid, // Handle parsing error
-                            };
-                        }
+                while let Some(char) = chars.peek() {
+                    if !char.is_ascii_digit() {
+                        break;
+                    }
+                    number_string.push(*char);
+                    chars.next();
+                }
+                let mut is_long = false;
+                match chars.peek() {
+                    Some(char) if *char == 'l' || *char == 'L' => {
+                        chars.next();
+                        is_long = true;
+                    }
+                    _ => {}
+                }
+                if is_long {
+                    match number_string.parse::<u64>() {
+                        Ok(num) => Token::NumberLiteral(ConstLong(num)),
+                        Err(_) => Token::Overflow,
+                    }
+                } else {
+                    match number_string.parse::<u32>() {
+                        Ok(num) => Token::NumberLiteral(ConstInt(num)),
+                        Err(_) => match number_string.parse::<u64>() { // fallback in case of overflow
+                            Ok(num) => Token::NumberLiteral(ConstLong(num)),
+                            Err(_) => Token::Overflow,
+                        },
                     }
                 }
             }

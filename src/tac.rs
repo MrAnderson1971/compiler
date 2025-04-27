@@ -161,7 +161,7 @@ impl FunctionBody {
             Some(TACInstruction::ReturnInstruction { .. }) | None => {}
             _ => {
                 self.add_instruction(TACInstruction::ReturnInstruction {
-                    val: Rc::from(Operand::Immediate(0.into())),
+                    val: Rc::from(Operand::Immediate(0u32.into())),
                 });
             }
         }
@@ -257,7 +257,11 @@ movq %r10, {}
                 }
             }
             TACInstruction::ReturnInstruction { val } => {
-                *out += &format!("movl {}, %eax\n", val);
+                if val.size() == 4 {
+                    *out += &format!("movl {}, %eax\n", val);
+                } else {
+                    *out += &format!("movq {}, %rax\n", val);
+                }
                 *out += "movq %rbp, %rsp\n\
 popq %rbp\n\
 ret\n";

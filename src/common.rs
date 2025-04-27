@@ -6,8 +6,8 @@ pub(crate) type Identifier = String;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Const {
-    ConstInt(i32),
-    ConstLong(i64),
+    ConstInt(u32),
+    ConstLong(u64),
 }
 
 impl Const {
@@ -32,14 +32,14 @@ impl Display for Const {
     }
 }
 
-impl From<i32> for Const {
-    fn from(v: i32) -> Self {
+impl From<u32> for Const {
+    fn from(v: u32) -> Self {
         Const::ConstInt(v)
     }
 }
 
-impl From<i64> for Const {
-    fn from(v: i64) -> Self {
+impl From<u64> for Const {
+    fn from(v: u64) -> Self {
         Const::ConstLong(v)
     }
 }
