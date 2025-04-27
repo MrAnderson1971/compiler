@@ -1,6 +1,7 @@
 mod simulator;
 
 use rstest::rstest;
+use compiler::CompilerError::{SemanticError, SyntaxError};
 use crate::simulator::{harness, CompilerTest};
 
 #[rstest]
@@ -280,4 +281,117 @@ fn test_long_prefix(mut harness: CompilerTest) {
     return ++l == 9223372036854775808l;
 }"#;
     harness.assert_runs_ok(source, 1);
+}
+
+#[rstest]
+fn test_overflow(harness: CompilerTest) {
+    let source = format!(r#"
+    int main() {{
+    long l = {};
+    return 0;
+    }}"#, i128::MAX);
+    assert_compile_err!(harness, &*source, SyntaxError(_));
+}
+
+#[rstest]
+fn test_too_many_suffixes(harness: CompilerTest) {
+    let source = r#"
+    int main() {
+    long l = 1000000lL;
+    return l;
+    }"#;
+    assert_compile_err!(harness, &*source, SyntaxError(_));
+}
+
+#[rstest]
+fn test_long_as_identifier(harness: CompilerTest) {
+    let source = r#"
+    int long() {
+    return 0;
+    }
+    int main() {
+    return 0;
+    }"#;
+    assert_compile_err!(harness, &*source, SyntaxError(_));
+}
+
+#[rstest]
+fn test_conflicting_global_types(harness: CompilerTest) {
+    let source = r#"
+    int a;
+    long a;
+    int main() {
+    return a;
+    }"#;
+    assert_compile_err!(harness, &*source, SemanticError(_));
+}
+
+#[rstest]
+fn test_conflicting_extern_types(harness: CompilerTest) {
+    let source = r#"
+long a;
+
+int main() {
+    extern int a;
+    return 0;
+    }"#;
+    assert_compile_err!(harness, &*source, SemanticError(_));
+}
+
+#[rstest]
+fn test_conflicting_function_param_types(harness: CompilerTest) {
+    let source = r#"int foo(int a);
+
+int main() {
+    return 0;
+}
+
+int foo(long a);"#;
+    assert_compile_err!(harness, &*source, SemanticError(_));
+}
+
+#[rstest]
+fn test_conflicting_function_return_types(harness: CompilerTest) {
+    let source = r#"int foo(int a);
+
+int main() {
+    return 0;
+}
+
+long foo(int a);"#;
+    assert_compile_err!(harness, &*source, SemanticError(_));
+}
+
+#[rstest]
+fn test_static_long_with_init(mut harness: CompilerTest) {
+    let source = r#"
+    int foo() {
+        static long a = 1000000l;
+        a++;
+        return a;
+    }
+    int main() {
+        foo();
+        foo();
+        return foo();
+    }
+    "#;
+    harness.assert_runs_ok(source, 1000003);
+}
+
+#[rstest]
+fn test_static_long_without_init(mut harness: CompilerTest) {
+    let source = r#"
+    int foo() {
+        static long a;
+        a++;
+        return a;
+    }
+    int main() {
+        foo();
+        foo();
+        return foo();
+    }
+    "#;
+    harness.assert_runs_ok(source, 3);
 }

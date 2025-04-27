@@ -294,7 +294,14 @@ impl<'map> VariableResolutionVisitor<'map> {
                     )));
                 }
 
-                if !self.global_variables_map.contains_key(&original_name) {
+                if let Some(attr) = self.global_variables_map.get(&original_name) {
+                    if attr.type_ != d.var_type {
+                        return Err(SemanticError(format!(
+                            "Extern variable {} redeclared with incompatible type at {:?}",
+                            d.name, line_number
+                        )));
+                    }
+                } else {
                     self.global_variables_map.insert(
                         original_name.clone(),
                         StaticAttr {

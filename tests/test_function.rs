@@ -1,7 +1,7 @@
 mod simulator;
 
 use crate::simulator::{CompilerTest, harness};
-use compiler::CompilerError;
+use compiler::{CompilerError, compile};
 use rstest::rstest;
 
 #[rstest]
@@ -274,4 +274,18 @@ fn test_forward_declaration_with_too_few_args(harness: CompilerTest) {
     }
     "#;
     assert_compile_err!(harness, source, CompilerError::SemanticError(_));
+}
+
+#[rstest]
+fn test_declaration_with_no_definition(harness: CompilerTest) {
+    let source = r#"
+    int foo();
+    int main() {
+        return foo();
+    }
+    "#;
+    match compile(source.parse().unwrap()) {
+        Ok(_) => {} // should succeed compilation but not linking
+        Err(_) => panic!("Expected compilation to succeed"),
+    };
 }
