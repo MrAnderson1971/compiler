@@ -277,7 +277,7 @@ fn test_forward_declaration_with_too_few_args(harness: CompilerTest) {
 }
 
 #[rstest]
-fn test_declaration_with_no_definition(harness: CompilerTest) {
+fn test_declaration_with_no_definition() {
     let source = r#"
     int foo();
     int main() {

@@ -201,9 +201,7 @@ movq %r10, {}
                 }
                 match op {
                     UnaryOperator::LogicalNot => {
-                        let cmp = if dest.size() == 4 { "cmpl" } else { "cmpq" };
-                        *out += &format!("{} $0, {}\n", cmp, dest);
-                        *out += &format!("sete {}\n", dest);
+                        *out += &format!("xor $1, {}", dest);
                     }
                     UnaryOperator::BitwiseNot => {
                         let not = if dest.size() == 4 { "notl" } else { "notq" };
@@ -223,14 +221,22 @@ movq %r10, {}
                 right,
             } => make_binary_op_instruction(out, dest, op, left, right),
             TACInstruction::JumpIfZero { label, operand } => {
-                *out += &format!("movl {}, %edx\n", operand);
-                *out += "cmpl $0, %edx\n";
-                *out += &format!("je {}\n", label);
+                *out += &format!(
+                    r#"movl {}, %edx
+testl %edx, %edx
+je {}
+"#,
+                    operand, label
+                );
             }
             TACInstruction::JumpIfNotZero { label, operand } => {
-                *out += &format!("movl {}, %edx\n", operand);
-                *out += "cmpl $0, %edx\n";
-                *out += &format!("jne {}\n", label);
+                *out += &format!(
+                    r#"movl {}, %edx
+testl %edx, %edx
+jne {}
+"#,
+                    operand, label
+                );
             }
             TACInstruction::Jump { label } => *out += &format!("jmp {}\n", label),
             TACInstruction::Label { label } => *out += &format!("{}:\n", label),
@@ -257,12 +263,18 @@ movq %r10, {}
                 }
             }
             TACInstruction::ReturnInstruction { val } => {
-                if val.size() == 4 {
-                    *out += &format!("movl {}, %eax\n", val);
-                } else if val.is_immediate() && val.size() == 8 {
-                    *out += &format!("movabsq {}, %rax\n", val);
-                } else {
-                    *out += &format!("movq {}, %rax\n", val);
+                match val.as_ref() {
+                    Operand::Immediate(Const::ConstInt(0)) => *out += "xorl %eax, %eax\n",
+                    Operand::Immediate(Const::ConstLong(0)) => *out += "xorq %rax, %rax\n",
+                    _ => {
+                        if val.size() == 4 {
+                            *out += &format!("movl {}, %eax\n", val);
+                        } else if val.is_immediate() && val.size() == 8 {
+                            *out += &format!("movabsq {}, %rax\n", val);
+                        } else {
+                            *out += &format!("movq {}, %rax\n", val);
+                        }
+                    }
                 }
                 *out += "movq %rbp, %rsp\n\
 popq %rbp\n\
@@ -351,91 +363,94 @@ fn make_binary_op_instruction(
     let r10 = if left.size() == 4 { "r10d" } else { "r10" };
     let r11 = if left.size() == 4 { "r11d" } else { "r11" };
     let mov = if left.size() == 4 { "movl" } else { "movq" };
+    let cx = if dest.size() == 4 { "ecx" } else { "rcx" };
 
     match op {
-        BinaryOperator::Addition
-        | BinaryOperator::Subtraction
-        | BinaryOperator::BitwiseShiftLeft
-        | BinaryOperator::BitwiseShiftRight
-        | BinaryOperator::BitwiseAnd
-        | BinaryOperator::BitwiseOr
-        | BinaryOperator::BitwiseXor => {
+        BinaryOperator::BitwiseShiftLeft | BinaryOperator::BitwiseShiftRight => {
+            let opcode = if let BinaryOperator::BitwiseShiftLeft = op {
+                if right.size() == 4 { "shll" } else { "shlq" }
+            } else {
+                if right.size() == 4 { "shrl" } else { "shrq" }
+            };
             if left.is_immediate() && left.size() == 8 {
                 *out += &format!("movabsq {}, %r10\n", src1);
             } else {
                 *out += &format!("{} {}, %{}\n", mov, src1, r10);
             }
-            if *op == BinaryOperator::BitwiseShiftLeft || *op == BinaryOperator::BitwiseShiftRight {
-                if right.size() == 4 {
-                    let shift_op = if *op == BinaryOperator::BitwiseShiftLeft {
-                        "shll"
-                    } else {
-                        "shrl"
-                    };
-                    if src2_is_immediate {
-                        *out += &format!("{} {}, %r10d\n", shift_op, src2);
-                    } else {
-                        *out += &format!("movl {}, %ecx\n", src2);
-                        *out += &format!("{} %cl, %r10d\n", shift_op);
-                    }
-                } else {
-                    let shift_op = if *op == BinaryOperator::BitwiseShiftLeft {
-                        "shlq"
-                    } else {
-                        "shrq"
-                    };
-                    if src2_is_immediate {
-                        *out += &format!("movasbq {}, %r10\n", src2);
-                    } else {
-                        *out += &format!("movq {}, %rcx\n", src2);
-                    }
-                    *out += &format!("{} %cl, %r10\n", shift_op);
-                }
+            if right.is_immediate() {
+                *out += &format!("{} {}, %{}\n", opcode, src2, r10);
             } else {
-                let opcode = match op {
-                    BinaryOperator::Addition => {
-                        if right.size() == 4 {
-                            "addl"
-                        } else {
-                            "addq"
-                        }
+                *out += &format!(
+                    r#"{} {}, %{}
+{} %cl, %{}
+"#,
+                    mov, src2, cx, opcode, r10
+                );
+            }
+            *out += &format!("{} %{}, {}\n", mov, r10, d);
+        }
+        BinaryOperator::Addition
+        | BinaryOperator::Subtraction
+        | BinaryOperator::BitwiseAnd
+        | BinaryOperator::BitwiseOr
+        | BinaryOperator::BitwiseXor => {
+            let opcode = match op {
+                BinaryOperator::Addition => {
+                    if right.size() == 4 {
+                        "addl"
+                    } else {
+                        "addq"
                     }
-                    BinaryOperator::Subtraction => {
-                        if right.size() == 4 {
-                            "subl"
-                        } else {
-                            "subq"
-                        }
-                    }
-                    BinaryOperator::BitwiseAnd => {
-                        if right.size() == 4 {
-                            "andl"
-                        } else {
-                            "andq"
-                        }
-                    }
-                    BinaryOperator::BitwiseOr => {
-                        if right.size() == 4 {
-                            "orl"
-                        } else {
-                            "orq"
-                        }
-                    }
-                    BinaryOperator::BitwiseXor => {
-                        if right.size() == 4 {
-                            "xorl"
-                        } else {
-                            "xorq"
-                        }
-                    }
-                    _ => unreachable!(),
-                };
-                if src2_is_immediate {
-                    *out += &format!("{} {}, %{}\n", opcode, src2, r10);
-                } else {
-                    *out += &format!("{} {}, %{}\n", mov, src2, r11);
-                    *out += &format!("{} %{}, %{}\n", opcode, r11, r10);
                 }
+                BinaryOperator::Subtraction => {
+                    if right.size() == 4 {
+                        "subl"
+                    } else {
+                        "subq"
+                    }
+                }
+                BinaryOperator::BitwiseAnd => {
+                    if right.size() == 4 {
+                        "andl"
+                    } else {
+                        "andq"
+                    }
+                }
+                BinaryOperator::BitwiseOr => {
+                    if right.size() == 4 {
+                        "orl"
+                    } else {
+                        "orq"
+                    }
+                }
+                BinaryOperator::BitwiseXor => {
+                    if right.size() == 4 {
+                        "xorl"
+                    } else {
+                        "xorq"
+                    }
+                }
+                _ => unreachable!(),
+            };
+            if right.is_immediate() && left.is_immediate() && left.size() == 4 {
+                *out += &format!(
+                    r#"movl {}, {}
+{} {}, {}
+"#,
+                    src1, dest, opcode, src2, dest
+                );
+                return;
+            }
+            if left.is_immediate() && left.size() == 8 {
+                *out += &format!("movabsq {}, %r10\n", src1);
+            } else {
+                *out += &format!("{} {}, %{}\n", mov, src1, r10);
+            }
+            if src2_is_immediate {
+                *out += &format!("{} {}, %{}\n", opcode, src2, r10);
+            } else {
+                *out += &format!("{} {}, %{}\n", mov, src2, r11);
+                *out += &format!("{} %{}, %{}\n", opcode, r11, r10);
             }
             *out += &format!("{} %{}, {}\n", mov, r10, d);
         }
@@ -459,7 +474,6 @@ fn make_binary_op_instruction(
         }
         BinaryOperator::Divide | BinaryOperator::Modulo => {
             let ax = if dest.size() == 4 { "eax" } else { "rax" };
-            let cx = if dest.size() == 4 { "ecx" } else { "rcx" };
             *out += &format!("{} {}, %{}\n", mov, src1, ax);
             *out += if dest.size() == 4 { "cdq\n" } else { "cqo\n" };
             if src2_is_immediate && right.size() == 8 {
