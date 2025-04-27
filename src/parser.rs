@@ -166,6 +166,21 @@ impl Parser {
         }
     }
 
+    fn parse_type_specifier(&self, types: Vec<Type>) -> Result<Type, CompilerError> {
+        if types.len() != 1 {
+            if types == vec![Type::Int, Type::Long] || types == vec![Type::Long, Type::Int] {
+                Ok(Type::Long)
+            } else {
+                Err(SyntaxError(format!(
+                    "Invalid type specifier {:?} at {:?}",
+                    types, self.line_number
+                )))
+            }
+        } else {
+            Ok(types[0])
+        }
+    }
+
     /*
     parse_type_and_storage_class(specifier_list):
          types = []
@@ -202,18 +217,7 @@ impl Parser {
             }
         }
 
-        let type_ = if types.len() != 1 {
-            if types == vec![Type::Int, Type::Long] || types == vec![Type::Long, Type::Int] {
-                Type::Long
-            } else {
-                return Err(SyntaxError(format!(
-                    "Invalid type specifier {:?} at {:?}",
-                    types, self.line_number
-                )));
-            }
-        } else {
-            types[0]
-        };
+        let type_ = self.parse_type_specifier(types)?;
         if storage_classes.len() > 1 {
             return Err(SyntaxError(format!(
                 "Invalid storage class {:?} at {:?}",
@@ -407,9 +411,28 @@ impl Parser {
             }
             Token::Symbol(..) => {
                 expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;
-                let expression = self.parse_binary_op(0)?;
-                expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
-                Ok(expression)
+                let expression = if let Some(t) =
+                    match_and_consume!(self, Token::Keyword(Keyword::Type(t)) => Some(t))
+                {
+                    let mut types = vec![t];
+                    while let Some(t) =
+                        match_and_consume!(self, Token::Keyword(Keyword::Type(t)) => Some(t))
+                    {
+                        types.push(t);
+                    }
+                    expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
+                    let type_ = self.parse_type_specifier(types)?;
+                    let exp = self.parse_unary_or_primary()?;
+                    Ok(self.make_node(Expression::Cast(type_, Box::from(exp))))
+                } else {
+                    let expression = match self.parse_binary_op(0) {
+                        Ok(expression) => Ok(expression),
+                        Err(err) => return Err(err),
+                    };
+                    expect_token!(self, Token::Symbol(Symbol::CloseParenthesis))?;
+                    expression
+                };
+                expression
             }
             Token::Name(identifier) => {
                 self.tokens.pop_front();
