@@ -1,5 +1,5 @@
 use crate::ast::{ASTNode, Declaration, Expression, ForInit, Statement, Visitor};
-use crate::common::{Const, Identifier, Position};
+use crate::common::{Const, Position};
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
@@ -483,7 +483,7 @@ impl<'a> Visitor for TacVisitor<'a> {
     fn visit_variable(
         &mut self,
         _line_number: &Rc<Position>,
-        identifier: &mut Rc<Identifier>,
+        identifier: &mut Rc<String>,
         type_: &mut Type,
     ) -> Result<(), CompilerError> {
         if let Some(pseudoregister) = self
@@ -506,7 +506,7 @@ impl<'a> Visitor for TacVisitor<'a> {
     fn visit_function_call(
         &mut self,
         _line_number: &Rc<Position>,
-        identifier: &mut Rc<Identifier>,
+        identifier: &mut Rc<String>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
         ret_type: &mut Type,
     ) -> Result<(), CompilerError> {
@@ -566,8 +566,8 @@ impl<'a> Visitor for TacVisitor<'a> {
             BinaryOperator::Subtraction
         };
         variable.accept(self)?;
-        let one = if type_.size() == 4 {Const::ConstInt(1u32.into())} else {
-            Const::ConstLong(1u64.into())
+        let one = if type_.size() == 4 {Const::ConstInt(1i32)} else {
+            Const::ConstLong(1i64)
         };
         match &*self.result {
             Operand::Register(pseudoregister) => {
@@ -616,9 +616,9 @@ impl<'a> Visitor for TacVisitor<'a> {
             src: Rc::clone(&self.result),
         });
         let one = if type_.size() == 4 {
-            Const::ConstInt(1u32.into())
+            Const::ConstInt(1i32)
         } else {
-            Const::ConstLong(1u64.into())
+            Const::ConstLong(1i64)
         };
         self.body.add_instruction(BinaryOpInstruction {
             dest: Rc::clone(&dest),

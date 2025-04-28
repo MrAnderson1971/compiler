@@ -2,12 +2,10 @@ use std::fmt::{Display, Formatter};
 
 pub(crate) type Position = (i32, String);
 
-pub(crate) type Identifier = String;
-
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Const {
-    ConstInt(u32),
-    ConstLong(u64),
+    ConstInt(i32),
+    ConstLong(i64),
     ConstUInt(u32),
     ConstULong(u64),
 }
@@ -34,12 +32,12 @@ impl Display for Const {
 
 impl From<u32> for Const {
     fn from(v: u32) -> Self {
-        Const::ConstInt(v)
+        Const::ConstInt(v as i32)
     }
 }
 
 impl From<u64> for Const {
     fn from(v: u64) -> Self {
-        Const::ConstLong(v)
+        Const::ConstLong(v as i64)
     }
 }

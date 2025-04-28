@@ -1,6 +1,6 @@
 use crate::CompilerError;
 use crate::CompilerError::SemanticError;
-use crate::common::{Const, Identifier, Position};
+use crate::common::{Const, Position};
 use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use crate::tac::{FunctionBody, TACInstruction};
 use crate::tac_generator::TacVisitor;
@@ -158,7 +158,7 @@ pub(crate) trait Visitor {
     fn visit_variable(
         &mut self,
         _line_number: &Rc<Position>,
-        _identifier: &mut Rc<Identifier>,
+        _identifier: &mut Rc<String>,
         _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         Ok(())
@@ -166,7 +166,7 @@ pub(crate) trait Visitor {
     fn visit_function_call(
         &mut self,
         _line_number: &Rc<Position>,
-        _identifier: &mut Rc<Identifier>,
+        _identifier: &mut Rc<String>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
         _ret_type: &mut Type,
     ) -> Result<(), CompilerError>
@@ -269,8 +269,8 @@ pub(crate) type Program = Vec<ASTNode<Declaration>>;
 
 #[derive(Debug)]
 pub(crate) struct FunctionDeclaration {
-    pub(crate) name: Rc<Identifier>,
-    pub(crate) params: Vec<Identifier>,
+    pub(crate) name: Rc<String>,
+    pub(crate) params: Vec<String>,
     pub(crate) body: Option<ASTNode<Block>>,
     pub(crate) storage_class: Option<StorageClass>,
     pub(crate) func_type: Rc<FuncType>,
@@ -292,7 +292,7 @@ pub(crate) enum Declaration {
 
 #[derive(Debug)]
 pub(crate) struct VariableDeclaration {
-    pub(crate) name: Rc<Identifier>,
+    pub(crate) name: Rc<String>,
     pub(crate) init: Option<ASTNode<Expression>>,
     pub(crate) storage_class: Option<StorageClass>,
     pub(crate) var_type: Type,
@@ -301,7 +301,7 @@ pub(crate) struct VariableDeclaration {
 #[derive(Debug)]
 pub(crate) enum Expression {
     Constant(Const),
-    Variable(Rc<Identifier>),
+    Variable(Rc<String>),
     Unary(UnaryOperator, Box<ASTNode<Expression>>),
     Binary {
         op: BinaryOperator,
@@ -317,7 +317,7 @@ pub(crate) enum Expression {
         if_true: Box<ASTNode<Expression>>,
         if_false: Box<ASTNode<Expression>>,
     },
-    FunctionCall(Rc<Identifier>, Box<Vec<ASTNode<Expression>>>),
+    FunctionCall(Rc<String>, Box<Vec<ASTNode<Expression>>>),
     Prefix(UnaryOperator, Box<ASTNode<Expression>>),
     Postfix(UnaryOperator, Box<ASTNode<Expression>>),
     Cast(Type, Box<ASTNode<Expression>>),
@@ -367,7 +367,7 @@ pub(crate) fn is_lvalue_node(node: &Expression) -> bool {
     }
 }
 
-pub(crate) fn extract_base_variable(node: &Expression) -> Rc<Identifier> {
+pub(crate) fn extract_base_variable(node: &Expression) -> Rc<String> {
     match node {
         Expression::Variable(v) => Rc::clone(v),
         Expression::Prefix(_, v) => extract_base_variable(&v.kind),
@@ -383,8 +383,8 @@ impl PartialEq for FuncType {
 
 impl ASTNode<Program> {
     pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
-        let mut shared_functions_map: HashMap<Identifier, FunAttr> = HashMap::new();
-        let mut shared_variables_map: HashMap<Identifier, StaticAttr> = HashMap::new();
+        let mut shared_functions_map: HashMap<String, FunAttr> = HashMap::new();
+        let mut shared_variables_map: HashMap<String, StaticAttr> = HashMap::new();
 
         // first pass: register declarations
         for declaration in self.kind.iter_mut() {
@@ -455,8 +455,8 @@ impl ASTNode<Program> {
     }
 
     fn typecheck_file_scope_variable_declaration(
-        shared_functions_map: &mut HashMap<Identifier, FunAttr>,
-        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
+        shared_functions_map: &mut HashMap<String, FunAttr>,
+        shared_variables_map: &mut HashMap<String, StaticAttr>,
         var: &&mut VariableDeclaration,
     ) -> Option<Result<(), CompilerError>> {
         let mut initial_value = if let Some(init) = &var.init {
@@ -532,8 +532,8 @@ impl ASTNode<Program> {
     }
 
     fn typecheck_function_declaration(
-        shared_functions_map: &mut HashMap<Identifier, FunAttr>,
-        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
+        shared_functions_map: &mut HashMap<String, FunAttr>,
+        shared_variables_map: &mut HashMap<String, StaticAttr>,
         func: &&mut FunctionDeclaration,
     ) -> Option<Result<(), CompilerError>> {
         let name = Rc::clone(&func.name);

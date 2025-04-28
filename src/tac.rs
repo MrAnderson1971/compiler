@@ -1,4 +1,4 @@
-use crate::common::{Const, Identifier};
+use crate::common::Const;
 use crate::lexer::{BinaryOperator, Type, UnaryOperator};
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -79,7 +79,6 @@ impl Display for Pseudoregister {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub(crate) enum TACInstruction {
     FunctionInstruction {
         name: Rc<String>,
@@ -123,7 +122,7 @@ pub(crate) enum TACInstruction {
         val: Rc<Operand>,
     },
     AllocateStackInstruction,
-    FunctionCall(Rc<Identifier>),
+    FunctionCall(Rc<String>),
     PushArgument(Rc<Operand>),
     AdjustStack(usize),
     SignExtend {

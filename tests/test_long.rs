@@ -391,10 +391,44 @@ fn test_static_long_with_init(mut harness: CompilerTest) {
 }
 
 #[rstest]
+fn test_top_level_static_long_with_init(mut harness: CompilerTest) {
+    let source = r#"
+    static long a = 1000000l;
+    int foo() {
+        a++;
+        return a;
+    }
+    int main() {
+        foo();
+        foo();
+        return foo();
+    }
+    "#;
+    harness.assert_runs_ok(source, 1000003);
+}
+
+#[rstest]
 fn test_static_long_without_init(mut harness: CompilerTest) {
     let source = r#"
     int foo() {
         static long a;
+        a++;
+        return a;
+    }
+    int main() {
+        foo();
+        foo();
+        return foo();
+    }
+    "#;
+    harness.assert_runs_ok(source, 3);
+}
+
+#[rstest]
+fn test_top_level_static_long_without_init(mut harness: CompilerTest) {
+    let source = r#"
+    static long a;
+    int foo() {
         a++;
         return a;
     }

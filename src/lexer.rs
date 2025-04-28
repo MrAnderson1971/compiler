@@ -273,7 +273,7 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
                             if is_unsigned {
                                 Token::NumberLiteral(ConstULong(num))
                             } else {
-                                Token::NumberLiteral(ConstLong(num))
+                                Token::NumberLiteral(ConstLong(num as i64))
                             }
                         }
                         Err(_) => Token::Overflow,
@@ -284,7 +284,7 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
                             if is_unsigned {
                                 Token::NumberLiteral(ConstUInt(num))
                             } else {
-                                Token::NumberLiteral(ConstInt(num))
+                                Token::NumberLiteral(ConstInt(num as i32))
                             }
                         }
                         Err(_) => match number_string.parse::<u64>() {
@@ -293,7 +293,7 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
                                 if is_unsigned {
                                     Token::NumberLiteral(ConstULong(num))
                                 } else {
-                                    Token::NumberLiteral(ConstLong(num))
+                                    Token::NumberLiteral(ConstLong(num as i64))
                                 }
                             }
                             Err(_) => Token::Overflow,

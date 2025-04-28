@@ -2,7 +2,7 @@ use crate::ast::{
     ASTNode, Block, Declaration, Expression, ForInit, FunAttr, InitialValue, Statement, StaticAttr,
     VariableDeclaration, Visitor,
 };
-use crate::common::{Identifier, Position};
+use crate::common::Position;
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{StorageClass, Type};
@@ -21,15 +21,15 @@ pub(crate) struct VariableResolutionVisitor<'map> {
     function: Rc<String>,
     variable_scopes: HashMap<String, VecDeque<ScopeEntry>>,
     loop_labels: VecDeque<(Rc<String>, bool)>,
-    functions_map: &'map HashMap<Identifier, FunAttr>,
-    global_variables_map: &'map mut HashMap<Identifier, StaticAttr>,
+    functions_map: &'map HashMap<String, FunAttr>,
+    global_variables_map: &'map mut HashMap<String, StaticAttr>,
 }
 
 impl<'map> VariableResolutionVisitor<'map> {
     pub(crate) fn new(
         function: Rc<String>,
-        functions_map: &'map HashMap<Identifier, FunAttr>,
-        global_variables_map: &'map mut HashMap<Identifier, StaticAttr>,
+        functions_map: &'map HashMap<String, FunAttr>,
+        global_variables_map: &'map mut HashMap<String, StaticAttr>,
     ) -> Self {
         Self {
             layer: 0,
@@ -210,7 +210,7 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
     fn visit_variable(
         &mut self,
         line_number: &Rc<Position>,
-        identifier: &mut Rc<Identifier>,
+        identifier: &mut Rc<String>,
         _node: &mut Type,
     ) -> Result<(), CompilerError> {
         let original_name = identifier.as_ref().to_string();
@@ -231,7 +231,7 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
     fn visit_function_call(
         &mut self,
         line_number: &Rc<Position>,
-        identifier: &mut Rc<Identifier>,
+        identifier: &mut Rc<String>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
         _ret_type: &mut Type,
     ) -> Result<(), CompilerError> {
