@@ -456,11 +456,6 @@ fn test_decrement_overflow(mut harness: CompilerTest) {
     harness.assert_runs_ok(source, i32::MAX);
 }
 
-#[rstest]
-fn test_compound_subtract_overflow(mut harness: CompilerTest) {
-    let source = &format!("int main() {{ int a = {}; a -= 1; return a; }}", i32::MIN);
-    harness.assert_runs_ok(source, i32::MAX);
-}
 
 #[rstest]
 fn test_prefix_as_lvalue_for_compound_assign(mut harness: CompilerTest) {

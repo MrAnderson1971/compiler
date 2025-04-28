@@ -1,13 +1,40 @@
+use crate::asm_ast::AsmAst::{
+    Binary, Call, Cdq, Cmp, Function, Idiv, Jmp, JmpCC, Label, Mov, MovAl, Movsx, Push, Ret, SetCC,
+    Static, Testl, Unary,
+};
+use crate::asm_ast::{AsmAst, CondCode};
 use crate::common::Const;
+use crate::common::Const::ConstLong;
 use crate::lexer::{BinaryOperator, Type, UnaryOperator};
-use std::collections::HashMap;
+use crate::tac::Pseudoregister::Register;
+use std::collections::{HashMap, VecDeque};
 use std::fmt::Display;
 use std::rc::Rc;
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub(crate) enum Reg {
+    BP,
+    SP,
+    AX,
+    DX,
+    DI,
+    SI,
+    CX,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    R15,
+}
 
 #[derive(Debug, Clone)]
 pub(crate) enum Pseudoregister {
     Pseudoregister(i32, Type),
-    Register(String),
+    Register(Reg, Type),
     Data(Rc<String>, Type),
 }
 
@@ -19,13 +46,7 @@ impl Pseudoregister {
     fn size(&self) -> i32 {
         match self {
             Pseudoregister::Pseudoregister(_, t) => t.size(),
-            Pseudoregister::Register(reg) => {
-                if reg.starts_with("e") || reg.ends_with("d") {
-                    4
-                } else {
-                    8
-                }
-            }
+            Register(_, t) => t.size(),
             Pseudoregister::Data(_, t) => t.size(),
         }
     }
@@ -49,7 +70,7 @@ impl Operand {
         }
     }
 
-    fn is_immediate(&self) -> bool {
+    pub(crate) fn is_immediate(&self) -> bool {
         match self {
             Operand::Immediate(_) => true,
             _ => false,
@@ -72,7 +93,32 @@ impl Display for Pseudoregister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Pseudoregister::Pseudoregister(offset, _) => write!(f, "-{}(%rbp)", offset),
-            Pseudoregister::Register(s) => write!(f, "%{}", s),
+            Register(r, t) => {
+                let reg_name = format!("{:?}", r).to_lowercase();
+
+                // Handle special cases for traditional registers
+                if matches!(
+                    r,
+                    Reg::AX | Reg::DX | Reg::CX | Reg::BP | Reg::SP | Reg::DI | Reg::SI
+                ) {
+                    if t.size() == 4 {
+                        // 32-bit registers - e prefix
+                        write!(f, "%e{}", reg_name)
+                    } else {
+                        // 64-bit registers - r prefix
+                        write!(f, "%r{}", reg_name)
+                    }
+                } else {
+                    // For R8-R15, the format is different
+                    if t.size() == 4 {
+                        // 32-bit versions of extended registers get a 'd' suffix
+                        write!(f, "%{}d", reg_name)
+                    } else {
+                        // 64-bit versions of extended registers have no suffix
+                        write!(f, "%{}", reg_name)
+                    }
+                }
+            }
             Pseudoregister::Data(d, _) => write!(f, "{}(%rip)", d),
         }
     }
@@ -133,6 +179,10 @@ pub(crate) enum TACInstruction {
         dest: Rc<Pseudoregister>,
         src: Rc<Operand>,
     },
+    ZeroExtend {
+        dest: Rc<Pseudoregister>,
+        src: Rc<Operand>,
+    },
 }
 
 #[derive(Debug)]
@@ -168,50 +218,23 @@ impl FunctionBody {
 }
 
 impl TACInstruction {
-    pub(crate) fn make_assembly(&self, out: &mut String, function_body: &FunctionBody) {
+    pub(crate) fn make_assembly(&self, out: &mut VecDeque<AsmAst>, function_body: &FunctionBody) {
         match &self {
-            TACInstruction::FunctionInstruction { name, global } => {
-                if *global {
-                    *out += &format!(".global {}\n", name);
-                }
-                *out += &format!(
-                    ".text\n\
-                    {}:\n\
-                pushq %rbp\n\
-                movq %rsp, %rbp\n",
-                    name
-                );
-            }
+            TACInstruction::FunctionInstruction { name, global } => out.push_back(Function {
+                name: Rc::clone(name),
+                global: *global,
+            }),
             TACInstruction::UnaryOpInstruction { dest, op, operand } => {
-                let mov = if dest.size() == 4 { "movl" } else { "movq" };
-                if operand.is_immediate() && operand.size() == 8 {
-                    *out += &format!(
-                        r#"movabsq {}, %r10
-movq %r10, {}
-"#,
-                        operand, dest
-                    );
-                } else if operand.is_immediate() {
-                    *out += &format!("{} {}, {}\n", mov, operand, dest);
-                } else {
-                    let r10 = if dest.size() == 4 { "r10d" } else { "r10" };
-                    *out += &format!("{} {}, %{}\n", mov, operand, r10);
-                    *out += &format!("{} %{}, {}\n", mov, r10, dest);
-                }
-                match op {
-                    UnaryOperator::LogicalNot => {
-                        *out += &format!("xor $1, {}", dest);
-                    }
-                    UnaryOperator::BitwiseNot => {
-                        let not = if dest.size() == 4 { "notl" } else { "notq" };
-                        *out += &format!("{} {}\n", not, dest);
-                    }
-                    UnaryOperator::Negate => {
-                        let neg = if dest.size() == 4 { "negl" } else { "negq" };
-                        *out += &format!("{} {}\n", neg, dest);
-                    }
-                    _ => {}
-                }
+                out.push_back(Mov {
+                    size: dest.size(),
+                    dest: Rc::clone(dest),
+                    src: Rc::clone(operand),
+                });
+                out.push_back(Unary {
+                    operator: *op,
+                    size: dest.size(),
+                    dest: Rc::clone(dest),
+                });
             }
             TACInstruction::BinaryOpInstruction {
                 dest,
@@ -220,272 +243,301 @@ movq %r10, {}
                 right,
             } => make_binary_op_instruction(out, dest, op, left, right),
             TACInstruction::JumpIfZero { label, operand } => {
-                *out += &format!(
-                    r#"movl {}, %edx
-testl %edx, %edx
-je {}
-"#,
-                    operand, label
-                );
+                out.push_back(Mov {
+                    size: 4,
+                    src: Rc::clone(operand),
+                    dest: Rc::from(Register(Reg::DX, Type::Int)),
+                });
+                out.push_back(Testl(Rc::from(Register(Reg::DX, Type::Int))));
+                out.push_back(JmpCC {
+                    condition: CondCode::Equal,
+                    label: Rc::clone(&label),
+                });
             }
             TACInstruction::JumpIfNotZero { label, operand } => {
-                *out += &format!(
-                    r#"movl {}, %edx
-testl %edx, %edx
-jne {}
-"#,
-                    operand, label
-                );
+                out.push_back(Mov {
+                    size: 4,
+                    src: Rc::clone(operand),
+                    dest: Rc::from(Register(Reg::DX, Type::Int)),
+                });
+                out.push_back(Testl(Rc::from(Register(Reg::DX, Type::Int))));
+                out.push_back(JmpCC {
+                    condition: CondCode::NotEqual,
+                    label: Rc::clone(&label),
+                });
             }
-            TACInstruction::Jump { label } => *out += &format!("jmp {}\n", label),
-            TACInstruction::Label { label } => *out += &format!("{}:\n", label),
-            TACInstruction::StoreValueInstruction { dest, src } => {
-                if format!("{}", dest) == format!("{}", src) {
-                    return;
-                }
-                if src.is_immediate() && src.size() == 8 {
-                    *out += &format!(
-                        r#"movabsq {}, %r10
-movq %r10, {}
-"#,
-                        src, dest
-                    );
-                    return;
-                }
-                let mov = if src.size() == 4 { "movl" } else { "movq" };
-                let r10 = if src.size() == 4 { "r10d" } else { "r10" };
-                if src.is_immediate() {
-                    *out += &format!("{} {}, {}\n", mov, src, dest);
-                } else {
-                    *out += &format!("{} {}, %{}\n", mov, src, r10);
-                    *out += &format!("{} %{}, {}\n", mov, r10, dest);
-                }
-            }
+            TACInstruction::Jump { label } => out.push_back(Jmp(Rc::clone(label))),
+            TACInstruction::Label { label } => out.push_back(Label(Rc::clone(label))),
+            TACInstruction::StoreValueInstruction { dest, src } => out.push_back(Mov {
+                size: dest.size(),
+                src: Rc::clone(src),
+                dest: Rc::clone(dest),
+            }),
             TACInstruction::ReturnInstruction { val } => {
-                match val.as_ref() {
-                    Operand::Immediate(Const::ConstInt(0)) => *out += "xorl %eax, %eax\n",
-                    Operand::Immediate(Const::ConstLong(0)) => *out += "xorq %rax, %rax\n",
-                    _ => {
-                        if val.size() == 4 {
-                            *out += &format!("movl {}, %eax\n", val);
-                        } else if val.is_immediate() && val.size() == 8 {
-                            *out += &format!("movabsq {}, %rax\n", val);
-                        } else {
-                            *out += &format!("movq {}, %rax\n", val);
-                        }
-                    }
-                }
-                *out += "movq %rbp, %rsp\n\
-popq %rbp\n\
-ret\n";
+                let t = if val.size() == 4 {
+                    Type::Int
+                } else {
+                    Type::Long
+                };
+                out.push_back(Mov {
+                    size: val.size(),
+                    src: Rc::clone(val),
+                    dest: Rc::from(Register(Reg::AX, t)),
+                });
+                out.push_back(Ret);
             }
             TACInstruction::AllocateStackInstruction => {
                 let allocate = (function_body.current_offset + 15) & !15;
-                *out += &format!("subq ${}, %rsp\n", allocate)
+                out.push_back(Binary {
+                    operator: BinaryOperator::Subtraction,
+                    size: 8,
+                    src: Rc::from(Operand::Immediate(ConstLong(allocate as i64))),
+                    dest: Rc::from(Register(Reg::SP, Type::Long)),
+                });
             }
-            TACInstruction::FunctionCall(name) => {
-                *out += &format!("call {}\n", name);
-            }
+            TACInstruction::FunctionCall(name) => out.push_back(Call(Rc::clone(name))),
             TACInstruction::PushArgument(value) => {
-                *out += &format!("movl {}, %r10d\n", value);
-                *out += "pushq %r10\n";
+                out.push_back(Mov {
+                    size: 4,
+                    src: Rc::clone(value),
+                    dest: Rc::from(Register(Reg::R10, Type::Int)),
+                });
+                out.push_back(Push(Rc::from(Operand::Register(Register(
+                    Reg::R10,
+                    Type::Long,
+                )))));
             }
             TACInstruction::AdjustStack(size) => {
-                *out += &format!("addq ${}, %rsp\n", size);
+                out.push_back(Binary {
+                    size: 8,
+                    operator: BinaryOperator::Addition,
+                    src: Rc::from(Operand::Immediate(ConstLong(*size as i64))),
+                    dest: Rc::from(Register(Reg::SP, Type::Long)),
+                });
             }
             TACInstruction::StaticVariable { name, global, init } => {
-                if *global {
-                    *out += &format!(".global {}\n", name);
-                }
-                if matches!(*init, Const::ConstInt(0) | Const::ConstLong(0)) {
-                    *out += &format!(
-                        r#".bss
-.align {}
-.zero {}
-{}:
-"#,
-                        init.size(),
-                        init.size(),
-                        name
-                    );
-                } else {
-                    let which = if init.size() == 4 { "long" } else { "quad" };
-                    *out += &format!(
-                        r#".data
-.align {}
-{}:
-.{} {}
-"#,
-                        init.size(),
-                        name,
-                        which,
-                        init
-                    );
-                }
+                out.push_back(Static {
+                    size: init.size(),
+                    name: Rc::clone(name),
+                    global: *global,
+                    init: init.clone(),
+                });
             }
             TACInstruction::SignExtend { dest, src } => {
-                *out += &format!(
-                    r#"movl {}, %r10d
-movslq %r10d, %r10
-movq %r10, {}
-"#,
-                    src, dest
-                );
+                let r10 = Rc::from(Register(Reg::R10, Type::Int));
+                out.push_back(Mov {
+                    size: 4,
+                    src: Rc::clone(src),
+                    dest: Rc::clone(&r10),
+                });
+                out.push_back(Movsx {
+                    src: Rc::from(Operand::Register(r10.as_ref().clone())),
+                    dest: Rc::clone(&dest),
+                });
             }
-            TACInstruction::Truncate { dest, src } => {
-                if src.is_immediate() {
-                    *out += &format!("movl {}, {}\n", src, dest);
-                } else {
-                    *out += &format!(
-                        r#"movl {}, %r10d
-movl %r10d, {}
-"#,
-                        src, dest
-                    );
-                }
+            TACInstruction::Truncate { dest, src } => out.push_back(Mov {
+                size: 4,
+                src: Rc::clone(src),
+                dest: Rc::clone(dest),
+            }),
+            TACInstruction::ZeroExtend { dest, src } => {
+                out.push_back(Mov {
+                    size: 4,
+                    src: Rc::clone(src),
+                    dest: Rc::from(Register(Reg::AX, Type::Int)),
+                });
+                out.push_back(Mov {
+                    size: 8,
+                    src: Rc::from(Operand::Register(Register(Reg::AX, Type::Long))),
+                    dest: Rc::clone(dest),
+                });
             }
         }
     }
 }
 
 fn make_binary_op_instruction(
-    out: &mut String,
-    dest: &Pseudoregister,
+    out: &mut VecDeque<AsmAst>,
+    dest: &Rc<Pseudoregister>,
     op: &BinaryOperator,
-    left: &Operand,
-    right: &Operand,
+    left: &Rc<Operand>,
+    right: &Rc<Operand>,
 ) {
-    let src1 = format!("{}", left);
-    let src2 = format!("{}", right);
-    let d = format!("{}", dest);
-    let src2_is_immediate = right.is_immediate();
-    let r10 = if left.size() == 4 { "r10d" } else { "r10" };
-    let r11 = if left.size() == 4 { "r11d" } else { "r11" };
-    let mov = if left.size() == 4 { "movl" } else { "movq" };
-    let cx = if dest.size() == 4 { "ecx" } else { "rcx" };
-
     match op {
         BinaryOperator::BitwiseShiftLeft | BinaryOperator::BitwiseShiftRight => {
-            let opcode = if let BinaryOperator::BitwiseShiftLeft = op {
-                if right.size() == 4 { "shll" } else { "shlq" }
-            } else {
-                if right.size() == 4 { "shrl" } else { "shrq" }
-            };
-            if left.is_immediate() && left.size() == 8 {
-                *out += &format!("movabsq {}, %r10\n", src1);
-            } else {
-                *out += &format!("{} {}, %{}\n", mov, src1, r10);
-            }
+            // First, move the left operand (value to be shifted) to the destination
+            out.push_back(Mov {
+                size: dest.size(),
+                src: Rc::clone(left),
+                dest: Rc::clone(dest),
+            });
+
+            // For shift operations in x86, the shift count must be either an immediate or in CL register
             if right.is_immediate() {
-                *out += &format!("{} {}, %{}\n", opcode, src2, r10);
+                // If the shift count is an immediate, we can use it directly with the shift operation
+                out.push_back(Binary {
+                    operator: *op,
+                    size: dest.size(),
+                    src: Rc::clone(right),
+                    dest: Rc::clone(dest),
+                });
             } else {
-                *out += &format!(
-                    r#"{} {}, %{}
-{} %cl, %{}
-"#,
-                    mov, src2, cx, opcode, r10
-                );
+                // If the shift count is not an immediate, we need to move it to CL register first
+                // Move right operand (shift count) to CX/ECX
+                out.push_back(Mov {
+                    size: right.size(),
+                    src: Rc::clone(right),
+                    dest: Rc::from(Register(
+                        Reg::CX,
+                        if right.size() == 4 {
+                            Type::Int
+                        } else {
+                            Type::Long
+                        },
+                    )),
+                });
+
+                // Now perform the shift operation using CL as the shift count
+                out.push_back(Binary {
+                    operator: *op,
+                    size: dest.size(),
+                    src: Rc::from(Operand::Register(Register(Reg::CX, Type::Int))),
+                    dest: Rc::clone(dest),
+                });
             }
-            *out += &format!("{} %{}, {}\n", mov, r10, d);
         }
         BinaryOperator::Addition
         | BinaryOperator::Subtraction
         | BinaryOperator::BitwiseAnd
         | BinaryOperator::BitwiseOr
         | BinaryOperator::BitwiseXor => {
-            let opcode = match op {
-                BinaryOperator::Addition => {
-                    if right.size() == 4 {
-                        "addl"
-                    } else {
-                        "addq"
-                    }
-                }
-                BinaryOperator::Subtraction => {
-                    if right.size() == 4 {
-                        "subl"
-                    } else {
-                        "subq"
-                    }
-                }
-                BinaryOperator::BitwiseAnd => {
-                    if right.size() == 4 {
-                        "andl"
-                    } else {
-                        "andq"
-                    }
-                }
-                BinaryOperator::BitwiseOr => {
-                    if right.size() == 4 {
-                        "orl"
-                    } else {
-                        "orq"
-                    }
-                }
-                BinaryOperator::BitwiseXor => {
-                    if right.size() == 4 {
-                        "xorl"
-                    } else {
-                        "xorq"
-                    }
-                }
-                _ => unreachable!(),
-            };
-            if right.is_immediate() && left.is_immediate() && left.size() == 4 {
-                *out += &format!(
-                    r#"movl {}, {}
-{} {}, {}
-"#,
-                    src1, dest, opcode, src2, dest
-                );
-                return;
-            }
-            if left.is_immediate() && left.size() == 8 {
-                *out += &format!("movabsq {}, %r10\n", src1);
-            } else {
-                *out += &format!("{} {}, %{}\n", mov, src1, r10);
-            }
-            if src2_is_immediate {
-                *out += &format!("{} {}, %{}\n", opcode, src2, r10);
-            } else {
-                *out += &format!("{} {}, %{}\n", mov, src2, r11);
-                *out += &format!("{} %{}, %{}\n", opcode, r11, r10);
-            }
-            *out += &format!("{} %{}, {}\n", mov, r10, d);
+            // Move left operand to destination
+            out.push_back(Mov {
+                size: dest.size(),
+                src: Rc::clone(left),
+                dest: Rc::clone(dest),
+            });
+            // Apply binary operation with right operand
+            out.push_back(Binary {
+                operator: *op,
+                size: dest.size(),
+                src: Rc::clone(right),
+                dest: Rc::clone(dest),
+            });
         }
         BinaryOperator::Multiply => {
-            let mull = if dest.size() == 4 { "imull" } else { "imulq" };
-            if left.is_immediate() && left.size() == 8 {
-                *out += &format!("movabsq {}, %r11\n", src1);
-            } else {
-                *out += &format!("{} {}, %{}\n", mov, src1, r11);
-            }
-            if src2_is_immediate && right.size() == 8 {
-                *out += &format!("movabsq {}, %r10\n", src2);
-                *out += &format!("{} %r10, %r11\n", mull);
-            } else if src2_is_immediate {
-                *out += &format!("{} {}, %{}\n", mull, src2, r11);
-            } else {
-                *out += &format!("{} {}, %{}\n", mov, src2, r10);
-                *out += &format!("{} %{}, %{}\n", mull, r10, r11);
-            }
-            *out += &format!("{} %{}, {}\n", mov, r11, d);
+            // Multiply
+            // Move left operand to AX register
+            out.push_back(Mov {
+                size: left.size(),
+                src: Rc::clone(left),
+                dest: Rc::from(Register(
+                    Reg::AX,
+                    if left.size() == 4 {
+                        Type::Int
+                    } else {
+                        Type::Long
+                    },
+                )),
+            });
+            // Multiply AX by right operand
+            out.push_back(Binary {
+                operator: BinaryOperator::Multiply,
+                size: right.size(),
+                src: Rc::clone(right),
+                dest: Rc::from(Register(
+                    Reg::AX,
+                    if right.size() == 4 {
+                        Type::Int
+                    } else {
+                        Type::Long
+                    },
+                )),
+            });
+            // Move result from AX to destination
+            out.push_back(Mov {
+                size: dest.size(),
+                src: Rc::from(Operand::Register(Register(
+                    Reg::AX,
+                    if dest.size() == 4 {
+                        Type::Int
+                    } else {
+                        Type::Long
+                    },
+                ))),
+                dest: Rc::clone(dest),
+            });
         }
         BinaryOperator::Divide | BinaryOperator::Modulo => {
-            let ax = if dest.size() == 4 { "eax" } else { "rax" };
-            *out += &format!("{} {}, %{}\n", mov, src1, ax);
-            *out += if dest.size() == 4 { "cdq\n" } else { "cqo\n" };
-            if src2_is_immediate && right.size() == 8 {
-                *out += &format!("movabsq {}, %{}\n", src2, cx);
-            } else {
-                *out += &format!("{} {}, %{}\n", mov, src2, cx);
-            }
-            *out += &format!("idiv %{}\n", cx);
+            // Divide/Modulo
+            // Move left operand to AX register
+            out.push_back(Mov {
+                size: left.size(),
+                src: Rc::clone(left),
+                dest: Rc::from(Register(
+                    Reg::AX,
+                    if left.size() == 4 {
+                        Type::Int
+                    } else {
+                        Type::Long
+                    },
+                )),
+            });
+            // Sign-extend AX to DX:AX
+            out.push_back(Cdq { size: left.size() });
+            // Move right operand to CX register
+            out.push_back(Mov {
+                size: right.size(),
+                src: Rc::clone(right),
+                dest: Rc::from(Register(
+                    Reg::CX,
+                    if right.size() == 4 {
+                        Type::Int
+                    } else {
+                        Type::Long
+                    },
+                )),
+            });
+            // Divide DX:AX by CX, result in AX (quotient) and DX (remainder)
+            out.push_back(Idiv {
+                size: right.size(),
+                operand: Rc::from(Register(
+                    Reg::CX,
+                    if right.size() == 4 {
+                        Type::Int
+                    } else {
+                        Type::Long
+                    },
+                )),
+            });
+            // Move quotient (AX) or remainder (DX) to destination
             if *op == BinaryOperator::Divide {
-                *out += &format!("{} %{}, {}\n", mov, ax, d);
+                out.push_back(Mov {
+                    size: dest.size(),
+                    src: Rc::from(Operand::Register(Register(
+                        Reg::AX,
+                        if dest.size() == 4 {
+                            Type::Int
+                        } else {
+                            Type::Long
+                        },
+                    ))),
+                    dest: Rc::clone(dest),
+                });
             } else {
-                let dx = if dest.size() == 4 { "edx" } else { "rdx" };
-                *out += &format!("{} %{}, {}\n", mov, dx, d);
+                // Modulo
+                out.push_back(Mov {
+                    size: dest.size(),
+                    src: Rc::from(Operand::Register(Register(
+                        Reg::DX,
+                        if dest.size() == 4 {
+                            Type::Int
+                        } else {
+                            Type::Long
+                        },
+                    ))),
+                    dest: Rc::clone(dest),
+                });
             }
         }
         BinaryOperator::Equals
@@ -494,28 +546,77 @@ fn make_binary_op_instruction(
         | BinaryOperator::GreaterThanOrEquals
         | BinaryOperator::LessThan
         | BinaryOperator::LessThanOrEquals => {
-            let cmp = if left.size() == 4 { "cmpl" } else { "cmpq" };
-            let dest_reg = if left.size() == 4 { "edx" } else { "rdx" };
-            *out += &format!("{} {}, %{}\n", mov, src1, dest_reg);
-            if right.size() == 8 && src2_is_immediate {
-                *out += &format!("movabsq {}, %r11\n", src2);
-                *out += &format!("cmpq %r11, %{}\n", dest_reg);
+            // Move left operand to DX register
+            out.push_back(Mov {
+                size: left.size(),
+                src: Rc::clone(left),
+                dest: Rc::from(Register(
+                    Reg::DX,
+                    if left.size() == 4 {
+                        Type::Int
+                    } else {
+                        Type::Long
+                    },
+                )),
+            });
+
+            // Handle comparison
+            if right.size() == 8 && right.is_immediate() {
+                out.push_back(Mov {
+                    size: right.size(),
+                    src: Rc::clone(right),
+                    dest: Rc::from(Register(Reg::R11, Type::Long)),
+                });
+                out.push_back(Cmp {
+                    size: 8,
+                    left: Rc::from(Operand::Register(Register(Reg::R11, Type::Long))),
+                    right: Rc::from(Operand::Register(Register(Reg::DX, Type::Long))),
+                });
             } else {
-                *out += &format!("{} {}, %{}\n", cmp, src2, dest_reg);
+                out.push_back(Cmp {
+                    size: left.size(),
+                    left: Rc::clone(right),
+                    right: Rc::from(Operand::Register(Register(
+                        Reg::DX,
+                        if left.size() == 4 {
+                            Type::Int
+                        } else {
+                            Type::Long
+                        },
+                    ))),
+                });
             }
-            *out += &format!("{} $0, {}\n", mov, d);
-            let opcode = match op {
-                BinaryOperator::Equals => "sete",
-                BinaryOperator::NotEquals => "setne",
-                BinaryOperator::LessThan => "setl",
-                BinaryOperator::GreaterThan => "setg",
-                BinaryOperator::LessThanOrEquals => "setle",
-                BinaryOperator::GreaterThanOrEquals => "setge",
+
+            // Initialize destination with 0
+            out.push_back(Mov {
+                size: dest.size(),
+                src: Rc::from(Operand::Immediate(Const::ConstInt(0))),
+                dest: Rc::clone(dest),
+            });
+
+            // Set AL based on comparison
+            let condition = match op {
+                BinaryOperator::Equals => CondCode::Equal,
+                BinaryOperator::NotEquals => CondCode::NotEqual,
+                BinaryOperator::LessThan => CondCode::LessThan,
+                BinaryOperator::GreaterThan => CondCode::GreaterThan,
+                BinaryOperator::LessThanOrEquals => CondCode::LessEqual,
+                BinaryOperator::GreaterThanOrEquals => CondCode::GreaterEqual,
                 _ => unreachable!(),
             };
-            *out += &format!("{} %al\n", opcode);
-            *out += &"movzbl %al, %r10d\n".to_string();
-            *out += &format!("movl %r10d, {}\n", d);
+
+            // We'll hardcode to use AL register in the SetCC implementation
+            out.push_back(SetCC(condition));
+
+            // Zero-extend AL to R10D
+            out.push_back(MovAl(Rc::from(Register(Reg::R10, Type::Int))));
+
+            // Move the result to destination
+            out.push_back(Mov {
+                size: 4,
+                src: Rc::from(Operand::Register(Register(Reg::R10, Type::Int))),
+                dest: Rc::clone(dest),
+            })
         }
         _ => unreachable!(),
     }

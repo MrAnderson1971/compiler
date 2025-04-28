@@ -1,5 +1,6 @@
 use crate::CompilerError;
 use crate::CompilerError::SemanticError;
+use crate::asm_ast::AsmAst;
 use crate::common::{Const, Position};
 use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use crate::tac::{FunctionBody, TACInstruction};
@@ -7,7 +8,7 @@ use crate::tac_generator::TacVisitor;
 use crate::type_check::TypeCheckVisitor;
 use crate::variable_resolution::VariableResolutionVisitor;
 use std::cmp::PartialEq;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::ops::DerefMut;
 use std::rc::Rc;
 
@@ -382,7 +383,7 @@ impl PartialEq for FuncType {
 }
 
 impl ASTNode<Program> {
-    pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
+    pub(crate) fn generate(&mut self, out: &mut VecDeque<AsmAst>) -> Result<(), CompilerError> {
         let mut shared_functions_map: HashMap<String, FunAttr> = HashMap::new();
         let mut shared_variables_map: HashMap<String, StaticAttr> = HashMap::new();
 
@@ -580,7 +581,7 @@ impl ASTNode<Program> {
 }
 
 impl ASTNode<Declaration> {
-    pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
+    pub(crate) fn generate(&mut self, out: &mut VecDeque<AsmAst>) -> Result<(), CompilerError> {
         if let Declaration::FunctionDeclaration(func) = &mut self.kind {
             let identifier = Rc::clone(&func.name);
 
@@ -592,7 +593,6 @@ impl ASTNode<Declaration> {
             function_body.add_default_return();
 
             for instruction in &function_body.instructions {
-                *out += "\n";
                 instruction.make_assembly(out, &function_body);
             }
 

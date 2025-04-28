@@ -6,13 +6,19 @@ use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use crate::tac::TACInstruction::{
     AdjustStack, AllocateStackInstruction, BinaryOpInstruction, FunctionCall, FunctionInstruction,
     Jump, JumpIfNotZero, JumpIfZero, Label, PushArgument, ReturnInstruction, SignExtend,
-    StoreValueInstruction, Truncate, UnaryOpInstruction,
+    StoreValueInstruction, Truncate, UnaryOpInstruction, ZeroExtend,
 };
-use crate::tac::{FunctionBody, Operand, Pseudoregister};
+use crate::tac::{FunctionBody, Operand, Pseudoregister, Reg};
 use std::rc::Rc;
 
-const FIRST_SIX_INT_REGISTERS: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
-const FIRST_SIX_LONG_REGISTERS: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+const FIRST_SIX_REGISTERS: [Reg; 6] = [
+    Reg::DI,
+    Reg::SI,
+    Reg::DX,
+    Reg::CX,
+    Reg::R8,
+    Reg::R9,
+];
 
 pub(crate) struct TacVisitor<'a> {
     name: Rc<String>,
@@ -79,15 +85,11 @@ impl<'a> Visitor for TacVisitor<'a> {
                             .insert(param.to_string(), Rc::clone(&param_register));
 
                         if i < 6 {
-                            let reg = if func.func_type.params[i].size() == 4 {
-                                FIRST_SIX_INT_REGISTERS[i]
-                            } else {
-                                FIRST_SIX_LONG_REGISTERS[i]
-                            };
+                            let reg = &FIRST_SIX_REGISTERS[i];
                             self.body.add_instruction(StoreValueInstruction {
                                 dest: Rc::clone(&param_register),
                                 src: Rc::from(Operand::Register(Pseudoregister::Register(
-                                    reg.parse().unwrap(),
+                                    reg.clone(), func.func_type.params[i]
                                 ))),
                             });
                         } else {
@@ -517,14 +519,10 @@ impl<'a> Visitor for TacVisitor<'a> {
         }
 
         for i in 0..arguments.len().min(6) {
-            let reg = if arguments[i].type_.size() == 4 {
-                FIRST_SIX_INT_REGISTERS[i]
-            } else {
-                FIRST_SIX_LONG_REGISTERS[i]
-            };
+            let reg = &FIRST_SIX_REGISTERS[i];
             arguments[i].accept(self)?;
             self.body.add_instruction(StoreValueInstruction {
-                dest: Rc::from(Pseudoregister::Register(reg.to_string())),
+                dest: Rc::from(Pseudoregister::Register(reg.clone(), arguments[i].type_)),
                 src: Rc::clone(&self.result),
             });
         }
@@ -540,12 +538,10 @@ impl<'a> Visitor for TacVisitor<'a> {
         let result_register = Rc::new(Pseudoregister::new(self.body.current_offset, ret_type));
         self.body.current_offset += 8;
 
-        let from_register = if ret_type.size() == 4 { "eax" } else { "rax" };
+        let from_register = Reg::AX;
         self.body.add_instruction(StoreValueInstruction {
             dest: Rc::clone(&result_register),
-            src: Rc::from(Operand::Register(Pseudoregister::Register(
-                from_register.to_string(),
-            ))),
+            src: Rc::from(Operand::Register(Pseudoregister::Register(from_register, *ret_type))),
         });
 
         self.result = Rc::from(Operand::Register((*result_register).clone()));
@@ -566,7 +562,9 @@ impl<'a> Visitor for TacVisitor<'a> {
             BinaryOperator::Subtraction
         };
         variable.accept(self)?;
-        let one = if type_.size() == 4 {Const::ConstInt(1i32)} else {
+        let one = if type_.size() == 4 {
+            Const::ConstInt(1i32)
+        } else {
             Const::ConstLong(1i64)
         };
         match &*self.result {
@@ -698,10 +696,15 @@ impl<'a> Visitor for TacVisitor<'a> {
         let dest = Rc::from(Pseudoregister::new(self.body.current_offset, target_type));
         self.result = Rc::from(Operand::Register((*dest).clone()));
         self.body.current_offset += 8;
-        if *target_type == Type::Long {
+        if target_type.size() == exp.type_.size() {
+            self.body
+                .add_instruction(StoreValueInstruction { dest, src });
+        } else if target_type.size() < exp.type_.size() {
+            self.body.add_instruction(Truncate { dest, src });
+        } else if matches!(exp.type_, Type::UInt | Type::ULong) {
             self.body.add_instruction(SignExtend { dest, src });
         } else {
-            self.body.add_instruction(Truncate { dest, src })
+            self.body.add_instruction(ZeroExtend { dest, src });
         }
         Ok(())
     }
