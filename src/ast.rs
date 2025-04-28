@@ -434,9 +434,11 @@ impl ASTNode<Program> {
                     name: Rc::from(name.clone()),
                     global: static_attr.global,
                     init: match static_attr.type_ {
-                        Type::Void => unreachable!(),
                         Type::Int => Const::ConstInt(0),
                         Type::Long => Const::ConstLong(0),
+                        Type::UInt => Const::ConstUInt(0),
+                        Type::ULong => Const::ConstULong(0),
+                        _ => unreachable!(),
                     },
                 },
                 InitialValue::Initial(i) => TACInstruction::StaticVariable {

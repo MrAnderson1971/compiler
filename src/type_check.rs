@@ -196,6 +196,8 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         match value {
             Const::ConstInt(_) => *type_ = Type::Int,
             Const::ConstLong(_) => *type_ = Type::Long,
+            Const::ConstULong(_) => *type_ = Type::ULong,
+            Const::ConstUInt(_) => *type_ = Type::UInt,
         }
         Ok(())
     }
