@@ -226,6 +226,7 @@ pub(crate) trait Visitor {
         _line_number: &Rc<Position>,
         _target_type: &mut Type,
         exp: &mut Box<ASTNode<Expression>>,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError>
     where
         Self: Sized,
@@ -668,7 +669,9 @@ impl ASTNode<Expression> {
             Expression::Postfix(op, exp) => {
                 visitor.visit_postfix(&self.line_number, exp, op, &mut self.type_)
             }
-            Expression::Cast(type_, exp) => visitor.visit_cast(&self.line_number, type_, exp),
+            Expression::Cast(target_type, exp) => {
+                visitor.visit_cast(&self.line_number, target_type, exp, &mut self.type_)
+            }
         }
     }
 }

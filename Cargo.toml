@@ -18,3 +18,9 @@ winapi = { version = "0.3", features = [
 ] }
 regex = "1.11.1"
 uuid = { version = "1.16.0", features = ["v4"] }
+
+[profile.dev]
+incremental = true
+
+[profile.test]
+incremental = true

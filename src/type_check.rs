@@ -216,12 +216,12 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         value: &mut Const,
         type_: &mut Type,
     ) -> Result<(), CompilerError> {
-        match value {
-            Const::ConstInt(_) => *type_ = Type::Int,
-            Const::ConstLong(_) => *type_ = Type::Long,
-            Const::ConstULong(_) => *type_ = Type::ULong,
-            Const::ConstUInt(_) => *type_ = Type::UInt,
-        }
+        *type_ = match value {
+            Const::ConstInt(_) => Type::Int,
+            Const::ConstLong(_) => Type::Long,
+            Const::ConstULong(_) => Type::ULong,
+            Const::ConstUInt(_) => Type::UInt,
+        };
         Ok(())
     }
 
@@ -303,9 +303,10 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         _line_number: &Rc<Position>,
         target_type: &mut Type,
         exp: &mut Box<ASTNode<Expression>>,
+        type_: &mut Type,
     ) -> Result<(), CompilerError> {
         exp.accept(self)?;
-        *target_type = exp.type_.clone();
+        *type_ = target_type.clone();
         Ok(())
     }
 }

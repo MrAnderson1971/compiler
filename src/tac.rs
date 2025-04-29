@@ -324,16 +324,20 @@ impl TACInstruction {
                 });
             }
             TACInstruction::SignExtend { dest, src } => {
-                let r10 = Rc::from(Register(Reg::R10, Type::Int));
                 out.push_back(Mov {
                     size: 4,
                     src: Rc::clone(src),
-                    dest: Rc::clone(&r10),
+                    dest: Rc::from(Register(Reg::R10, Type::Int)),
                 });
                 out.push_back(Movsx {
-                    src: Rc::from(Operand::Register(r10.as_ref().clone())),
-                    dest: Rc::clone(&dest),
+                    src: Rc::from(Operand::Register(Register(Reg::R10, Type::Int))),
+                    dest: Rc::from(Register(Reg::R10, Type::Long)),
                 });
+                out.push_back(Mov {
+                    size: 8,
+                    src: Rc::from(Operand::Register(Register(Reg::R10, Type::Long))),
+                    dest: Rc::clone(dest),
+                })
             }
             TACInstruction::Truncate { dest, src } => out.push_back(Mov {
                 size: 4,

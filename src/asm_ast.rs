@@ -130,7 +130,7 @@ movq %r10, {}
                     *out += &format!("movl {}, {}\n", src, dest);
                 }
             }
-            AsmAst::Movsx { src, dest } => *out += &format!("movlsq {}, {}\n", src, dest),
+            AsmAst::Movsx { src, dest } => *out += &format!("movslq {}, {}\n", src, dest),
             AsmAst::MovZeroExtend { src, dest } => *out += &format!("movzbl {}, {}\n", src, dest),
             AsmAst::Unary {
                 size,
@@ -142,7 +142,7 @@ movq %r10, {}
                     UnaryOperator::Increment => format!("inc{}", suffix),
                     UnaryOperator::Decrement => format!("dec{}", suffix),
                     UnaryOperator::LogicalNot => {
-                        *out += &format!("xor $1, {}", dest);
+                        *out += &format!("xorl $1, {}", dest);
                         return;
                     }
                     UnaryOperator::BitwiseNot => format!("not{}", suffix),

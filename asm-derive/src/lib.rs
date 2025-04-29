@@ -42,7 +42,7 @@ pub fn derive_fix_intermediate(input: TokenStream) -> TokenStream {
                     // Pattern for Binary-like variants (with operator field)
                     quote! {
                         Self::#variant_name { operator, size, src, dest, .. } => {
-                            if matches!(src.as_ref(), Operand::Register(Pseudoregister::Pseudoregister(_, _)) | Operand::MemoryReference(_, _, _)) && matches!(dest.as_ref(), Pseudoregister::Pseudoregister(_, _)) {
+                            if matches!(src.as_ref(), Operand::Register(Pseudoregister::Pseudoregister(_, _) | Pseudoregister::Data(_, _)) | Operand::MemoryReference(_, _, _)) && matches!(dest.as_ref(), Pseudoregister::Pseudoregister(_, _) | Pseudoregister::Data(_, _)) {
                                 let r10 = std::rc::Rc::from(Pseudoregister::Register(
                                     Reg::R10,
                                     if *size == 4 { Type::Int } else { Type::Long },
@@ -67,7 +67,7 @@ pub fn derive_fix_intermediate(input: TokenStream) -> TokenStream {
                     // Pattern for Mov-like variants (without operator field)
                     quote! {
                         Self::#variant_name { size, src, dest, .. } => {
-                            if matches!(src.as_ref(), Operand::Register(Pseudoregister::Pseudoregister(_, _)) | Operand::MemoryReference(_, _, _)) && matches!(dest.as_ref(), Pseudoregister::Pseudoregister(_, _)) {
+                            if matches!(src.as_ref(), Operand::Register(Pseudoregister::Pseudoregister(_, _) | Pseudoregister::Data(_, _)) | Operand::MemoryReference(_, _, _)) && matches!(dest.as_ref(), Pseudoregister::Pseudoregister(_, _) | Pseudoregister::Data(_, _)) {
                                 let r10 = std::rc::Rc::from(Pseudoregister::Register(
                                     Reg::R10,
                                     if *size == 4 { Type::Int } else { Type::Long },

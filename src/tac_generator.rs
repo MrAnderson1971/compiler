@@ -687,6 +687,7 @@ impl<'a> Visitor for TacVisitor<'a> {
         _line_number: &Rc<Position>,
         target_type: &mut Type,
         exp: &mut Box<ASTNode<Expression>>,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         exp.accept(self)?;
         if *target_type == exp.type_ {
@@ -702,9 +703,9 @@ impl<'a> Visitor for TacVisitor<'a> {
         } else if target_type.size() < exp.type_.size() {
             self.body.add_instruction(Truncate { dest, src });
         } else if matches!(exp.type_, Type::UInt | Type::ULong) {
-            self.body.add_instruction(SignExtend { dest, src });
-        } else {
             self.body.add_instruction(ZeroExtend { dest, src });
+        } else {
+            self.body.add_instruction(SignExtend { dest, src });
         }
         Ok(())
     }
