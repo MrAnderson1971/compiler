@@ -1,7 +1,4 @@
-use crate::asm_ast::AsmAst::{
-    Binary, Call, Cdq, Cmp, Function, Idiv, Jmp, JmpCC, Label, Mov, MovAl, Movsx, Push, Ret, SetCC,
-    Static, Testl, Unary,
-};
+use crate::asm_ast::AsmAst::{Binary, Call, Cdq, Cmp, Div, Function, Idiv, Jmp, JmpCC, Label, Mov, MovAl, MovZeroExtend, Movsx, Push, Ret, SetCC, Static, Testl, Unary};
 use crate::asm_ast::{AsmAst, CondCode};
 use crate::common::Const;
 use crate::common::Const::ConstLong;
@@ -50,6 +47,14 @@ impl Pseudoregister {
             Pseudoregister::Data(_, t) => t.size(),
         }
     }
+
+    fn is_unsigned(&self) -> bool {
+        match self {
+            Pseudoregister::Pseudoregister(_, t) => matches!(t, Type::ULong | Type::UInt),
+            Register(_, t) => matches!(t, Type::ULong | Type::UInt),
+            Pseudoregister::Data(_, t) => matches!(t, Type::ULong | Type::UInt),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -74,6 +79,15 @@ impl Operand {
         match self {
             Operand::Immediate(_) => true,
             _ => false,
+        }
+    }
+
+    fn is_unsigned(&self) -> bool {
+        match self {
+            Operand::Immediate(c) => matches!(c, Const::ConstUInt(_) | Const::ConstULong(_)),
+            Operand::Register(reg) => reg.is_unsigned(),
+            Operand::MemoryReference(_, _, t) => matches!(t, Type::ULong | Type::UInt),
+            Operand::None => false,
         }
     }
 }
@@ -345,16 +359,7 @@ impl TACInstruction {
                 dest: Rc::clone(dest),
             }),
             TACInstruction::ZeroExtend { dest, src } => {
-                out.push_back(Mov {
-                    size: 4,
-                    src: Rc::clone(src),
-                    dest: Rc::from(Register(Reg::AX, Type::Int)),
-                });
-                out.push_back(Mov {
-                    size: 8,
-                    src: Rc::from(Operand::Register(Register(Reg::AX, Type::Long))),
-                    dest: Rc::clone(dest),
-                });
+                out.push_back(MovZeroExtend {src: src.clone(), dest: dest.clone()});
             }
         }
     }
@@ -367,6 +372,11 @@ fn make_binary_op_instruction(
     left: &Rc<Operand>,
     right: &Rc<Operand>,
 ) {
+    let t = if left.size() == 4 {
+        Type::Int
+    } else {
+        Type::Long
+    };
     match op {
         BinaryOperator::BitwiseShiftLeft | BinaryOperator::BitwiseShiftRight => {
             // First, move the left operand (value to be shifted) to the destination
@@ -391,14 +401,7 @@ fn make_binary_op_instruction(
                 out.push_back(Mov {
                     size: right.size(),
                     src: Rc::clone(right),
-                    dest: Rc::from(Register(
-                        Reg::CX,
-                        if right.size() == 4 {
-                            Type::Int
-                        } else {
-                            Type::Long
-                        },
-                    )),
+                    dest: Rc::from(Register(Reg::CX, t)),
                 });
 
                 // Now perform the shift operation using CL as the shift count
@@ -435,111 +438,77 @@ fn make_binary_op_instruction(
             out.push_back(Mov {
                 size: left.size(),
                 src: Rc::clone(left),
-                dest: Rc::from(Register(
-                    Reg::AX,
-                    if left.size() == 4 {
-                        Type::Int
-                    } else {
-                        Type::Long
-                    },
-                )),
+                dest: Rc::from(Register(Reg::AX, t)),
             });
             // Multiply AX by right operand
             out.push_back(Binary {
                 operator: BinaryOperator::Multiply,
                 size: right.size(),
                 src: Rc::clone(right),
-                dest: Rc::from(Register(
-                    Reg::AX,
-                    if right.size() == 4 {
-                        Type::Int
-                    } else {
-                        Type::Long
-                    },
-                )),
+                dest: Rc::from(Register(Reg::AX, t)),
             });
             // Move result from AX to destination
             out.push_back(Mov {
                 size: dest.size(),
-                src: Rc::from(Operand::Register(Register(
-                    Reg::AX,
-                    if dest.size() == 4 {
-                        Type::Int
-                    } else {
-                        Type::Long
-                    },
-                ))),
+                src: Rc::from(Operand::Register(Register(Reg::AX, t))),
                 dest: Rc::clone(dest),
             });
         }
         BinaryOperator::Divide | BinaryOperator::Modulo => {
-            // Divide/Modulo
-            // Move left operand to AX register
-            out.push_back(Mov {
-                size: left.size(),
-                src: Rc::clone(left),
-                dest: Rc::from(Register(
-                    Reg::AX,
-                    if left.size() == 4 {
-                        Type::Int
-                    } else {
-                        Type::Long
-                    },
-                )),
-            });
-            // Sign-extend AX to DX:AX
-            out.push_back(Cdq { size: left.size() });
-            // Move right operand to CX register
-            out.push_back(Mov {
-                size: right.size(),
-                src: Rc::clone(right),
-                dest: Rc::from(Register(
-                    Reg::CX,
-                    if right.size() == 4 {
-                        Type::Int
-                    } else {
-                        Type::Long
-                    },
-                )),
-            });
-            // Divide DX:AX by CX, result in AX (quotient) and DX (remainder)
-            out.push_back(Idiv {
-                size: right.size(),
-                operand: Rc::from(Register(
-                    Reg::CX,
-                    if right.size() == 4 {
-                        Type::Int
-                    } else {
-                        Type::Long
-                    },
-                )),
-            });
+            if left.is_unsigned() {
+                let c = if left.size() == 4 {
+                    Const::ConstUInt(0)
+                } else {
+                    Const::ConstULong(0)
+                };
+                out.push_back(Mov {
+                    size: left.size(),
+                    src: Rc::clone(left),
+                    dest: Rc::from(Register(Reg::AX, t)),
+                });
+                out.push_back(Mov {
+                    size: left.size(),
+                    src: Rc::from(Operand::Immediate(c)),
+                    dest: Rc::from(Register(Reg::DX, t)),
+                });
+                out.push_back(Div {
+                    size: left.size(),
+                    operand: Rc::clone(right),
+                });
+            } else {
+                // Divide/Modulo
+                // Move left operand to AX register
+                out.push_back(Mov {
+                    size: left.size(),
+                    src: Rc::clone(left),
+                    dest: Rc::from(Register(Reg::AX, t)),
+                });
+                // Sign-extend AX to DX:AX
+                out.push_back(Cdq { size: left.size() });
+                // Move right operand to CX register
+                out.push_back(Mov {
+                    size: right.size(),
+                    src: Rc::clone(right),
+                    dest: Rc::from(Register(Reg::CX, t)),
+                });
+                // Divide DX:AX by CX, result in AX (quotient) and DX (remainder)
+                out.push_back(Idiv {
+                    size: right.size(),
+                    operand: Rc::from(Register(Reg::CX, t)),
+                });
+            }
             // Move quotient (AX) or remainder (DX) to destination
             if *op == BinaryOperator::Divide {
                 out.push_back(Mov {
                     size: dest.size(),
-                    src: Rc::from(Operand::Register(Register(
-                        Reg::AX,
-                        if dest.size() == 4 {
-                            Type::Int
-                        } else {
-                            Type::Long
-                        },
-                    ))),
+                    src: Rc::from(Operand::Register(Register(Reg::AX, t))),
                     dest: Rc::clone(dest),
                 });
             } else {
                 // Modulo
                 out.push_back(Mov {
                     size: dest.size(),
-                    src: Rc::from(Operand::Register(Register(
-                        Reg::DX,
-                        if dest.size() == 4 {
-                            Type::Int
-                        } else {
-                            Type::Long
-                        },
-                    ))),
+                    src: Rc::from(Operand::Register(Register(Reg::DX, t))),
                     dest: Rc::clone(dest),
                 });
             }
@@ -554,14 +523,7 @@ fn make_binary_op_instruction(
             out.push_back(Mov {
                 size: left.size(),
                 src: Rc::clone(left),
-                dest: Rc::from(Register(
-                    Reg::DX,
-                    if left.size() == 4 {
-                        Type::Int
-                    } else {
-                        Type::Long
-                    },
-                )),
+                dest: Rc::from(Register(Reg::DX, t)),
             });
 
             // Handle comparison
@@ -580,14 +542,7 @@ fn make_binary_op_instruction(
                 out.push_back(Cmp {
                     size: left.size(),
                     left: Rc::clone(right),
-                    right: Rc::from(Operand::Register(Register(
-                        Reg::DX,
-                        if left.size() == 4 {
-                            Type::Int
-                        } else {
-                            Type::Long
-                        },
-                    ))),
+                    right: Rc::from(Operand::Register(Register(Reg::DX, t))),
                 });
             }
 

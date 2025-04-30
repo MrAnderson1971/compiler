@@ -1,10 +1,21 @@
 use crate::common::Const;
 use crate::lexer::{BinaryOperator, Type, UnaryOperator};
+use crate::tac::Pseudoregister::Register;
 use crate::tac::{Operand, Pseudoregister, Reg};
-use asm_derive::FixIntermediate;
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
+
+fn should_split(src: &Rc<Operand>, dest: &Rc<Pseudoregister>) -> bool {
+    matches!(
+        src.as_ref(),
+        Operand::Register(Pseudoregister::Pseudoregister(_, _) | Pseudoregister::Data(_, _))
+            | Operand::MemoryReference(_, _, _)
+    ) && matches!(
+        dest.as_ref(),
+        Pseudoregister::Pseudoregister(_, _) | Pseudoregister::Data(_, _)
+    )
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum CondCode {
@@ -29,7 +40,7 @@ impl Display for CondCode {
     }
 }
 
-#[derive(Debug, FixIntermediate, Clone)]
+#[derive(Debug, Clone)]
 pub(crate) enum AsmAst {
     Function {
         name: Rc<String>,
@@ -77,7 +88,7 @@ pub(crate) enum AsmAst {
     },
     Div {
         size: i32,
-        operand: Rc<Pseudoregister>,
+        operand: Rc<Operand>,
     },
     Cdq {
         size: i32,
@@ -104,6 +115,72 @@ pub(crate) fn assembly_fix(mut instructions: VecDeque<AsmAst>) -> VecDeque<AsmAs
 }
 
 impl AsmAst {
+    fn fix_intermediate(&self, out: &mut VecDeque<AsmAst>) {
+        match self {
+            AsmAst::Binary {
+                operator,
+                size,
+                src,
+                dest,
+            } => {
+                if should_split(src, dest) {
+                    let r10 = std::rc::Rc::from(Pseudoregister::Register(
+                        Reg::R10,
+                        if *size == 4 { Type::Int } else { Type::Long },
+                    ));
+                    out.push_back(Self::Mov {
+                        size: *size,
+                        src: src.clone(),
+                        dest: r10.clone(),
+                    });
+                    out.push_back(AsmAst::Binary {
+                        operator: *operator,
+                        size: *size,
+                        src: std::rc::Rc::from(Operand::Register(r10.as_ref().clone())),
+                        dest: dest.clone(),
+                    });
+                } else {
+                    out.push_back(self.clone());
+                }
+            }
+            AsmAst::Mov { size, src, dest } => {
+                if should_split(src, dest) {
+                    let r10 = std::rc::Rc::from(Pseudoregister::Register(
+                        Reg::R10,
+                        if *size == 4 { Type::Int } else { Type::Long },
+                    ));
+                    out.push_back(AsmAst::Mov {
+                        size: *size,
+                        src: src.clone(),
+                        dest: r10.clone(),
+                    });
+                    out.push_back(AsmAst::Mov {
+                        size: *size,
+                        src: std::rc::Rc::from(Operand::Register(r10.as_ref().clone())),
+                        dest: dest.clone(),
+                    });
+                } else {
+                    out.push_back(self.clone());
+                }
+            }
+            AsmAst::MovZeroExtend { src, dest } => {
+                if should_split(src, dest) {
+                    out.push_back(AsmAst::Mov {
+                        size: 4,
+                        src: src.clone(),
+                        dest: Rc::from(Register(Reg::R10, Type::Int)),
+                    });
+                    out.push_back(AsmAst::Mov {
+                        size: 8,
+                        src: std::rc::Rc::from(Operand::Register(Register(Reg::R10, Type::Long))),
+                        dest: dest.clone(),
+                    });
+                }
+            }
+            _ => out.push_back(self.clone()),
+        }
+    }
+
     pub(crate) fn make_assembly(&self, out: &mut String) {
         match &self {
             AsmAst::Function { name, global } => {
@@ -121,9 +198,12 @@ movq %rsp, %rbp
             }
             AsmAst::Mov { size, src, dest } => {
                 if *size == 8 && src.is_immediate() {
-                    *out += &format!(r#"movabsq {}, %r10
+                    *out += &format!(
+                        r#"movabsq {}, %r10
 movq %r10, {}
-"#, src, dest);
+"#,
+                        src, dest
+                    );
                 } else if *size == 8 {
                     *out += &format!("movq {}, {}\n", src, dest);
                 } else {
@@ -179,7 +259,10 @@ movq %r10, {}
                 let suffix = if *size == 4 { 'l' } else { 'q' };
                 *out += &format!("idiv{} {}", suffix, operand);
             }
-            AsmAst::Div { .. } => {}
+            AsmAst::Div { size, operand } => {
+                let suffix = if *size == 4 { 'l' } else { 'q' };
+                *out += &format!("div{} {}", suffix, operand);
+            }
             AsmAst::Cdq { size } => *out += if *size == 4 { "cdq" } else { "cqo" },
             AsmAst::Jmp(label) => *out += &format!("jmp {}\n", label),
             AsmAst::JmpCC { condition, label } => *out += &format!("j{} {}\n", condition, label),

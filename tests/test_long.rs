@@ -653,7 +653,7 @@ fn test_function_returning_long(mut harness: CompilerTest) {
         return (long)a;
     }
 
-    long calculate_long(int a, long b) {
+    int long calculate_long(int a, long int b) {
         return a * b + 42l;
     }
 
