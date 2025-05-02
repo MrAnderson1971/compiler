@@ -255,7 +255,16 @@ movq %r10, {}
                     BinaryOperator::BitwiseShiftRight => format!("shr{}", suffix),
                     _ => unreachable!(),
                 };
-                *out += &format!("{} {}, {}\n", opcode, src, dest);
+                if src.is_immediate() && *size == 8 {
+                    *out += &format!(
+                        r#"movabsq {}, %r10
+{} %r10, {}
+"#,
+                        src, opcode, dest
+                    );
+                } else {
+                    *out += &format!("{} {}, {}\n", opcode, src, dest);
+                }
             }
             AsmAst::Cmp { size, left, right } => {
                 let suffix = if *size == 4 { 'l' } else { 'q' };

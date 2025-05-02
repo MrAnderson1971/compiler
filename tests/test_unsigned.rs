@@ -94,17 +94,10 @@ fn test_unsigned_multiplication_large_values(mut harness: CompilerTest) {
     // In Rust, we can use wrapping_mul for explicit overflow handling
     let source = r#"
     int main() {
-    return 1000000u * 1000000u == 4000000000u; // Result after wrapping (1 trillion mod 2^32)
+    return 1000000u * 1000000u == 3567587328u; // Result after wrapping (1 trillion mod 2^32)
     }
     "#;
     harness.assert_runs_ok(source, 1);
-
-    // Alternative using std::num::Wrapping
-    use std::num::Wrapping;
-    let a = Wrapping(1000000u32);
-    let b = Wrapping(1000000u32);
-    let result = a * b;
-    assert_eq!(result.0, 1000000000000u64 as u32); // Correctly shows the wrapped result
 }
 
 #[rstest]
@@ -136,7 +129,7 @@ fn test_unsigned_modulo(mut harness: CompilerTest) {
              a = 4294967290u; // 2^32 - 6
              b = 90u;
 
-    return a % b == 80u;
+    return a % b == 70u;
     }
     "#;
     harness.assert_runs_ok(source, 1);
@@ -239,13 +232,13 @@ int subtraction() {
 
 int multiplication() {
     // a = 18446744073709551610ul;
-    return (a * 2ul == 18446744073709551614ul);
+    return (a * 2ul == 18446744073709551604ul);
 }
 
 int division() {
     // a = 18446744073709551610ul;
     b = a / 128ul;
-    return (b == 144115344481324621ul);
+    return (b == 144115188075855871ul);
 }
 
 int remaind() {
@@ -938,8 +931,8 @@ fn test_mixed_signed_unsigned_operations(mut harness: CompilerTest) {
         if (result != 4294967291u) return 1; // -10 + 5u should be UINT_MAX-4
 
         // Mixing in comparisons
-        if (!(neg < ui)) return 2; // -10 < 5u should be false (since -10 becomes a large unsigned)
-        if (ui < neg) return 3;    // 5u < -10 should be true
+        if (neg < ui) return 2; // -10 < 5u should be false (since -10 becomes a large unsigned)
+        if (!(ui < neg)) return 3;    // 5u < -10 should be true
 
         // Mixing in bit operations
         unsigned int bit_result = neg & ui;
