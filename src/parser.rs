@@ -8,7 +8,7 @@ use crate::ast::{
     ASTNode, Block, BlockItem, Declaration, Expression, ForInit, FuncType, FunctionDeclaration,
     Program, Statement, VariableDeclaration, extract_base_variable, is_lvalue_node,
 };
-use crate::common::{Identifier, Position};
+use crate::common::Position;
 use crate::errors::CompilerError;
 use crate::errors::CompilerError::{SemanticError, SyntaxError};
 use crate::lexer::BinaryOperator::Assign;
@@ -16,7 +16,7 @@ use crate::lexer::Symbol::{Ambiguous, Binary};
 use crate::lexer::{
     BinaryOperator, Keyword, StorageClass, Symbol, Token, Type, UnaryOperator, UnaryOrBinaryOp,
 };
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 
 macro_rules! match_and_consume {
@@ -105,79 +105,87 @@ impl Parser {
     }
 
     #[allow(unused_variables)]
-    fn parse_params(&mut self) -> Result<(Vec<Identifier>, Vec<Type>), CompilerError> {
+    fn parse_params(&mut self) -> Result<(Vec<String>, Vec<Type>), CompilerError> {
         expect_token!(self, Token::Symbol(Symbol::OpenParenthesis))?;
         let mut params = vec![];
         let mut types = vec![];
 
-        let next = self.tokens.pop_front().unwrap();
-        match next {
-            Token::Symbol(Symbol::CloseParenthesis) => return Ok((params, types)),
-            Token::Keyword(Keyword::Type(param_type)) => {
-                if let Token::Name(name) = self.tokens.pop_front().unwrap() {
-                    params.push(name);
-                    types.push(param_type);
-                } else {
-                    return Err(SyntaxError(format!(
-                        "Expected identifier but got {:?}",
-                        next
-                    )));
-                }
-            }
-            _ => {
-                return Err(SyntaxError(format!(
-                    "Expected identifier but got {:?}",
-                    next
-                )));
-            }
+        // Handle empty parameter list
+        if match_and_consume!(self, Token::Symbol(Symbol::CloseParenthesis)) {
+            return Ok((params, types));
         }
 
+        // Process parameters
         loop {
-            let next = self.tokens.pop_front().unwrap();
-            match next {
-                Token::Symbol(Symbol::CloseParenthesis) => return Ok((params, types)),
-                Token::Symbol(Symbol::Comma) => {
-                    let param_type =
-                        match_and_consume!(self, Token::Keyword(Keyword::Type(t)) => Some(t))
-                            .ok_or_else(|| {
-                                SyntaxError(format!(
-                                    "Expected type but got {:?} at {:?}",
-                                    self.peek_token(),
-                                    self.line_number
-                                ))
-                            })?;
-                    if let Token::Name(name) = self.tokens.pop_front().unwrap() {
-                        types.push(param_type);
-                        params.push(name);
-                    } else {
-                        return Err(SyntaxError(format!(
-                            "Expected identifier but got {:?}",
-                            next
-                        )));
-                    }
-                }
-                _ => {
-                    return Err(SyntaxError(format!(
-                        "Expected identifier but got {:?}",
-                        next
-                    )));
-                }
+            // Parse type specifiers
+            let mut specifiers = vec![];
+            while let Token::Keyword(spec @ Keyword::Type(..)) = self.peek_token() {
+                self.tokens.pop_front();
+                specifiers.push(spec);
             }
+
+            if specifiers.is_empty() {
+                return Err(SyntaxError(format!(
+                    "Expected type specifier but got {:?} at {:?}",
+                    self.peek_token(),
+                    self.line_number
+                )));
+            }
+
+            let (type_, _) = self.parse_type_and_storage_class(specifiers)?;
+
+            // Parse parameter name
+            if let Token::Name(name) = self.peek_token() {
+                self.tokens.pop_front();
+                params.push(name);
+                types.push(type_);
+            } else {
+                return Err(SyntaxError(format!(
+                    "Expected parameter name but got {:?} at {:?}",
+                    self.peek_token(),
+                    self.line_number
+                )));
+            }
+
+            // Check for end of parameter list or more parameters
+            if match_and_consume!(self, Token::Symbol(Symbol::CloseParenthesis)) {
+                return Ok((params, types));
+            }
+
+            expect_token!(self, Token::Symbol(Symbol::Comma))?;
         }
     }
 
     fn parse_type_specifier(&self, types: Vec<Type>) -> Result<Type, CompilerError> {
-        if types.len() != 1 {
-            if types == vec![Type::Int, Type::Long] || types == vec![Type::Long, Type::Int] {
-                Ok(Type::Long)
-            } else {
-                Err(SyntaxError(format!(
+        if types.is_empty() {
+            return Err(SyntaxError(format!(
+                "Invalid type specifier {:?} at {:?}",
+                types, self.line_number
+            )));
+        }
+        let mut seen = HashSet::new();
+        for item in types.iter() {
+            if !seen.insert(*item) {
+                return Err(SyntaxError(format!(
                     "Invalid type specifier {:?} at {:?}",
                     types, self.line_number
-                )))
+                )));
             }
+        }
+        if seen.contains(&Type::Signed) && seen.contains(&Type::Unsigned) {
+            return Err(SyntaxError(format!(
+                "Invalid type specifier {:?} at {:?}",
+                types, self.line_number
+            )));
+        }
+        if seen.contains(&Type::Unsigned) && seen.contains(&Type::Long) {
+            Ok(Type::ULong)
+        } else if seen.contains(&Type::Unsigned) {
+            Ok(Type::UInt)
+        } else if seen.contains(&Type::Long) {
+            Ok(Type::Long)
         } else {
-            Ok(types[0])
+            Ok(Type::Int)
         }
     }
 
@@ -325,7 +333,7 @@ impl Parser {
     fn parse_declaration(
         &mut self,
         specifiers: (Type, Option<StorageClass>),
-        name: Option<Identifier>,
+        name: Option<String>,
     ) -> Result<ASTNode<VariableDeclaration>, CompilerError> {
         let identifier = if let Some(name) = name {
             name

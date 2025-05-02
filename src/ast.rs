@@ -1,13 +1,14 @@
 use crate::CompilerError;
 use crate::CompilerError::SemanticError;
-use crate::common::{Const, Identifier, Position};
+use crate::asm_ast::AsmAst;
+use crate::common::{Const, Position};
 use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use crate::tac::{FunctionBody, TACInstruction};
 use crate::tac_generator::TacVisitor;
 use crate::type_check::TypeCheckVisitor;
 use crate::variable_resolution::VariableResolutionVisitor;
 use std::cmp::PartialEq;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::ops::DerefMut;
 use std::rc::Rc;
 
@@ -158,7 +159,7 @@ pub(crate) trait Visitor {
     fn visit_variable(
         &mut self,
         _line_number: &Rc<Position>,
-        _identifier: &mut Rc<Identifier>,
+        _identifier: &mut Rc<String>,
         _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         Ok(())
@@ -166,7 +167,7 @@ pub(crate) trait Visitor {
     fn visit_function_call(
         &mut self,
         _line_number: &Rc<Position>,
-        _identifier: &mut Rc<Identifier>,
+        _identifier: &mut Rc<String>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
         _ret_type: &mut Type,
     ) -> Result<(), CompilerError>
@@ -225,6 +226,7 @@ pub(crate) trait Visitor {
         _line_number: &Rc<Position>,
         _target_type: &mut Type,
         exp: &mut Box<ASTNode<Expression>>,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError>
     where
         Self: Sized,
@@ -269,8 +271,8 @@ pub(crate) type Program = Vec<ASTNode<Declaration>>;
 
 #[derive(Debug)]
 pub(crate) struct FunctionDeclaration {
-    pub(crate) name: Rc<Identifier>,
-    pub(crate) params: Vec<Identifier>,
+    pub(crate) name: Rc<String>,
+    pub(crate) params: Vec<String>,
     pub(crate) body: Option<ASTNode<Block>>,
     pub(crate) storage_class: Option<StorageClass>,
     pub(crate) func_type: Rc<FuncType>,
@@ -292,7 +294,7 @@ pub(crate) enum Declaration {
 
 #[derive(Debug)]
 pub(crate) struct VariableDeclaration {
-    pub(crate) name: Rc<Identifier>,
+    pub(crate) name: Rc<String>,
     pub(crate) init: Option<ASTNode<Expression>>,
     pub(crate) storage_class: Option<StorageClass>,
     pub(crate) var_type: Type,
@@ -301,7 +303,7 @@ pub(crate) struct VariableDeclaration {
 #[derive(Debug)]
 pub(crate) enum Expression {
     Constant(Const),
-    Variable(Rc<Identifier>),
+    Variable(Rc<String>),
     Unary(UnaryOperator, Box<ASTNode<Expression>>),
     Binary {
         op: BinaryOperator,
@@ -317,7 +319,7 @@ pub(crate) enum Expression {
         if_true: Box<ASTNode<Expression>>,
         if_false: Box<ASTNode<Expression>>,
     },
-    FunctionCall(Rc<Identifier>, Box<Vec<ASTNode<Expression>>>),
+    FunctionCall(Rc<String>, Box<Vec<ASTNode<Expression>>>),
     Prefix(UnaryOperator, Box<ASTNode<Expression>>),
     Postfix(UnaryOperator, Box<ASTNode<Expression>>),
     Cast(Type, Box<ASTNode<Expression>>),
@@ -367,7 +369,7 @@ pub(crate) fn is_lvalue_node(node: &Expression) -> bool {
     }
 }
 
-pub(crate) fn extract_base_variable(node: &Expression) -> Rc<Identifier> {
+pub(crate) fn extract_base_variable(node: &Expression) -> Rc<String> {
     match node {
         Expression::Variable(v) => Rc::clone(v),
         Expression::Prefix(_, v) => extract_base_variable(&v.kind),
@@ -382,9 +384,9 @@ impl PartialEq for FuncType {
 }
 
 impl ASTNode<Program> {
-    pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
-        let mut shared_functions_map: HashMap<Identifier, FunAttr> = HashMap::new();
-        let mut shared_variables_map: HashMap<Identifier, StaticAttr> = HashMap::new();
+    pub(crate) fn generate(&mut self, out: &mut VecDeque<AsmAst>) -> Result<(), CompilerError> {
+        let mut shared_functions_map: HashMap<String, FunAttr> = HashMap::new();
+        let mut shared_variables_map: HashMap<String, StaticAttr> = HashMap::new();
 
         // first pass: register declarations
         for declaration in self.kind.iter_mut() {
@@ -434,9 +436,11 @@ impl ASTNode<Program> {
                     name: Rc::from(name.clone()),
                     global: static_attr.global,
                     init: match static_attr.type_ {
-                        Type::Void => unreachable!(),
                         Type::Int => Const::ConstInt(0),
                         Type::Long => Const::ConstLong(0),
+                        Type::UInt => Const::ConstUInt(0),
+                        Type::ULong => Const::ConstULong(0),
+                        _ => unreachable!(),
                     },
                 },
                 InitialValue::Initial(i) => TACInstruction::StaticVariable {
@@ -453,8 +457,8 @@ impl ASTNode<Program> {
     }
 
     fn typecheck_file_scope_variable_declaration(
-        shared_functions_map: &mut HashMap<Identifier, FunAttr>,
-        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
+        shared_functions_map: &mut HashMap<String, FunAttr>,
+        shared_variables_map: &mut HashMap<String, StaticAttr>,
         var: &&mut VariableDeclaration,
     ) -> Option<Result<(), CompilerError>> {
         let mut initial_value = if let Some(init) = &var.init {
@@ -530,8 +534,8 @@ impl ASTNode<Program> {
     }
 
     fn typecheck_function_declaration(
-        shared_functions_map: &mut HashMap<Identifier, FunAttr>,
-        shared_variables_map: &mut HashMap<Identifier, StaticAttr>,
+        shared_functions_map: &mut HashMap<String, FunAttr>,
+        shared_variables_map: &mut HashMap<String, StaticAttr>,
         func: &&mut FunctionDeclaration,
     ) -> Option<Result<(), CompilerError>> {
         let name = Rc::clone(&func.name);
@@ -578,7 +582,7 @@ impl ASTNode<Program> {
 }
 
 impl ASTNode<Declaration> {
-    pub(crate) fn generate(&mut self, out: &mut String) -> Result<(), CompilerError> {
+    pub(crate) fn generate(&mut self, out: &mut VecDeque<AsmAst>) -> Result<(), CompilerError> {
         if let Declaration::FunctionDeclaration(func) = &mut self.kind {
             let identifier = Rc::clone(&func.name);
 
@@ -590,7 +594,6 @@ impl ASTNode<Declaration> {
             function_body.add_default_return();
 
             for instruction in &function_body.instructions {
-                *out += "\n";
                 instruction.make_assembly(out, &function_body);
             }
 
@@ -666,7 +669,9 @@ impl ASTNode<Expression> {
             Expression::Postfix(op, exp) => {
                 visitor.visit_postfix(&self.line_number, exp, op, &mut self.type_)
             }
-            Expression::Cast(type_, exp) => visitor.visit_cast(&self.line_number, type_, exp),
+            Expression::Cast(target_type, exp) => {
+                visitor.visit_cast(&self.line_number, target_type, exp, &mut self.type_)
+            }
         }
     }
 }

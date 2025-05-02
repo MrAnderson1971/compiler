@@ -1,23 +1,51 @@
 use crate::CompilerError;
 use crate::CompilerError::SemanticError;
 use crate::ast::{ASTNode, Declaration, Expression, FunAttr, StaticAttr, Visitor};
-use crate::common::{Const, Identifier, Position};
+use crate::common::{Const, Position};
 use crate::lexer::{BinaryOperator, Type, UnaryOperator};
 use std::collections::HashMap;
 use std::rc::Rc;
 
 pub(crate) struct TypeCheckVisitor<'map> {
-    variables_map: HashMap<Identifier, Type>,
-    functions_map: &'map HashMap<Identifier, FunAttr>,
-    global_variables_map: &'map HashMap<Identifier, StaticAttr>,
+    variables_map: HashMap<String, Type>,
+    functions_map: &'map HashMap<String, FunAttr>,
+    global_variables_map: &'map HashMap<String, StaticAttr>,
     current_return_type: Type,
 }
 
+/*
+get_common_type(type1, type2):
+ 1 if type1 == type2:
+     return type1
+ 2 if size(type1) == size(type2):
+    if type1 is signed:
+        return type2
+    else:
+        return type1
+ 3 if size(type1) > size(type2):
+    return type1
+ else:
+    return type2
+ */
 fn get_common_type(type1: &Type, type2: &Type) -> Type {
     if type1 == type2 {
-        type1.clone()
+        return *type1;
+    }
+
+    if type1.size() == type2.size() {
+        if matches!(type1, Type::UInt | Type::ULong) {
+            return *type1;
+        }
+        if matches!(type2, Type::UInt | Type::ULong) {
+            return *type2;
+        }
+        return *type1;
+    }
+
+    if type1.size() > type2.size() {
+        *type1
     } else {
-        Type::Long
+        *type2
     }
 }
 
@@ -46,8 +74,8 @@ fn convert_to(line_number: &Rc<Position>, e: &mut ASTNode<Expression>, t: &Type)
 
 impl<'map> TypeCheckVisitor<'map> {
     pub(crate) fn new(
-        functions_map: &'map HashMap<Identifier, FunAttr>,
-        global_variables_map: &'map HashMap<Identifier, StaticAttr>,
+        functions_map: &'map HashMap<String, FunAttr>,
+        global_variables_map: &'map HashMap<String, StaticAttr>,
     ) -> Self {
         Self {
             variables_map: HashMap::new(),
@@ -193,17 +221,19 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         value: &mut Const,
         type_: &mut Type,
     ) -> Result<(), CompilerError> {
-        match value {
-            Const::ConstInt(_) => *type_ = Type::Int,
-            Const::ConstLong(_) => *type_ = Type::Long,
-        }
+        *type_ = match value {
+            Const::ConstInt(_) => Type::Int,
+            Const::ConstLong(_) => Type::Long,
+            Const::ConstULong(_) => Type::ULong,
+            Const::ConstUInt(_) => Type::UInt,
+        };
         Ok(())
     }
 
     fn visit_variable(
         &mut self,
         _line_number: &Rc<Position>,
-        identifier: &mut Rc<Identifier>,
+        identifier: &mut Rc<String>,
         node: &mut Type,
     ) -> Result<(), CompilerError> {
         if let Some(attr) = self.global_variables_map.get(&identifier.to_string()) {
@@ -221,7 +251,7 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
     fn visit_function_call(
         &mut self,
         line_number: &Rc<Position>,
-        identifier: &mut Rc<Identifier>,
+        identifier: &mut Rc<String>,
         arguments: &mut Box<Vec<ASTNode<Expression>>>,
         ret_type: &mut Type,
     ) -> Result<(), CompilerError> {
@@ -278,9 +308,10 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
         _line_number: &Rc<Position>,
         target_type: &mut Type,
         exp: &mut Box<ASTNode<Expression>>,
+        type_: &mut Type,
     ) -> Result<(), CompilerError> {
         exp.accept(self)?;
-        *target_type = exp.type_.clone();
+        *type_ = target_type.clone();
         Ok(())
     }
 }

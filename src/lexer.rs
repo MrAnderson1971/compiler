@@ -1,5 +1,5 @@
 use crate::common::Const;
-use crate::common::Const::{ConstInt, ConstLong};
+use crate::common::Const::{ConstInt, ConstLong, ConstUInt, ConstULong};
 use crate::lexer::Symbol::{Ambiguous, Binary, Unary};
 use std::collections::VecDeque;
 
@@ -69,14 +69,19 @@ pub(crate) enum Type {
     Void,
     Int,
     Long,
+    Unsigned,
+    Signed,
+    UInt,
+    ULong,
 }
 
 impl Type {
     pub(crate) fn size(&self) -> i32 {
         match self {
             Type::Void => 0,
-            Type::Int => 4,
-            Type::Long => 8,
+            Type::Int | Type::UInt => 4,
+            Type::Long | Type::ULong => 8,
+            _ => unreachable!(),
         }
     }
 }
@@ -120,6 +125,8 @@ fn match_keyword(string: &str) -> Option<Keyword> {
         "static" => Some(Keyword::StorageClass(StorageClass::Static)),
         "extern" => Some(Keyword::StorageClass(StorageClass::Extern)),
         "long" => Some(Keyword::Type(Type::Long)),
+        "unsigned" => Some(Keyword::Type(Type::Unsigned)),
+        "signed" => Some(Keyword::Type(Type::Signed)),
         _ => None,
     }
 }
@@ -127,7 +134,8 @@ fn match_keyword(string: &str) -> Option<Keyword> {
 pub(crate) fn lex(source: String) -> VecDeque<Token> {
     let mut tokens: VecDeque<Token> = VecDeque::new();
     let mut chars = source.chars().peekable();
-    while let Some(c) = chars.next() {
+
+    'main_loop: while let Some(c) = chars.next() {
         let next: Token = match c {
             '{' => Token::Symbol(Symbol::OpenBrace),
             '}' => Token::Symbol(Symbol::CloseBrace),
@@ -237,23 +245,57 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
                     chars.next();
                 }
                 let mut is_long = false;
-                match chars.peek() {
-                    Some(char) if *char == 'l' || *char == 'L' => {
-                        chars.next();
-                        is_long = true;
+                let mut is_unsigned = false;
+                for _ in 0..2 {
+                    match chars.peek() {
+                        Some(char) if *char == 'l' || *char == 'L' => {
+                            chars.next();
+                            if is_long {
+                                tokens.push_back(Token::Invalid);
+                                continue 'main_loop;
+                            }
+                            is_long = true;
+                        }
+                        Some(char) if *char == 'u' || *char == 'U' => {
+                            chars.next();
+                            if is_unsigned {
+                                tokens.push_back(Token::Invalid);
+                                continue 'main_loop;
+                            }
+                            is_unsigned = true;
+                        }
+                        _ => break,
                     }
-                    _ => {}
                 }
                 if is_long {
                     match number_string.parse::<u64>() {
-                        Ok(num) => Token::NumberLiteral(ConstLong(num)),
+                        Ok(num) => {
+                            if is_unsigned {
+                                Token::NumberLiteral(ConstULong(num))
+                            } else {
+                                Token::NumberLiteral(ConstLong(num as i64))
+                            }
+                        }
                         Err(_) => Token::Overflow,
                     }
                 } else {
                     match number_string.parse::<u32>() {
-                        Ok(num) => Token::NumberLiteral(ConstInt(num)),
-                        Err(_) => match number_string.parse::<u64>() { // fallback in case of overflow
-                            Ok(num) => Token::NumberLiteral(ConstLong(num)),
+                        Ok(num) => {
+                            if is_unsigned {
+                                Token::NumberLiteral(ConstUInt(num))
+                            } else {
+                                Token::NumberLiteral(ConstInt(num as i32))
+                            }
+                        }
+                        Err(_) => match number_string.parse::<u64>() {
+                            // fallback in case of overflow
+                            Ok(num) => {
+                                if is_unsigned {
+                                    Token::NumberLiteral(ConstULong(num))
+                                } else {
+                                    Token::NumberLiteral(ConstLong(num as i64))
+                                }
+                            }
                             Err(_) => Token::Overflow,
                         },
                     }

@@ -8,6 +8,7 @@ pub(crate) mod tac;
 pub(crate) mod tac_generator;
 pub(crate) mod variable_resolution;
 pub(crate) mod type_check;
+pub(crate) mod asm_ast;
 
 // Make these public externally
 pub mod compiler;
