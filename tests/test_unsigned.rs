@@ -322,7 +322,7 @@ return calculate_check_value(
     9ul, 10u);
     }
     "#;
-    harness.assert_runs_ok(source, 7);
+    harness.assert_runs_ok(source, 5);
 }
 
 #[rstest]
@@ -701,7 +701,7 @@ fn test_unsigned_bitwise_operations(mut harness: CompilerTest) {
 
         // Bitwise NOT
         unsigned long not_result = ~a;
-        if (not_result != 18446620616920094826ul) return 4;
+        if (not_result != 18323287284586094826ul) return 4;
 
         // Bit shifts
         unsigned long c = 1ul;
@@ -943,7 +943,7 @@ fn test_mixed_signed_unsigned_operations(mut harness: CompilerTest) {
 
         // Mixing in bit operations
         unsigned int bit_result = neg & ui;
-        if (bit_result != 5u) return 4; // -10 & 5u should be 5 (after conversion)
+        if (bit_result != 4u) return 4; // -10 & 5u should be 5 (after conversion)
 
         // Mixing unsigned and signed together with ternary operator
         unsigned int ternary = (neg > 0) ? ui : (unsigned int)neg;

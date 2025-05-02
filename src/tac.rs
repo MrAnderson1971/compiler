@@ -1,4 +1,7 @@
-use crate::asm_ast::AsmAst::{Binary, Call, Cdq, Cmp, Div, Function, Idiv, Jmp, JmpCC, Label, Mov, MovAl, MovZeroExtend, Movsx, Push, Ret, SetCC, Static, Testl, Unary};
+use crate::asm_ast::AsmAst::{
+    Binary, Call, Cdq, Cmp, Div, Function, Idiv, Jmp, JmpCC, Label, Mov, MovAl, MovZeroExtend,
+    Movsx, Push, Ret, SetCC, Static, Testl, Unary,
+};
 use crate::asm_ast::{AsmAst, CondCode};
 use crate::common::Const;
 use crate::common::Const::ConstLong;
@@ -359,7 +362,10 @@ impl TACInstruction {
                 dest: Rc::clone(dest),
             }),
             TACInstruction::ZeroExtend { dest, src } => {
-                out.push_back(MovZeroExtend {src: src.clone(), dest: dest.clone()});
+                out.push_back(MovZeroExtend {
+                    src: src.clone(),
+                    dest: dest.clone(),
+                });
             }
         }
     }
@@ -471,10 +477,22 @@ fn make_binary_op_instruction(
                     src: Rc::from(Operand::Immediate(c)),
                     dest: Rc::from(Register(Reg::DX, t)),
                 });
-                out.push_back(Div {
-                    size: left.size(),
-                    operand: Rc::clone(right),
-                });
+                if right.is_immediate() {
+                    out.push_back(Mov {
+                        size: right.size(),
+                        src: Rc::clone(right),
+                        dest: Rc::from(Register(Reg::R11, t)),
+                    });
+                    out.push_back(Div {
+                        size: left.size(),
+                        operand: Rc::from(Operand::Register(Register(Reg::R11, t))),
+                    });
+                } else {
+                    out.push_back(Div {
+                        size: left.size(),
+                        operand: Rc::clone(right),
+                    });
+                }
             } else {
                 // Divide/Modulo
                 // Move left operand to AX register
@@ -554,14 +572,26 @@ fn make_binary_op_instruction(
             });
 
             // Set AL based on comparison
-            let condition = match op {
-                BinaryOperator::Equals => CondCode::Equal,
-                BinaryOperator::NotEquals => CondCode::NotEqual,
-                BinaryOperator::LessThan => CondCode::LessThan,
-                BinaryOperator::GreaterThan => CondCode::GreaterThan,
-                BinaryOperator::LessThanOrEquals => CondCode::LessEqual,
-                BinaryOperator::GreaterThanOrEquals => CondCode::GreaterEqual,
-                _ => unreachable!(),
+            let condition = if right.is_unsigned() || left.is_unsigned() {
+                match op {
+                    BinaryOperator::Equals => CondCode::Equal,
+                    BinaryOperator::NotEquals => CondCode::NotEqual,
+                    BinaryOperator::LessThan => CondCode::Below,
+                    BinaryOperator::GreaterThan => CondCode::Above,
+                    BinaryOperator::LessThanOrEquals => CondCode::BelowOrEqual,
+                    BinaryOperator::GreaterThanOrEquals => CondCode::AboveOrEqual,
+                    _ => unreachable!(),
+                }
+            } else {
+                match op {
+                    BinaryOperator::Equals => CondCode::Equal,
+                    BinaryOperator::NotEquals => CondCode::NotEqual,
+                    BinaryOperator::LessThan => CondCode::LessThan,
+                    BinaryOperator::GreaterThan => CondCode::GreaterThan,
+                    BinaryOperator::LessThanOrEquals => CondCode::LessEqual,
+                    BinaryOperator::GreaterThanOrEquals => CondCode::GreaterEqual,
+                    _ => unreachable!(),
+                }
             };
 
             // We'll hardcode to use AL register in the SetCC implementation

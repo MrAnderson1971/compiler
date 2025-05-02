@@ -31,13 +31,18 @@ fn get_common_type(type1: &Type, type2: &Type) -> Type {
     if type1 == type2 {
         return *type1;
     }
+
     if type1.size() == type2.size() {
         if matches!(type1, Type::UInt | Type::ULong) {
-            *type2
-        } else {
-            *type1
+            return *type1;
         }
-    } else if type1.size() > type2.size() {
+        if matches!(type2, Type::UInt | Type::ULong) {
+            return *type2;
+        }
+        return *type1;
+    }
+
+    if type1.size() > type2.size() {
         *type1
     } else {
         *type2

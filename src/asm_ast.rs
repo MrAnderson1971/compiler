@@ -25,6 +25,10 @@ pub(crate) enum CondCode {
     LessThan,
     GreaterEqual,
     LessEqual,
+    Above,
+    AboveOrEqual,
+    Below,
+    BelowOrEqual,
 }
 
 impl Display for CondCode {
@@ -36,6 +40,10 @@ impl Display for CondCode {
             CondCode::LessThan => write!(f, "l"),
             CondCode::GreaterEqual => write!(f, "ge"),
             CondCode::LessEqual => write!(f, "le"),
+            CondCode::Above => write!(f, "a"),
+            CondCode::AboveOrEqual => write!(f, "ae"),
+            CondCode::Below => write!(f, "b"),
+            CondCode::BelowOrEqual => write!(f, "be"),
         }
     }
 }
@@ -124,7 +132,7 @@ impl AsmAst {
                 dest,
             } => {
                 if should_split(src, dest) {
-                    let r10 = std::rc::Rc::from(Pseudoregister::Register(
+                    let r10 = std::rc::Rc::from(Register(
                         Reg::R10,
                         if *size == 4 { Type::Int } else { Type::Long },
                     ));
@@ -145,7 +153,7 @@ impl AsmAst {
             }
             AsmAst::Mov { size, src, dest } => {
                 if should_split(src, dest) {
-                    let r10 = std::rc::Rc::from(Pseudoregister::Register(
+                    let r10 = std::rc::Rc::from(Register(
                         Reg::R10,
                         if *size == 4 { Type::Int } else { Type::Long },
                     ));
