@@ -164,18 +164,16 @@ impl AsmAst {
                 }
             }
             AsmAst::MovZeroExtend { src, dest } => {
-                if should_split(src, dest) {
-                    out.push_back(AsmAst::Mov {
-                        size: 4,
-                        src: src.clone(),
-                        dest: Rc::from(Register(Reg::R10, Type::Int)),
-                    });
-                    out.push_back(AsmAst::Mov {
-                        size: 8,
-                        src: std::rc::Rc::from(Operand::Register(Register(Reg::R10, Type::Long))),
-                        dest: dest.clone(),
-                    });
-                }
+                out.push_back(AsmAst::Mov {
+                    size: 4,
+                    src: src.clone(),
+                    dest: Rc::from(Register(Reg::R10, Type::Int)),
+                });
+                out.push_back(AsmAst::Mov {
+                    size: 8,
+                    src: std::rc::Rc::from(Operand::Register(Register(Reg::R10, Type::Long))),
+                    dest: dest.clone(),
+                });
             }
             _ => out.push_back(self.clone()),
         }

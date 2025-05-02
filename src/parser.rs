@@ -110,59 +110,49 @@ impl Parser {
         let mut params = vec![];
         let mut types = vec![];
 
-        let next = self.tokens.pop_front().unwrap();
-        match next {
-            Token::Symbol(Symbol::CloseParenthesis) => return Ok((params, types)),
-            Token::Keyword(Keyword::Type(param_type)) => {
-                if let Token::Name(name) = self.tokens.pop_front().unwrap() {
-                    params.push(name);
-                    types.push(param_type);
-                } else {
-                    return Err(SyntaxError(format!(
-                        "Expected identifier but got {:?}",
-                        next
-                    )));
-                }
-            }
-            _ => {
-                return Err(SyntaxError(format!(
-                    "Expected identifier but got {:?}",
-                    next
-                )));
-            }
+        // Handle empty parameter list
+        if match_and_consume!(self, Token::Symbol(Symbol::CloseParenthesis)) {
+            return Ok((params, types));
         }
 
+        // Process parameters
         loop {
-            let next = self.tokens.pop_front().unwrap();
-            match next {
-                Token::Symbol(Symbol::CloseParenthesis) => return Ok((params, types)),
-                Token::Symbol(Symbol::Comma) => {
-                    let param_type =
-                        match_and_consume!(self, Token::Keyword(Keyword::Type(t)) => Some(t))
-                            .ok_or_else(|| {
-                                SyntaxError(format!(
-                                    "Expected type but got {:?} at {:?}",
-                                    self.peek_token(),
-                                    self.line_number
-                                ))
-                            })?;
-                    if let Token::Name(name) = self.tokens.pop_front().unwrap() {
-                        types.push(param_type);
-                        params.push(name);
-                    } else {
-                        return Err(SyntaxError(format!(
-                            "Expected identifier but got {:?}",
-                            next
-                        )));
-                    }
-                }
-                _ => {
-                    return Err(SyntaxError(format!(
-                        "Expected identifier but got {:?}",
-                        next
-                    )));
-                }
+            // Parse type specifiers
+            let mut specifiers = vec![];
+            while let Token::Keyword(spec @ Keyword::Type(..)) = self.peek_token() {
+                self.tokens.pop_front();
+                specifiers.push(spec);
             }
+
+            if specifiers.is_empty() {
+                return Err(SyntaxError(format!(
+                    "Expected type specifier but got {:?} at {:?}",
+                    self.peek_token(),
+                    self.line_number
+                )));
+            }
+
+            let (type_, _) = self.parse_type_and_storage_class(specifiers)?;
+
+            // Parse parameter name
+            if let Token::Name(name) = self.peek_token() {
+                self.tokens.pop_front();
+                params.push(name);
+                types.push(type_);
+            } else {
+                return Err(SyntaxError(format!(
+                    "Expected parameter name but got {:?} at {:?}",
+                    self.peek_token(),
+                    self.line_number
+                )));
+            }
+
+            // Check for end of parameter list or more parameters
+            if match_and_consume!(self, Token::Symbol(Symbol::CloseParenthesis)) {
+                return Ok((params, types));
+            }
+
+            expect_token!(self, Token::Symbol(Symbol::Comma))?;
         }
     }
 
