@@ -73,6 +73,7 @@ pub(crate) enum Type {
     Signed,
     UInt,
     ULong,
+    Double,
 }
 
 impl Type {
@@ -127,6 +128,7 @@ fn match_keyword(string: &str) -> Option<Keyword> {
         "long" => Some(Keyword::Type(Type::Long)),
         "unsigned" => Some(Keyword::Type(Type::Unsigned)),
         "signed" => Some(Keyword::Type(Type::Signed)),
+        "double" => Some(Keyword::Type(Type::Double)),
         _ => None,
     }
 }
