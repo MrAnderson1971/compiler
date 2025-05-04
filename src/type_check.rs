@@ -31,6 +31,9 @@ fn get_common_type(type1: &Type, type2: &Type) -> Type {
     if type1 == type2 {
         return *type1;
     }
+    if *type1 == Type::Double || *type2 == Type::Double {
+        return Type::Double;
+    }
 
     if type1.size() == type2.size() {
         if matches!(type1, Type::UInt | Type::ULong) {
@@ -152,7 +155,7 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
 
     fn visit_unary(
         &mut self,
-        _line_number: &Rc<Position>,
+        line_number: &Rc<Position>,
         op: &mut UnaryOperator,
         expression: &mut Box<ASTNode<Expression>>,
         type_: &mut Type,
@@ -162,7 +165,14 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
             UnaryOperator::LogicalNot => Type::Int,
             _ => expression.type_,
         };
-        Ok(())
+        if *op == UnaryOperator::BitwiseNot && *type_ == Type::Double {
+            Err(SemanticError(format!(
+                "Cannot take bitwise not of double at {:?}",
+                line_number
+            )))
+        } else {
+            Ok(())
+        }
     }
 
     fn visit_binary(
@@ -194,7 +204,14 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
             _ => common_type,
         };
 
-        Ok(())
+        if *op == BinaryOperator::Modulo && *type_ == Type::Double {
+            Err(SemanticError(format!(
+                "Cannot take modulo of double at {:?}",
+                line_number
+            )))
+        } else {
+            Ok(())
+        }
     }
 
     fn visit_condition(
@@ -226,6 +243,7 @@ impl<'map> Visitor for TypeCheckVisitor<'map> {
             Const::ConstLong(_) => Type::Long,
             Const::ConstULong(_) => Type::ULong,
             Const::ConstUInt(_) => Type::UInt,
+            Const::ConstDouble(_) => Type::Double,
         };
         Ok(())
     }
