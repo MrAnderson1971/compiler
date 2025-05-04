@@ -2,9 +2,9 @@ name: Rust Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -12,7 +12,7 @@ env:
 jobs:
   test:
     name: Run tests in release mode
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
