@@ -4,21 +4,14 @@ use crate::errors::CompilerError;
 use crate::errors::CompilerError::SemanticError;
 use crate::lexer::{BinaryOperator, StorageClass, Type, UnaryOperator};
 use crate::tac::TACInstruction::{
-    AdjustStack, AllocateStackInstruction, BinaryOpInstruction, FunctionCall, FunctionInstruction,
-    Jump, JumpIfNotZero, JumpIfZero, Label, PushArgument, ReturnInstruction, SignExtend,
-    StoreValueInstruction, Truncate, UnaryOpInstruction, ZeroExtend,
+    AdjustStack, AllocateStackInstruction, BinaryOpInstruction, DoubleToInt, FunctionCall,
+    FunctionInstruction, IntToDouble, Jump, JumpIfNotZero, JumpIfZero, Label, PushArgument,
+    ReturnInstruction, SignExtend, StoreValueInstruction, Truncate, UnaryOpInstruction, ZeroExtend,
 };
 use crate::tac::{FunctionBody, Operand, Pseudoregister, Reg};
 use std::rc::Rc;
 
-const FIRST_SIX_REGISTERS: [Reg; 6] = [
-    Reg::DI,
-    Reg::SI,
-    Reg::DX,
-    Reg::CX,
-    Reg::R8,
-    Reg::R9,
-];
+const FIRST_SIX_REGISTERS: [Reg; 6] = [Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
 
 pub(crate) struct TacVisitor<'a> {
     name: Rc<String>,
@@ -89,7 +82,8 @@ impl<'a> Visitor for TacVisitor<'a> {
                             self.body.add_instruction(StoreValueInstruction {
                                 dest: Rc::clone(&param_register),
                                 src: Rc::from(Operand::Register(Pseudoregister::Register(
-                                    reg.clone(), func.func_type.params[i]
+                                    reg.clone(),
+                                    func.func_type.params[i],
                                 ))),
                             });
                         } else {
@@ -185,11 +179,9 @@ impl<'a> Visitor for TacVisitor<'a> {
     ) -> Result<(), CompilerError> {
         match op {
             BinaryOperator::LogicalAnd => {
-                let false_label: Rc<String> =
-                    Rc::from(format!(".{}{}_false", self.name, self.label_count));
+                let false_label = Rc::from(format!(".{}{}_false", self.name, self.label_count));
                 self.label_count += 1;
-                let end_label: Rc<String> =
-                    Rc::from(format!(".{}{}_end", self.name, self.label_count));
+                let end_label = Rc::from(format!(".{}{}_end", self.name, self.label_count));
                 self.label_count += 1;
 
                 // Short-circuiting
@@ -233,11 +225,9 @@ impl<'a> Visitor for TacVisitor<'a> {
                 Ok(())
             }
             BinaryOperator::LogicalOr => {
-                let true_label: Rc<String> =
-                    Rc::from(format!(".{}{}_true", self.name, self.label_count));
+                let true_label = Rc::from(format!(".{}{}_true", self.name, self.label_count));
                 self.label_count += 1;
-                let end_label: Rc<String> =
-                    Rc::from(format!(".{}{}_end", self.name, self.label_count));
+                let end_label = Rc::from(format!(".{}{}_end", self.name, self.label_count));
                 self.label_count += 1;
 
                 left.accept(self)?;
@@ -312,9 +302,9 @@ impl<'a> Visitor for TacVisitor<'a> {
         type_: &mut Type,
     ) -> Result<(), CompilerError> {
         condition.accept(self)?;
-        let else_label: Rc<String> = Rc::from(format!(".{}{}_else", self.name, self.label_count));
+        let else_label = Rc::from(format!(".{}{}_else", self.name, self.label_count));
         self.label_count += 1;
-        let end_label: Rc<String> = Rc::from(format!(".{}{}_end", self.name, self.label_count));
+        let end_label = Rc::from(format!(".{}{}_end", self.name, self.label_count));
         self.label_count += 1;
         let dest = Rc::new(Pseudoregister::new(self.body.current_offset, type_));
         self.body.add_instruction(JumpIfZero {
@@ -436,10 +426,9 @@ impl<'a> Visitor for TacVisitor<'a> {
         body: &mut Box<ASTNode<Statement>>,
         label: &mut Rc<String>,
     ) -> Result<(), CompilerError> {
-        let start_label: Rc<String> = Rc::from(format!(".{}{}_start.loop", self.name, label));
-        let end_label: Rc<String> = Rc::from(format!(".{}{}_end.loop", self.name, label));
-        let increment_label: Rc<String> =
-            Rc::from(format!(".{}{}_increment.loop", self.name, label));
+        let start_label = Rc::from(format!(".{}{}_start.loop", self.name, label));
+        let end_label = Rc::from(format!(".{}{}_end.loop", self.name, label));
+        let increment_label = Rc::from(format!(".{}{}_increment.loop", self.name, label));
         init.accept(self)?;
         self.body.add_instruction(
             // start
@@ -541,7 +530,10 @@ impl<'a> Visitor for TacVisitor<'a> {
         let from_register = Reg::AX;
         self.body.add_instruction(StoreValueInstruction {
             dest: Rc::clone(&result_register),
-            src: Rc::from(Operand::Register(Pseudoregister::Register(from_register, *ret_type))),
+            src: Rc::from(Operand::Register(Pseudoregister::Register(
+                from_register,
+                *ret_type,
+            ))),
         });
 
         self.result = Rc::from(Operand::Register((*result_register).clone()));
@@ -697,7 +689,19 @@ impl<'a> Visitor for TacVisitor<'a> {
         let dest = Rc::from(Pseudoregister::new(self.body.current_offset, target_type));
         self.result = Rc::from(Operand::Register((*dest).clone()));
         self.body.current_offset += 8;
-        if target_type.size() == exp.type_.size() {
+        if *target_type == Type::Double && exp.type_ != Type::Double {
+            self.body.add_instruction(IntToDouble {
+                dest,
+                src,
+                unsigned: matches!(exp.type_, Type::UInt),
+            });
+        } else if *target_type != Type::Double && exp.type_ == Type::Double {
+            self.body.add_instruction(DoubleToInt {
+                dest,
+                src,
+                unsigned: matches!(target_type, Type::UInt),
+            });
+        } else if target_type.size() == exp.type_.size() {
             self.body
                 .add_instruction(StoreValueInstruction { dest, src });
         } else if target_type.size() < exp.type_.size() {

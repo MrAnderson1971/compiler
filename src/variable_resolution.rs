@@ -211,7 +211,7 @@ impl<'map> Visitor for VariableResolutionVisitor<'map> {
         &mut self,
         line_number: &Rc<Position>,
         identifier: &mut Rc<String>,
-        _node: &mut Type,
+        _type_: &mut Type,
     ) -> Result<(), CompilerError> {
         let original_name = identifier.as_ref().to_string();
 

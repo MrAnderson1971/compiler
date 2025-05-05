@@ -81,7 +81,7 @@ impl Type {
         match self {
             Type::Void => 0,
             Type::Int | Type::UInt => 4,
-            Type::Long | Type::ULong => 8,
+            Type::Long | Type::ULong | Type::Double => 8,
             _ => unreachable!(),
         }
     }
