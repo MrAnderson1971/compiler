@@ -200,6 +200,16 @@ pub(crate) enum TACInstruction {
         dest: Rc<Pseudoregister>,
         src: Rc<Operand>,
     },
+    IntToDouble {
+        dest: Rc<Pseudoregister>,
+        src: Rc<Operand>,
+        unsigned: bool,
+    },
+    DoubleToInt {
+        dest: Rc<Pseudoregister>,
+        src: Rc<Operand>,
+        unsigned: bool,
+    },
 }
 
 #[derive(Debug)]
@@ -367,6 +377,8 @@ impl TACInstruction {
                     dest: dest.clone(),
                 });
             }
+            TACInstruction::IntToDouble { .. } => {}
+            TACInstruction::DoubleToInt { .. } => {}
         }
     }
 }

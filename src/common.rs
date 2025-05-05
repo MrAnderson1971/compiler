@@ -8,13 +8,14 @@ pub(crate) enum Const {
     ConstLong(i64),
     ConstUInt(u32),
     ConstULong(u64),
+    ConstDouble(f64),
 }
 
 impl Const {
     pub(crate) fn size(&self) -> i32 {
         match self {
             Const::ConstInt(_) | Const::ConstUInt(_) => 4,
-            Const::ConstLong(_) | Const::ConstULong(_) => 8,
+            Const::ConstLong(_) | Const::ConstULong(_) | Const::ConstDouble(_) => 8,
         }
     }
 }
@@ -26,6 +27,7 @@ impl Display for Const {
             Const::ConstLong(i) => write!(f, "{}", i),
             Const::ConstUInt(i) => write!(f, "{}", i),
             Const::ConstULong(i) => write!(f, "{}", i),
+            Const::ConstDouble(i) => write!(f, "{}", i),
         }
     }
 }
