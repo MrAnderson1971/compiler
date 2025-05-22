@@ -1,6 +1,6 @@
 use crate::asm_ast::AsmAst::{
-    Binary, Call, Cdq, Cmp, Div, Function, Idiv, Jmp, JmpCC, Label, Mov, MovAl, MovZeroExtend,
-    Movsx, Push, Ret, SetCC, Static, Testl, Unary,
+    Binary, Call, Cdq, Cmp, Cvtsi2sd, Cvttsd2si, Div, Function, Idiv, Jmp, JmpCC, Label, Mov,
+    MovAl, MovZeroExtend, Movsx, Push, Ret, SetCC, Static, Testl, Unary,
 };
 use crate::asm_ast::{AsmAst, CondCode};
 use crate::common::Const;
@@ -29,6 +29,16 @@ pub(crate) enum Reg {
     R13,
     R14,
     R15,
+    XMM0,
+    XMM1,
+    XMM2,
+    XMM3,
+    XMM4,
+    XMM5,
+    XMM6,
+    XMM7,
+    XMM14,
+    XMM15,
 }
 
 #[derive(Debug, Clone)]
@@ -377,8 +387,200 @@ impl TACInstruction {
                     dest: dest.clone(),
                 });
             }
-            TACInstruction::IntToDouble { .. } => {}
-            TACInstruction::DoubleToInt { .. } => {}
+            TACInstruction::IntToDouble {
+                dest,
+                src,
+                unsigned,
+            } => {
+                let src_size = src.size();
+                if !*unsigned {
+                    // Signed integer to double
+                    out.push_back(Cvtsi2sd {
+                        src_size,
+                        src: Rc::clone(src),
+                        dst: Rc::clone(dest),
+                    })
+                } else if src_size == 4 {
+                    // Unsigned int to double - zero extend to 64-bit then convert
+                    out.push_back(MovZeroExtend {
+                        src: Rc::clone(src),
+                        dest: Rc::new(Register(Reg::AX, Type::Int)),
+                    });
+                    out.push_back(Cvtsi2sd {
+                        src_size: 8,
+                        src: Rc::new(Operand::Register(Register(Reg::AX, Type::Long))),
+                        dst: Rc::clone(dest),
+                    });
+                } else {
+                    // Unsigned long to double - complex case
+                    let label1 = Rc::new(format!(".L_uint64_case_{}", dest.size()));
+                    let label2 = Rc::new(format!(".L_uint64_end_{}", dest.size()));
+
+                    // Check if the value is negative when interpreted as signed (upper bit set)
+                    out.push_back(Cmp {
+                        size: 8,
+                        left: Rc::new(Operand::Immediate(Const::ConstInt(0))),
+                        right: Rc::clone(src),
+                    });
+                    out.push_back(JmpCC {
+                        condition: CondCode::LessThan,
+                        label: Rc::clone(&label1),
+                    });
+
+                    // If not negative, just convert directly
+                    out.push_back(Cvtsi2sd {
+                        src_size: 8,
+                        src: Rc::clone(src),
+                        dst: Rc::clone(dest),
+                    });
+                    out.push_back(Jmp(Rc::clone(&label2)));
+
+                    // If negative, use rounding-to-odd technique
+                    out.push_back(Label(Rc::clone(&label1)));
+                    out.push_back(Mov {
+                        size: 8,
+                        src: Rc::clone(src),
+                        dest: Rc::new(Register(Reg::R10, Type::Long)),
+                    });
+                    out.push_back(Mov {
+                        size: 8,
+                        src: Rc::new(Operand::Register(Register(Reg::R10, Type::Long))),
+                        dest: Rc::new(Register(Reg::R11, Type::Long)),
+                    });
+
+                    // Shift right by 1
+                    out.push_back(Binary {
+                        operator: BinaryOperator::BitwiseShiftRight,
+                        size: 8,
+                        src: Rc::new(Operand::Immediate(Const::ConstInt(1))),
+                        dest: Rc::new(Register(Reg::R11, Type::Long)),
+                    });
+
+                    // Round to odd technique: check if original was odd and OR it with shifted value
+                    out.push_back(Binary {
+                        operator: BinaryOperator::BitwiseAnd,
+                        size: 8,
+                        src: Rc::new(Operand::Immediate(Const::ConstInt(1))),
+                        dest: Rc::new(Register(Reg::R10, Type::Long)),
+                    });
+                    out.push_back(Binary {
+                        operator: BinaryOperator::BitwiseOr,
+                        size: 8,
+                        src: Rc::new(Operand::Register(Register(Reg::R10, Type::Long))),
+                        dest: Rc::new(Register(Reg::R11, Type::Long)),
+                    });
+
+                    // Convert the halved and rounded value to double
+                    out.push_back(Cvtsi2sd {
+                        src_size: 8,
+                        src: Rc::new(Operand::Register(Register(Reg::R11, Type::Long))),
+                        dst: Rc::clone(dest),
+                    });
+
+                    // Double the result by adding the register to itself
+                    let reg_operand = Rc::new(Operand::Register(dest.as_ref().clone()));
+                    out.push_back(Binary {
+                        operator: BinaryOperator::Addition,
+                        size: 8,
+                        src: reg_operand,
+                        dest: Rc::clone(dest),
+                    });
+
+                    out.push_back(Label(Rc::clone(&label2)));
+                }
+            }
+
+            // Implement DoubleToInt
+            TACInstruction::DoubleToInt {
+                dest,
+                src,
+                unsigned,
+            } => {
+                if !*unsigned {
+                    // Signed integer conversion
+                    out.push_back(Cvttsd2si {
+                        dst_size: dest.size(),
+                        src: Rc::clone(src),
+                        dst: Rc::clone(dest),
+                    });
+                } else if dest.size() == 4 {
+                    // Unsigned int - convert to long first, then truncate
+                    out.push_back(Cvttsd2si {
+                        dst_size: 8,
+                        src: Rc::clone(src),
+                        dst: Rc::new(Register(Reg::R10, Type::Long)),
+                    });
+                    out.push_back(Mov {
+                        size: 4,
+                        src: Rc::new(Operand::Register(Register(Reg::R10, Type::Int))),
+                        dest: Rc::clone(dest),
+                    });
+                } else {
+                    // Unsigned long - handle values >= 2^63 separately
+                    let label1 = Rc::new(format!(".L_out_of_range_{}", dest.size()));
+                    let label2 = Rc::new(format!(".L_end_{}", dest.size()));
+
+                    // Create a constant for 2^63
+                    let upper_bound = Rc::new(format!(".L_upper_bound"));
+
+                    // Compare to see if value >= 2^63
+                    out.push_back(Cmp {
+                        size: 8,
+                        left: Rc::new(Operand::Register(Pseudoregister::Data(
+                            Rc::clone(&upper_bound),
+                            Type::Double,
+                        ))),
+                        right: Rc::clone(src),
+                    });
+                    out.push_back(JmpCC {
+                        condition: CondCode::AboveOrEqual,
+                        label: Rc::clone(&label1),
+                    });
+
+                    // Normal case - convert directly
+                    out.push_back(Cvttsd2si {
+                        dst_size: 8,
+                        src: Rc::clone(src),
+                        dst: Rc::clone(dest),
+                    });
+                    out.push_back(Jmp(Rc::clone(&label2)));
+
+                    // Special case - subtract 2^63, convert, then add 2^63
+                    out.push_back(Label(Rc::clone(&label1)));
+                    out.push_back(Mov {
+                        size: 8,
+                        src: Rc::clone(src),
+                        dest: Rc::new(Register(Reg::XMM14, Type::Double)),
+                    });
+                    out.push_back(Binary {
+                        operator: BinaryOperator::DivDouble,
+                        size: 8,
+                        src: Rc::new(Operand::Register(Pseudoregister::Data(
+                            Rc::clone(&upper_bound),
+                            Type::Double,
+                        ))),
+                        dest: Rc::new(Register(Reg::XMM14, Type::Double)),
+                    });
+                    out.push_back(Cvttsd2si {
+                        dst_size: 8,
+                        src: Rc::new(Operand::Register(Register(Reg::XMM14, Type::Double))),
+                        dst: Rc::clone(dest),
+                    });
+                    out.push_back(Mov {
+                        size: 8,
+                        src: Rc::new(Operand::Immediate(Const::ConstULong(9223372036854775808))),
+                        dest: Rc::new(Register(Reg::R10, Type::Long)),
+                    });
+                    out.push_back(Binary {
+                        operator: BinaryOperator::Addition,
+                        size: 8,
+                        src: Rc::new(Operand::Register(Register(Reg::R10, Type::Long))),
+                        dest: Rc::clone(dest),
+                    });
+
+                    out.push_back(Label(Rc::clone(&label2)));
+                }
+            }
         }
     }
 }

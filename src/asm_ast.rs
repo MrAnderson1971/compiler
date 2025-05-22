@@ -112,6 +112,16 @@ pub(crate) enum AsmAst {
     Call(Rc<String>),
     Ret,
     Testl(Rc<Pseudoregister>),
+    Cvttsd2si {
+        dst_size: i32,
+        src: Rc<Operand>,
+        dst: Rc<Pseudoregister>,
+    },
+    Cvtsi2sd {
+        src_size: i32,
+        src: Rc<Operand>,
+        dst: Rc<Pseudoregister>,
+    },
 }
 
 pub(crate) fn assembly_fix(mut instructions: VecDeque<AsmAst>) -> VecDeque<AsmAst> {
@@ -322,6 +332,8 @@ ret"#
             }
             AsmAst::Testl(reg) => *out += &format!("testl {}, {}", reg, reg),
             AsmAst::MovAl(dest) => *out += &format!("movzbl %al, {}\n", dest),
+            AsmAst::Cvttsd2si { .. } => {}
+            AsmAst::Cvtsi2sd { .. } => {}
         }
     }
 }

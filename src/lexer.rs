@@ -26,6 +26,8 @@ pub(crate) enum BinaryOperator {
     GreaterThan,
     Ternary, // ternary
     Assign,
+
+    DivDouble,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

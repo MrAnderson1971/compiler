@@ -90,6 +90,7 @@ fn get_precedence(op: Symbol) -> i32 {
             BinaryOperator::LogicalOr => 5,
             BinaryOperator::Ternary => 3,
             Assign => 1,
+            _ => -1,
         },
         _ => -1,
     }
