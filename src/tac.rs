@@ -1,6 +1,6 @@
 use crate::asm_ast::AsmAst::{
     Binary, Call, Cdq, Cmp, Cvtsi2sd, Cvttsd2si, Div, Function, Idiv, Jmp, JmpCC, Label, Mov,
-    MovAl, MovZeroExtend, Movsx, Push, Ret, SetCC, Static, Testl, Unary,
+    MovAl, MovZeroExtend, Movsx, Push, Ret, SetCC, Static, StaticConstant, Testl, Unary,
 };
 use crate::asm_ast::{AsmAst, CondCode};
 use crate::common::Const;
@@ -103,6 +103,20 @@ impl Operand {
             Operand::None => false,
         }
     }
+
+    fn is_double(&self) -> bool {
+        match self {
+            Operand::Register(reg) => matches!(
+                reg,
+                Pseudoregister::Register(_, Type::Double)
+                    | Pseudoregister::Pseudoregister(_, Type::Double)
+                    | Pseudoregister::Data(_, Type::Double)
+            ),
+            Operand::Immediate(c) => matches!(c, Const::ConstDouble(_)),
+            Operand::MemoryReference(_, _, t) => *t == Type::Double,
+            Operand::None => false,
+        }
+    }
 }
 
 impl Display for Operand {
@@ -122,6 +136,23 @@ impl Display for Pseudoregister {
             Pseudoregister::Pseudoregister(offset, _) => write!(f, "-{}(%rbp)", offset),
             Register(r, t) => {
                 let reg_name = format!("{:?}", r).to_lowercase();
+
+                // Handle XMM registers
+                if matches!(
+                    r,
+                    Reg::XMM0
+                        | Reg::XMM1
+                        | Reg::XMM2
+                        | Reg::XMM3
+                        | Reg::XMM4
+                        | Reg::XMM5
+                        | Reg::XMM6
+                        | Reg::XMM7
+                        | Reg::XMM14
+                        | Reg::XMM15
+                ) {
+                    return write!(f, "%{}", reg_name);
+                }
 
                 // Handle special cases for traditional registers
                 if matches!(
@@ -227,6 +258,7 @@ pub(crate) struct FunctionBody {
     pub(crate) current_offset: i32,
     pub(crate) instructions: Vec<TACInstruction>,
     pub(crate) variable_to_pseudoregister: HashMap<String, Rc<Pseudoregister>>,
+    constant_counter: usize,
 }
 
 impl FunctionBody {
@@ -235,6 +267,7 @@ impl FunctionBody {
             current_offset: 8,
             instructions: vec![],
             variable_to_pseudoregister: HashMap::new(),
+            constant_counter: 0,
         }
     }
 
@@ -254,73 +287,189 @@ impl FunctionBody {
     }
 }
 
+fn generate_constant_label(function_body: &mut FunctionBody) -> String {
+    function_body.constant_counter += 1;
+    format!(".L_const_{}", function_body.constant_counter)
+}
+
 impl TACInstruction {
-    pub(crate) fn make_assembly(&self, out: &mut VecDeque<AsmAst>, function_body: &FunctionBody) {
+    pub(crate) fn make_assembly(
+        &self,
+        out: &mut VecDeque<AsmAst>,
+        function_body: &mut FunctionBody,
+    ) {
         match &self {
             TACInstruction::FunctionInstruction { name, global } => out.push_back(Function {
                 name: Rc::clone(name),
                 global: *global,
             }),
             TACInstruction::UnaryOpInstruction { dest, op, operand } => {
-                out.push_back(Mov {
-                    size: dest.size(),
-                    dest: Rc::clone(dest),
-                    src: Rc::clone(operand),
-                });
-                out.push_back(Unary {
-                    operator: *op,
-                    size: dest.size(),
-                    dest: Rc::clone(dest),
-                });
+                if operand.is_double() && *op == UnaryOperator::Negate {
+                    // Floating-point negation using XOR with -0.0
+                    let neg_zero_label = generate_constant_label(function_body);
+                    out.push_back(StaticConstant {
+                        name: Rc::new(neg_zero_label.clone()),
+                        alignment: 16,
+                        init: Const::ConstDouble(-0.0),
+                    });
+
+                    out.push_back(Mov {
+                        size: 8,
+                        src: Rc::clone(operand),
+                        dest: Rc::clone(dest),
+                    });
+                    out.push_back(Binary {
+                        operator: BinaryOperator::BitwiseXor,
+                        size: 8,
+                        src: Rc::new(Operand::Register(Pseudoregister::Data(
+                            Rc::new(neg_zero_label),
+                            Type::Double,
+                        ))),
+                        dest: Rc::clone(dest),
+                    });
+                } else {
+                    // Integer unary operations
+                    out.push_back(Mov {
+                        size: dest.size(),
+                        dest: Rc::clone(dest),
+                        src: Rc::clone(operand),
+                    });
+                    out.push_back(Unary {
+                        operator: *op,
+                        size: dest.size(),
+                        dest: Rc::clone(dest),
+                    });
+                }
             }
             TACInstruction::BinaryOpInstruction {
                 dest,
                 op,
                 left,
                 right,
-            } => make_binary_op_instruction(out, dest, op, left, right),
+            } => make_binary_op_instruction(out, dest, op, left, right, function_body),
             TACInstruction::JumpIfZero { label, operand } => {
-                out.push_back(Mov {
-                    size: 4,
-                    src: Rc::clone(operand),
-                    dest: Rc::from(Register(Reg::DX, Type::Int)),
-                });
-                out.push_back(Testl(Rc::from(Register(Reg::DX, Type::Int))));
-                out.push_back(JmpCC {
-                    condition: CondCode::Equal,
-                    label: Rc::clone(&label),
-                });
+                if operand.is_double() {
+                    // Zero out XMM register and compare
+                    out.push_back(Binary {
+                        operator: BinaryOperator::BitwiseXor,
+                        size: 8,
+                        src: Rc::new(Operand::Register(Register(Reg::XMM15, Type::Double))),
+                        dest: Rc::new(Register(Reg::XMM15, Type::Double)),
+                    });
+                    out.push_back(Cmp {
+                        size: 8,
+                        left: Rc::clone(operand),
+                        right: Rc::new(Operand::Register(Register(Reg::XMM15, Type::Double))),
+                    });
+                    out.push_back(JmpCC {
+                        condition: CondCode::Equal,
+                        label: Rc::clone(&label),
+                    });
+                } else {
+                    out.push_back(Mov {
+                        size: 4,
+                        src: Rc::clone(operand),
+                        dest: Rc::from(Register(Reg::DX, Type::Int)),
+                    });
+                    out.push_back(Testl(Rc::from(Register(Reg::DX, Type::Int))));
+                    out.push_back(JmpCC {
+                        condition: CondCode::Equal,
+                        label: Rc::clone(&label),
+                    });
+                }
             }
             TACInstruction::JumpIfNotZero { label, operand } => {
-                out.push_back(Mov {
-                    size: 4,
-                    src: Rc::clone(operand),
-                    dest: Rc::from(Register(Reg::DX, Type::Int)),
-                });
-                out.push_back(Testl(Rc::from(Register(Reg::DX, Type::Int))));
-                out.push_back(JmpCC {
-                    condition: CondCode::NotEqual,
-                    label: Rc::clone(&label),
-                });
+                if operand.is_double() {
+                    // Zero out XMM register and compare
+                    out.push_back(Binary {
+                        operator: BinaryOperator::BitwiseXor,
+                        size: 8,
+                        src: Rc::new(Operand::Register(Register(Reg::XMM15, Type::Double))),
+                        dest: Rc::new(Register(Reg::XMM15, Type::Double)),
+                    });
+                    out.push_back(Cmp {
+                        size: 8,
+                        left: Rc::clone(operand),
+                        right: Rc::new(Operand::Register(Register(Reg::XMM15, Type::Double))),
+                    });
+                    out.push_back(JmpCC {
+                        condition: CondCode::NotEqual,
+                        label: Rc::clone(&label),
+                    });
+                } else {
+                    out.push_back(Mov {
+                        size: 4,
+                        src: Rc::clone(operand),
+                        dest: Rc::from(Register(Reg::DX, Type::Int)),
+                    });
+                    out.push_back(Testl(Rc::from(Register(Reg::DX, Type::Int))));
+                    out.push_back(JmpCC {
+                        condition: CondCode::NotEqual,
+                        label: Rc::clone(&label),
+                    });
+                }
             }
             TACInstruction::Jump { label } => out.push_back(Jmp(Rc::clone(label))),
             TACInstruction::Label { label } => out.push_back(Label(Rc::clone(label))),
-            TACInstruction::StoreValueInstruction { dest, src } => out.push_back(Mov {
-                size: dest.size(),
-                src: Rc::clone(src),
-                dest: Rc::clone(dest),
-            }),
-            TACInstruction::ReturnInstruction { val } => {
-                let t = if val.size() == 4 {
-                    Type::Int
+            TACInstruction::StoreValueInstruction { dest, src } => {
+                // Handle floating-point constants
+                let final_src = if let Operand::Immediate(Const::ConstDouble(val)) = src.as_ref() {
+                    let const_label = generate_constant_label(function_body);
+                    out.push_back(StaticConstant {
+                        name: Rc::new(const_label.clone()),
+                        alignment: 8,
+                        init: Const::ConstDouble(*val),
+                    });
+                    Rc::new(Operand::Register(Pseudoregister::Data(
+                        Rc::new(const_label),
+                        Type::Double,
+                    )))
                 } else {
-                    Type::Long
+                    Rc::clone(src)
                 };
+
                 out.push_back(Mov {
-                    size: val.size(),
-                    src: Rc::clone(val),
-                    dest: Rc::from(Register(Reg::AX, t)),
+                    size: dest.size(),
+                    src: final_src,
+                    dest: Rc::clone(dest),
                 });
+            }
+            TACInstruction::ReturnInstruction { val } => {
+                // Handle floating-point constants in return values
+                let final_val = if let Operand::Immediate(Const::ConstDouble(value)) = val.as_ref()
+                {
+                    let const_label = generate_constant_label(function_body);
+                    out.push_back(StaticConstant {
+                        name: Rc::new(const_label.clone()),
+                        alignment: 8,
+                        init: Const::ConstDouble(*value),
+                    });
+                    Rc::new(Operand::Register(Pseudoregister::Data(
+                        Rc::new(const_label),
+                        Type::Double,
+                    )))
+                } else {
+                    Rc::clone(val)
+                };
+
+                if final_val.is_double() {
+                    out.push_back(Mov {
+                        size: 8,
+                        src: final_val,
+                        dest: Rc::new(Register(Reg::XMM0, Type::Double)),
+                    });
+                } else {
+                    let t = if final_val.size() == 4 {
+                        Type::Int
+                    } else {
+                        Type::Long
+                    };
+                    out.push_back(Mov {
+                        size: final_val.size(),
+                        src: final_val,
+                        dest: Rc::from(Register(Reg::AX, t)),
+                    });
+                }
                 out.push_back(Ret);
             }
             TACInstruction::AllocateStackInstruction => {
@@ -413,8 +562,10 @@ impl TACInstruction {
                     });
                 } else {
                     // Unsigned long to double - complex case
-                    let label1 = Rc::new(format!(".L_uint64_case_{}", dest.size()));
-                    let label2 = Rc::new(format!(".L_uint64_end_{}", dest.size()));
+                    let label1 =
+                        Rc::new(format!(".L_uint64_case_{}", function_body.constant_counter));
+                    let label2 =
+                        Rc::new(format!(".L_uint64_end_{}", function_body.constant_counter));
 
                     // Check if the value is negative when interpreted as signed (upper bit set)
                     out.push_back(Cmp {
@@ -489,8 +640,6 @@ impl TACInstruction {
                     out.push_back(Label(Rc::clone(&label2)));
                 }
             }
-
-            // Implement DoubleToInt
             TACInstruction::DoubleToInt {
                 dest,
                 src,
@@ -517,23 +666,33 @@ impl TACInstruction {
                     });
                 } else {
                     // Unsigned long - handle values >= 2^63 separately
-                    let label1 = Rc::new(format!(".L_out_of_range_{}", dest.size()));
-                    let label2 = Rc::new(format!(".L_end_{}", dest.size()));
+                    let label1 = Rc::new(format!(
+                        ".L_out_of_range_{}",
+                        function_body.constant_counter
+                    ));
+                    let label2 = Rc::new(format!(".L_end_{}", function_body.constant_counter));
+                    let upper_bound =
+                        Rc::new(format!(".L_upper_bound_{}", function_body.constant_counter));
 
-                    // Create a constant for 2^63
-                    let upper_bound = Rc::new(format!(".L_upper_bound"));
+                    // Create constant for 2^63
+                    out.push_back(StaticConstant {
+                        name: Rc::clone(&upper_bound),
+                        alignment: 8,
+                        init: Const::ConstDouble(9223372036854775808.0),
+                    });
 
                     // Compare to see if value >= 2^63
+                    let upper_bound_data =
+                        Pseudoregister::Data(Rc::clone(&upper_bound), Type::Double);
+                    let upper_bound_operand = Rc::new(Operand::Register(upper_bound_data));
+
                     out.push_back(Cmp {
                         size: 8,
-                        left: Rc::new(Operand::Register(Pseudoregister::Data(
-                            Rc::clone(&upper_bound),
-                            Type::Double,
-                        ))),
+                        left: upper_bound_operand.clone(),
                         right: Rc::clone(src),
                     });
                     out.push_back(JmpCC {
-                        condition: CondCode::AboveOrEqual,
+                        condition: CondCode::BelowOrEqual,
                         label: Rc::clone(&label1),
                     });
 
@@ -552,25 +711,26 @@ impl TACInstruction {
                         src: Rc::clone(src),
                         dest: Rc::new(Register(Reg::XMM14, Type::Double)),
                     });
+
                     out.push_back(Binary {
-                        operator: BinaryOperator::DivDouble,
+                        operator: BinaryOperator::Subtraction,
                         size: 8,
-                        src: Rc::new(Operand::Register(Pseudoregister::Data(
-                            Rc::clone(&upper_bound),
-                            Type::Double,
-                        ))),
+                        src: upper_bound_operand,
                         dest: Rc::new(Register(Reg::XMM14, Type::Double)),
                     });
+
                     out.push_back(Cvttsd2si {
                         dst_size: 8,
                         src: Rc::new(Operand::Register(Register(Reg::XMM14, Type::Double))),
                         dst: Rc::clone(dest),
                     });
+
                     out.push_back(Mov {
                         size: 8,
                         src: Rc::new(Operand::Immediate(Const::ConstULong(9223372036854775808))),
                         dest: Rc::new(Register(Reg::R10, Type::Long)),
                     });
+
                     out.push_back(Binary {
                         operator: BinaryOperator::Addition,
                         size: 8,
@@ -591,7 +751,111 @@ fn make_binary_op_instruction(
     op: &BinaryOperator,
     left: &Rc<Operand>,
     right: &Rc<Operand>,
+    function_body: &mut FunctionBody,
 ) {
+    // Check if this is a floating-point operation
+    if left.is_double() || right.is_double() {
+        // Handle floating-point constants
+        let final_left = if let Operand::Immediate(Const::ConstDouble(val)) = left.as_ref() {
+            let const_label = generate_constant_label(function_body);
+            out.push_back(StaticConstant {
+                name: Rc::new(const_label.clone()),
+                alignment: 8,
+                init: Const::ConstDouble(*val),
+            });
+            Rc::new(Operand::Register(Pseudoregister::Data(
+                Rc::new(const_label),
+                Type::Double,
+            )))
+        } else {
+            Rc::clone(left)
+        };
+
+        let final_right = if let Operand::Immediate(Const::ConstDouble(val)) = right.as_ref() {
+            let const_label = generate_constant_label(function_body);
+            out.push_back(StaticConstant {
+                name: Rc::new(const_label.clone()),
+                alignment: 8,
+                init: Const::ConstDouble(*val),
+            });
+            Rc::new(Operand::Register(Pseudoregister::Data(
+                Rc::new(const_label),
+                Type::Double,
+            )))
+        } else {
+            Rc::clone(right)
+        };
+
+        match op {
+            BinaryOperator::Addition
+            | BinaryOperator::Subtraction
+            | BinaryOperator::Multiply
+            | BinaryOperator::Divide => {
+                // Move left operand to destination
+                out.push_back(Mov {
+                    size: 8,
+                    src: final_left,
+                    dest: Rc::clone(dest),
+                });
+                // Apply floating-point operation
+                out.push_back(Binary {
+                    operator: *op,
+                    size: 8,
+                    src: final_right,
+                    dest: Rc::clone(dest),
+                });
+            }
+            // Handle floating-point comparisons
+            BinaryOperator::Equals
+            | BinaryOperator::NotEquals
+            | BinaryOperator::LessThan
+            | BinaryOperator::LessThanOrEquals
+            | BinaryOperator::GreaterThan
+            | BinaryOperator::GreaterThanOrEquals => {
+                // Use comisd for floating-point comparison
+                out.push_back(Mov {
+                    size: 8,
+                    src: final_left,
+                    dest: Rc::new(Register(Reg::XMM14, Type::Double)),
+                });
+                out.push_back(Cmp {
+                    size: 8,
+                    left: final_right,
+                    right: Rc::new(Operand::Register(Register(Reg::XMM14, Type::Double))),
+                });
+
+                // Set result based on comparison (floating-point uses unsigned condition codes)
+                let condition = match op {
+                    BinaryOperator::Equals => CondCode::Equal,
+                    BinaryOperator::NotEquals => CondCode::NotEqual,
+                    BinaryOperator::LessThan => CondCode::Below,
+                    BinaryOperator::LessThanOrEquals => CondCode::BelowOrEqual,
+                    BinaryOperator::GreaterThan => CondCode::Above,
+                    BinaryOperator::GreaterThanOrEquals => CondCode::AboveOrEqual,
+                    _ => unreachable!(),
+                };
+
+                // Initialize destination with 0
+                out.push_back(Mov {
+                    size: dest.size(),
+                    src: Rc::new(Operand::Immediate(Const::ConstInt(0))),
+                    dest: Rc::clone(dest),
+                });
+
+                out.push_back(SetCC(condition));
+                out.push_back(MovAl(Rc::new(Register(Reg::R10, Type::Int))));
+                out.push_back(Mov {
+                    size: 4,
+                    src: Rc::new(Operand::Register(Register(Reg::R10, Type::Int))),
+                    dest: Rc::clone(dest),
+                });
+            }
+            _ => unreachable!("Invalid floating-point operation"),
+        }
+        return;
+    }
+
+    // Rest of the existing integer logic...
     let t = if left.size() == 4 {
         Type::Int
     } else {
