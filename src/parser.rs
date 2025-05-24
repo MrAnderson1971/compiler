@@ -90,6 +90,7 @@ fn get_precedence(op: Symbol) -> i32 {
             BinaryOperator::LogicalOr => 5,
             BinaryOperator::Ternary => 3,
             Assign => 1,
+            _ => -1,
         },
         _ => -1,
     }
@@ -163,6 +164,9 @@ impl Parser {
                 types, self.line_number
             )));
         }
+        if types == vec![Type::Double] {
+            return Ok(Type::Double);
+        }
         let mut seen = HashSet::new();
         for item in types.iter() {
             if !seen.insert(*item) {
@@ -171,6 +175,12 @@ impl Parser {
                     types, self.line_number
                 )));
             }
+        }
+        if seen.contains(&Type::Double) {
+            return Err(SyntaxError(format!(
+                "Double cannot be combined with other specifiers, at {:?}",
+                self.line_number
+            )));
         }
         if seen.contains(&Type::Signed) && seen.contains(&Type::Unsigned) {
             return Err(SyntaxError(format!(

@@ -26,6 +26,8 @@ pub(crate) enum BinaryOperator {
     GreaterThan,
     Ternary, // ternary
     Assign,
+
+    DivDouble,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -73,6 +75,7 @@ pub(crate) enum Type {
     Signed,
     UInt,
     ULong,
+    Double,
 }
 
 impl Type {
@@ -80,7 +83,7 @@ impl Type {
         match self {
             Type::Void => 0,
             Type::Int | Type::UInt => 4,
-            Type::Long | Type::ULong => 8,
+            Type::Long | Type::ULong | Type::Double => 8,
             _ => unreachable!(),
         }
     }
@@ -127,16 +130,17 @@ fn match_keyword(string: &str) -> Option<Keyword> {
         "long" => Some(Keyword::Type(Type::Long)),
         "unsigned" => Some(Keyword::Type(Type::Unsigned)),
         "signed" => Some(Keyword::Type(Type::Signed)),
+        "double" => Some(Keyword::Type(Type::Double)),
         _ => None,
     }
 }
 
 pub(crate) fn lex(source: String) -> VecDeque<Token> {
-    let mut tokens: VecDeque<Token> = VecDeque::new();
+    let mut tokens = VecDeque::new();
     let mut chars = source.chars().peekable();
 
     'main_loop: while let Some(c) = chars.next() {
-        let next: Token = match c {
+        let next = match c {
             '{' => Token::Symbol(Symbol::OpenBrace),
             '}' => Token::Symbol(Symbol::CloseBrace),
             '(' => Token::Symbol(Symbol::OpenParenthesis),
@@ -237,6 +241,11 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
             '0'..='9' => {
                 let mut number_string = String::new();
                 number_string.push(c);
+
+                // Track if this is a floating point number
+                let mut is_float = false;
+
+                // First collect all digits before a potential decimal point
                 while let Some(char) = chars.peek() {
                     if !char.is_ascii_digit() {
                         break;
@@ -244,51 +253,90 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
                     number_string.push(*char);
                     chars.next();
                 }
-                let mut is_long = false;
-                let mut is_unsigned = false;
-                for _ in 0..2 {
-                    match chars.peek() {
-                        Some(char) if *char == 'l' || *char == 'L' => {
-                            chars.next();
-                            if is_long {
-                                tokens.push_back(Token::Invalid);
-                                continue 'main_loop;
-                            }
-                            is_long = true;
+
+                // Check for decimal point
+                if chars.peek() == Some(&'.') {
+                    is_float = true;
+                    number_string.push('.');
+                    chars.next();
+
+                    // Collect digits after the decimal point
+                    while let Some(char) = chars.peek() {
+                        if !char.is_ascii_digit() {
+                            break;
                         }
-                        Some(char) if *char == 'u' || *char == 'U' => {
-                            chars.next();
-                            if is_unsigned {
-                                tokens.push_back(Token::Invalid);
-                                continue 'main_loop;
-                            }
-                            is_unsigned = true;
-                        }
-                        _ => break,
+                        number_string.push(*char);
+                        chars.next();
                     }
                 }
-                if is_long {
-                    match number_string.parse::<u64>() {
-                        Ok(num) => {
-                            if is_unsigned {
-                                Token::NumberLiteral(ConstULong(num))
-                            } else {
-                                Token::NumberLiteral(ConstLong(num as i64))
-                            }
+
+                // Check for scientific notation
+                if chars.peek() == Some(&'e') || chars.peek() == Some(&'E') {
+                    is_float = true;
+                    number_string.push(*chars.peek().unwrap());
+                    chars.next();
+
+                    // Check for optional sign in exponent
+                    if chars.peek() == Some(&'+') || chars.peek() == Some(&'-') {
+                        number_string.push(*chars.peek().unwrap());
+                        chars.next();
+                    }
+
+                    // Ensure we have at least one digit in exponent
+                    let has_exponent_digits = chars.peek().map_or(false, |c| c.is_ascii_digit());
+                    if !has_exponent_digits {
+                        tokens.push_back(Token::Invalid);
+                        continue 'main_loop;
+                    }
+
+                    // Collect exponent digits
+                    while let Some(char) = chars.peek() {
+                        if !char.is_ascii_digit() {
+                            break;
                         }
-                        Err(_) => Token::Overflow,
+                        number_string.push(*char);
+                        chars.next();
+                    }
+                }
+
+                // Handle type suffixes and parse the number
+                if is_float {
+                    // Optional floating point suffix 'f' or 'F'
+                    if chars.peek() == Some(&'f') || chars.peek() == Some(&'F') {
+                        chars.next();
+                    }
+
+                    match number_string.parse::<f64>() {
+                        Ok(num) => Token::NumberLiteral(Const::ConstDouble(num)),
+                        Err(_) => Token::Invalid,
                     }
                 } else {
-                    match number_string.parse::<u32>() {
-                        Ok(num) => {
-                            if is_unsigned {
-                                Token::NumberLiteral(ConstUInt(num))
-                            } else {
-                                Token::NumberLiteral(ConstInt(num as i32))
+                    // Handle integer types (existing code)
+                    let mut is_long = false;
+                    let mut is_unsigned = false;
+                    for _ in 0..2 {
+                        match chars.peek() {
+                            Some(char) if *char == 'l' || *char == 'L' => {
+                                chars.next();
+                                if is_long {
+                                    tokens.push_back(Token::Invalid);
+                                    continue 'main_loop;
+                                }
+                                is_long = true;
                             }
+                            Some(char) if *char == 'u' || *char == 'U' => {
+                                chars.next();
+                                if is_unsigned {
+                                    tokens.push_back(Token::Invalid);
+                                    continue 'main_loop;
+                                }
+                                is_unsigned = true;
+                            }
+                            _ => break,
                         }
-                        Err(_) => match number_string.parse::<u64>() {
-                            // fallback in case of overflow
+                    }
+                    if is_long {
+                        match number_string.parse::<u64>() {
                             Ok(num) => {
                                 if is_unsigned {
                                     Token::NumberLiteral(ConstULong(num))
@@ -297,7 +345,28 @@ pub(crate) fn lex(source: String) -> VecDeque<Token> {
                                 }
                             }
                             Err(_) => Token::Overflow,
-                        },
+                        }
+                    } else {
+                        match number_string.parse::<u32>() {
+                            Ok(num) => {
+                                if is_unsigned {
+                                    Token::NumberLiteral(ConstUInt(num))
+                                } else {
+                                    Token::NumberLiteral(ConstInt(num as i32))
+                                }
+                            }
+                            Err(_) => match number_string.parse::<u64>() {
+                                // fallback in case of overflow
+                                Ok(num) => {
+                                    if is_unsigned {
+                                        Token::NumberLiteral(ConstULong(num))
+                                    } else {
+                                        Token::NumberLiteral(ConstLong(num as i64))
+                                    }
+                                }
+                                Err(_) => Token::Overflow,
+                            },
+                        }
                     }
                 }
             }

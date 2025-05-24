@@ -9,6 +9,7 @@ use crate::type_check::TypeCheckVisitor;
 use crate::variable_resolution::VariableResolutionVisitor;
 use std::cmp::PartialEq;
 use std::collections::{HashMap, VecDeque};
+use std::mem;
 use std::ops::DerefMut;
 use std::rc::Rc;
 
@@ -450,7 +451,7 @@ impl ASTNode<Program> {
                 },
                 InitialValue::NoInitializer => continue,
             };
-            tac.make_assembly(out, &FunctionBody::new());
+            tac.make_assembly(out, &mut FunctionBody::new());
         }
 
         Ok(())
@@ -593,8 +594,9 @@ impl ASTNode<Declaration> {
 
             function_body.add_default_return();
 
-            for instruction in &function_body.instructions {
-                instruction.make_assembly(out, &function_body);
+            let instructions = mem::take(&mut function_body.instructions);
+            for instruction in instructions {
+                instruction.make_assembly(out, &mut function_body);
             }
 
             return Ok(());
